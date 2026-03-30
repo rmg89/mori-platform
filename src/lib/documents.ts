@@ -2,7 +2,12 @@
 // Templates are data-merge only — no AI, deterministic output
 // TODO: Replace with more robust templating (e.g., docx → PDF) once templates are finalized
 
-import { Client } from '@/types'
+import { Engagement, primaryContact } from '@/types'
+type Client = Engagement
+
+function pc(client: Client) {
+  return primaryContact(client)
+}
 import { formatDate, formatCurrency } from './utils'
 
 // ─── Shared PDF setup ─────────────────────────────────────────────────────────
@@ -81,7 +86,7 @@ export function generateContract(client: Client): Blob {
   y += 20
 
   addField(doc, 'Client Organization', client.organization, L, y)
-  addField(doc, 'Primary Contact', `${client.first_name} ${client.last_name}`, R, y)
+  addField(doc, 'Primary Contact', `${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}`, R, y)
   y += 40
 
   addField(doc, 'Event Name', client.event_name || '—', L, y)
@@ -151,7 +156,7 @@ export function generateContract(client: Client): Blob {
   doc.setFontSize(9)
   doc.setTextColor(100, 97, 90)
   doc.text('Mori Taheripour, Speaker', 50, y)
-  doc.text(`${client.first_name} ${client.last_name}, ${client.organization}`, 330, y)
+  doc.text(`${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}, ${client.organization}`, 330, y)
   y += 14
   doc.text('Date: ___________________', 50, y)
   doc.text('Date: ___________________', 330, y)
@@ -209,11 +214,11 @@ export function generateAdvanceSheet(client: Client): Blob {
   y += 50
 
   section('CONTACT ON SITE')
-  addField(doc, 'Primary Contact', `${client.first_name} ${client.last_name}`, L, y)
-  addField(doc, 'Email', client.email, R, y)
+  addField(doc, 'Primary Contact', `${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}`, L, y)
+  addField(doc, 'Email', pc(client)?.email || "—", R, y)
   y += 40
-  addField(doc, 'Phone', client.phone || '—', L, y)
-  addField(doc, 'Title', client.title || '—', R, y)
+  addField(doc, 'Phone', pc(client)?.phone || "—" || '—', L, y)
+  addField(doc, 'Title', pc(client)?.title || "—" || '—', R, y)
   y += 50
 
   section('TECHNICAL & LOGISTICS')
@@ -271,10 +276,10 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(60, 58, 54)
-  doc.text(`${client.first_name} ${client.last_name}`, 50, y); y += 14
-  if (client.title) { doc.text(client.title, 50, y); y += 14 }
+  doc.text(`${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}`, 50, y); y += 14
+  if (pc(client)?.title || "—") { doc.text(pc(client)?.title || "—", 50, y); y += 14 }
   doc.text(client.organization, 50, y); y += 14
-  doc.text(client.email, 50, y); y += 30
+  doc.text(pc(client)?.email || "—", 50, y); y += 30
 
   // Line items
   doc.setDrawColor(201, 168, 76)

@@ -1,85 +1,38 @@
-// ─── Pipeline Buckets & Steps ─────────────────────────────────────────────────
+// ─── Pipeline Steps ────────────────────────────────────────────────────────────
 
-export type PipelineBucket = 'prospect' | 'client' | 'complete'
+export type ProspectStep = 'inquiry' | 'outreach' | 'in_contact' | 'discussing' | 'confirmed' | 'declined'
+export type EngagementFlag = 'contract_sent' | 'contract_signed' | 'advance_sheet_sent' | 'logistics_confirmed' | 'day_of_ready'
+export type PostEventFlag = 'invoice_sent' | 'invoice_paid' | 'media_uploaded' | 'marked_complete'
+export type Section = 'prospects' | 'engagements' | 'post-event'
 
-export type ProspectStep   = 'new_inquiry' | 'contacted' | 'proposal_sent' | 'negotiating'
-export type ClientStep     = 'contract_sent' | 'confirmed' | 'briefing_ready' | 'event_day'
-export type CompleteStep   = 'post_event' | 'invoiced' | 'paid'
-export type PipelineStep   = ProspectStep | ClientStep | CompleteStep
-
-export const BUCKETS: {
-  id: PipelineBucket
-  label: string
-  color: string
-  accent: string
-  steps: { id: PipelineStep; label: string }[]
-}[] = [
-  {
-    id: 'prospect',
-    label: 'Prospects',
-    color: '#7A9E87',
-    accent: '#A8C4B0',
-    steps: [
-      { id: 'new_inquiry',    label: 'New Inquiry' },
-      { id: 'contacted',      label: 'Contacted' },
-      { id: 'proposal_sent',  label: 'Proposal Sent' },
-      { id: 'negotiating',    label: 'Negotiating' },
-    ],
-  },
-  {
-    id: 'client',
-    label: 'Clients',
-    color: '#C9A84C',
-    accent: '#E8C97A',
-    steps: [
-      { id: 'contract_sent',  label: 'Contract Sent' },
-      { id: 'confirmed',      label: 'Confirmed' },
-      { id: 'briefing_ready', label: 'Briefing Ready' },
-      { id: 'event_day',      label: 'Event Day' },
-    ],
-  },
-  {
-    id: 'complete',
-    label: 'Complete',
-    color: '#4A4740',
-    accent: '#7D7A72',
-    steps: [
-      { id: 'post_event', label: 'Post-Event' },
-      { id: 'invoiced',   label: 'Invoiced' },
-      { id: 'paid',       label: 'Paid' },
-    ],
-  },
+export const PROSPECT_STEPS: { id: ProspectStep; label: string; entry?: boolean; terminal?: boolean }[] = [
+  { id: 'inquiry',    label: 'Inquiry',    entry: true },
+  { id: 'outreach',   label: 'Outreach',   entry: true },
+  { id: 'in_contact', label: 'In Contact' },
+  { id: 'discussing', label: 'Discussing' },
+  { id: 'confirmed',  label: 'Confirmed',  terminal: true },
+  { id: 'declined',   label: 'Declined',   terminal: true },
 ]
 
-export function getBucket(step: PipelineStep): PipelineBucket {
-  for (const b of BUCKETS) {
-    if (b.steps.some(s => s.id === step)) return b.id
-  }
-  return 'prospect'
-}
+export const ENGAGEMENT_FLAGS: { id: EngagementFlag; label: string }[] = [
+  { id: 'contract_sent',      label: 'Contract Sent' },
+  { id: 'contract_signed',    label: 'Contract Signed' },
+  { id: 'advance_sheet_sent', label: 'Advance Sheet Sent' },
+  { id: 'logistics_confirmed',label: 'Logistics Confirmed' },
+  { id: 'day_of_ready',       label: 'Day-Of Ready' },
+]
 
-export function getStepLabel(step: PipelineStep): string {
-  for (const b of BUCKETS) {
-    const s = b.steps.find(s => s.id === step)
-    if (s) return s.label
-  }
-  return step
-}
+export const POST_EVENT_FLAGS: { id: PostEventFlag; label: string }[] = [
+  { id: 'invoice_sent',     label: 'Invoice Sent' },
+  { id: 'invoice_paid',     label: 'Invoice Paid' },
+  { id: 'media_uploaded',   label: 'Media Uploaded' },
+  { id: 'marked_complete',  label: 'Complete' },
+]
 
-export function getBucketForStep(step: PipelineStep) {
-  return BUCKETS.find(b => b.steps.some(s => s.id === step))!
-}
+// ─── Contact ──────────────────────────────────────────────────────────────────
 
-// ─── Contact (person on an engagement) ───────────────────────────────────────
-
-export type ContactRole =
-  | 'primary'
-  | 'bureau'
-  | 'legal'
-  | 'logistics'
-  | 'av'
-  | 'assistant'
-  | 'other'
+export type ContactRole = 'primary' | 'bureau' | 'legal' | 'logistics' | 'av' | 'assistant' | 'other'
+export type ContactStatus = 'prospect_active' | 'prospect_expired' | 'client'
 
 export interface EngagementContact {
   id: string
@@ -91,18 +44,13 @@ export interface EngagementContact {
   role: ContactRole
   is_current_point_of_contact: boolean
   notes?: string
+  status?: ContactStatus
+  watching?: boolean
 }
 
-// ─── Communication timeline entry ────────────────────────────────────────────
+// ─── Communication ────────────────────────────────────────────────────────────
 
-export type CommEntryType =
-  | 'email_inbound'
-  | 'email_outbound'
-  | 'note'
-  | 'stage_change'
-  | 'document_sent'
-  | 'call'
-  | 'other_channel' // IG, LinkedIn, etc.
+export type CommEntryType = 'email_inbound' | 'email_outbound' | 'note' | 'stage_change' | 'document_sent' | 'call' | 'other_channel'
 
 export interface CommEntry {
   id: string
@@ -112,22 +60,17 @@ export interface CommEntry {
   body?: string
   from_name?: string
   to_name?: string
-  contact_id?: string   // which EngagementContact this is linked to
-  staff_name?: string   // which staff member sent/logged it
-  channel?: string      // 'email' | 'instagram' | 'linkedin' | 'phone' | 'in_person'
+  contact_id?: string
+  staff_name?: string
+  channel?: string
   needs_response?: boolean
   response_due_by?: string
-  tagged_manually?: boolean // true if staff manually linked this
+  tagged_manually?: boolean
 }
 
-// ─── Alert ───────────────────────────────────────────────────────────────────
+// ─── Alert ────────────────────────────────────────────────────────────────────
 
-export type AlertType =
-  | 'no_response'        // inbound with no reply in X hours
-  | 'follow_up_due'      // we sent something, no reply in X days
-  | 'stage_stalled'      // hasn't moved in X days
-  | 'event_approaching'  // event in ≤14 days, doc not done
-  | 'invoice_overdue'    // invoice sent, not paid after 30 days
+export type AlertType = 'no_response' | 'follow_up_due' | 'stage_stalled' | 'event_approaching' | 'invoice_overdue'
 
 export interface EngagementAlert {
   type: AlertType
@@ -136,7 +79,29 @@ export interface EngagementAlert {
   since?: string
 }
 
-// ─── Engagement (the core record) ────────────────────────────────────────────
+// ─── Review Queue Item ────────────────────────────────────────────────────────
+
+export type ReviewItemState = 'ai_sorted' | 'needs_review'
+export type ReviewAction = 'create_prospect' | 'add_to_existing' | 'ignore'
+
+export interface ReviewItem {
+  id: string
+  received_at: string
+  from_name: string
+  from_email: string
+  subject: string
+  body_preview: string
+  account: string // which M365 account received it
+  ai_confidence: number // 0-1
+  state: ReviewItemState
+  ai_suggested_action: ReviewAction
+  ai_suggested_engagement_id?: string // if add_to_existing
+  ai_reasoning: string
+  confirmed_by?: string
+  confirmed_at?: string
+}
+
+// ─── Engagement ───────────────────────────────────────────────────────────────
 
 export interface Engagement {
   id: string
@@ -144,18 +109,19 @@ export interface Engagement {
   updated_at: string
   last_activity_at: string
 
-  // Pipeline position
-  bucket: PipelineBucket
-  step: PipelineStep
+  section: Section
+  prospect_step?: ProspectStep
+  engagement_flags: EngagementFlag[]
+  post_event_flags: PostEventFlag[]
 
-  // Organization
+  // AI confirmation status (for auto-sorted items)
+  ai_created?: boolean
+  human_confirmed?: boolean
+
   organization: string
-  source?: string  // how they found Mori
-
-  // Contacts (replaces single contact fields)
+  source?: string
   contacts: EngagementContact[]
 
-  // Event details
   event_name?: string
   event_date?: string
   event_location?: string
@@ -167,44 +133,24 @@ export interface Engagement {
   fee?: number
   travel_covered?: boolean
   hotel_covered?: boolean
-
-  // AV / Logistics
   av_needs?: string
   special_requirements?: string
-
-  // Internal
   notes?: string
   booker_name?: string
 
-  // Document status
-  contract_generated?: boolean
-  contract_signed?: boolean
-  advance_sheet_generated?: boolean
-  invoice_generated?: boolean
-  invoice_paid?: boolean
-
-  // Communication timeline
   comms: CommEntry[]
-
-  // Computed alerts (derived from comms + dates)
   alerts: EngagementAlert[]
 }
 
-// Convenience: primary contact on an engagement
 export function primaryContact(e: Engagement): EngagementContact | undefined {
   return e.contacts.find(c => c.is_current_point_of_contact) ?? e.contacts[0]
 }
 
-// ─── Legacy alias (used in documents.ts + dashboard) ─────────────────────────
-// Keeps existing code working while we migrate
-export type Client = Engagement & {
-  first_name: string
-  last_name: string
-  email: string
-  stage: PipelineStep
+export function getProspectStepLabel(step: ProspectStep): string {
+  return PROSPECT_STEPS.find(s => s.id === step)?.label ?? step
 }
 
-// ─── Document Types ────────────────────────────────────────────────────────────
+// ─── Document Types ───────────────────────────────────────────────────────────
 
 export interface GeneratedDocument {
   id: string
@@ -215,18 +161,6 @@ export interface GeneratedDocument {
   version: number
 }
 
-// ─── Dashboard Types ──────────────────────────────────────────────────────────
-
-export interface DashboardStats {
-  total_active: number
-  new_this_month: number
-  events_this_month: number
-  revenue_confirmed: number
-  revenue_pipeline: number
-  by_bucket: Record<PipelineBucket, number>
-  upcoming_events: Engagement[]
-}
-
 // ─── AI Types ─────────────────────────────────────────────────────────────────
 
 export interface InstagramCaptionRequest {
@@ -235,61 +169,35 @@ export interface InstagramCaptionRequest {
   tone?: 'professional' | 'inspiring' | 'conversational' | 'bold'
 }
 
-// ─── Document Types ────────────────────────────────────────────────────────────
+// ─── Company ──────────────────────────────────────────────────────────────────
 
-export interface GeneratedDocument {
+export interface CompanyTeam {
   id: string
-  client_id: string
-  type: 'contract' | 'advance_sheet' | 'invoice'
-  generated_at: string
-  file_url?: string
-  version: number
+  name: string // e.g. "Women's Initiative", "Leadership Development"
 }
 
-// ─── Email / CRM Types ────────────────────────────────────────────────────────
-
-export interface EmailThread {
+export interface Company {
   id: string
-  contact_name: string
-  contact_email: string
-  organization?: string
-  subject: string
-  last_message_at: string
-  message_count: number
-  messages: EmailMessage[]
-  client_id?: string // linked client if known
-  is_read: boolean
+  name: string
+  industry?: string
+  website?: string
+  notes?: string
+  watching?: boolean
+  teams: CompanyTeam[]
+  // derived from engagements
+  engagement_ids: string[]
+  contact_ids: string[]
 }
 
-export interface EmailMessage {
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'regular'
+
+export interface TeamUser {
   id: string
-  thread_id: string
-  from_name: string
-  from_email: string
-  to_email: string
-  subject: string
-  body: string
-  sent_at: string
-  is_inbound: boolean
-  ai_draft_reply?: string
-}
-
-// ─── Dashboard Types ──────────────────────────────────────────────────────────
-
-export interface DashboardStats {
-  total_active: number
-  new_this_month: number
-  events_this_month: number
-  revenue_confirmed: number
-  revenue_pipeline: number
-  by_stage: Record<PipelineStage, number>
-  upcoming_events: Client[]
-}
-
-// ─── AI Types ─────────────────────────────────────────────────────────────────
-
-export interface InstagramCaptionRequest {
-  image_description: string
-  topic_prompt: string
-  tone?: 'professional' | 'inspiring' | 'conversational' | 'bold'
+  name: string
+  email: string
+  role: UserRole
+  account: string // which M365 account they own
+  avatar_initials: string
 }

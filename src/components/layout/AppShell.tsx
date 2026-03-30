@@ -2,20 +2,25 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Users, Inbox, Sparkles, Settings,
-  ChevronRight, Bell, Search
+  LayoutDashboard, UserSearch, Handshake, Archive,
+  ClipboardCheck, Sparkles, Settings, ChevronRight, Bell, Search, Building2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MOCK_REVIEW_ITEMS } from '@/lib/mock-data'
 
 const NAV = [
-  { href: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-  { href: '/pipeline',   label: 'Pipeline',   icon: Users },
-  { href: '/inbox',      label: 'Inbox',      icon: Inbox, badge: 2 },
-  { href: '/ai-tools',   label: 'AI Tools',   icon: Sparkles },
+  { href: '/dashboard',    label: 'Dashboard',   icon: LayoutDashboard },
+  { href: '/prospects',    label: 'Prospects',   icon: UserSearch },
+  { href: '/engagements',  label: 'Engagements', icon: Handshake },
+  { href: '/post-event',   label: 'Post-Event',  icon: Archive },
+  { href: '/review',       label: 'Review',      icon: ClipboardCheck },
+  { href: '/companies',    label: 'Companies',   icon: Building2 },
+  { href: '/ai-tools',     label: 'AI Tools',    icon: Sparkles },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const reviewCount = MOCK_REVIEW_ITEMS.filter(i => !i.confirmed_at).length
 
   return (
     <div className="flex h-screen overflow-hidden bg-cream">
@@ -24,15 +29,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="px-5 py-6 border-b border-ink-800">
           <div className="font-display text-gold text-xl font-semibold tracking-wide leading-tight">
-            Mori<br />
-            <span className="text-ink-300 text-sm font-normal tracking-widest uppercase">Platform</span>
+            Team<br />
+            <span className="text-ink-300 text-sm font-normal tracking-widest uppercase">Taheripour</span>
           </div>
           <div className="accent-line mt-3" />
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV.map(({ href, label, icon: Icon, badge }) => {
+          {NAV.map(({ href, label, icon: Icon }) => {
+            const badge = href === '/review' ? (reviewCount > 0 ? reviewCount : undefined) : undefined
             const active = pathname.startsWith(href)
             return (
               <Link
