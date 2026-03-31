@@ -169,14 +169,31 @@ export function generateContract(client: Client): Blob {
 
 export function generateAdvanceSheet(client: Client): Blob {
   const doc = createDoc()
-  addHeader(doc, 'Advance Sheet / Event Briefing')
+
+  const eventType = (client as any).event_type || 'speaking'
+  const isMedia = ['podcast', 'interview', 'panel', 'livestream'].includes(eventType)
+  const isInPerson = client.event_format === 'in_person'
+  const isVirtual = client.event_format === 'virtual'
+  const isHybrid = client.event_format === 'hybrid'
+  const hasPhysicalComponent = isInPerson || isHybrid
+
+  const docTitle = isMedia ? 'Appearance Brief' : 'Advance Sheet'
+  addHeader(doc, docTitle)
 
   let y = 110
   const L = 50, R = 330
 
+  // Adaptive intro note
   doc.setFontSize(10)
   doc.setTextColor(60, 58, 54)
-  const note = `This advance sheet is prepared for Mori Taheripour and event staff for the engagement listed below. Please review all details and confirm any changes at least 72 hours prior to the event.`
+  const introByType: Record<string, string> = {
+    speaking:   `This advance sheet is prepared for Mori Taheripour and event staff. Please review all details and confirm any changes at least 72 hours prior to the event.`,
+    podcast:    `This appearance brief is prepared for Mori Taheripour ahead of the podcast recording. Please confirm all logistics and dial-in details at least 48 hours prior.`,
+    interview:  `This appearance brief is prepared for Mori Taheripour ahead of the interview. Please confirm format, questions received, and any final logistics at least 48 hours prior.`,
+    panel:      `This appearance brief is prepared for Mori Taheripour for the panel appearance. Please confirm panelist lineup, moderator questions, and tech setup at least 48 hours prior.`,
+    livestream: `This appearance brief is prepared for Mori Taheripour for the live appearance. Please confirm platform, dial-in link, and run-of-show at least 48 hours prior.`,
+  }
+  const note = introByType[eventType] || introByType.speaking
   const noteLines = doc.splitTextToSize(note, 512)
   doc.text(noteLines, 50, y)
   y += noteLines.length * 14 + 20
@@ -193,52 +210,179 @@ export function generateAdvanceSheet(client: Client): Blob {
     y += 18
   }
 
-  section('EVENT OVERVIEW')
-  addField(doc, 'Event Name', client.event_name || '—', L, y)
-  addField(doc, 'Date', formatDate(client.event_date), R, y)
-  y += 40
-  addField(doc, 'Organization', client.organization, L, y)
-  addField(doc, 'Format', client.event_format?.replace('_', '-') || '—', R, y)
-  y += 40
-  addField(doc, 'Venue', client.event_location || '—', L, y)
-  addField(doc, 'City', client.event_city || '—', R, y)
-  y += 40
-  addField(doc, 'Audience Size', client.audience_size?.toString() || '—', L, y)
-  addField(doc, 'Session Length', client.session_length ? `${client.session_length} minutes` : '—', R, y)
-  y += 50
+  // ── OVERVIEW ──
+  const overviewLabel = isMedia ? 'APPEARANCE OVERVIEW' : 'EVENT OVERVIEW'
+  section(overviewLabel)
 
-  section('PRESENTATION')
-  addField(doc, 'Topic / Title', client.topic || '—', L, y)
-  y += 40
-  addField(doc, 'Speaker Notes / Special Focus', client.notes || 'None specified', L, y)
-  y += 50
+  if (client.event_name) {
+    addField(doc, isMedia ? 'Appearance / Show Name' : 'Event Name', client.event_name, L, y)
+    addField(doc, 'Date', formatDate(client.event_date), R, y)
+    y += 40
+  } else {
+    addField(doc, 'Date', formatDate(client.event_date), L, y)
+    y += 40
+  }
 
-  section('CONTACT ON SITE')
-  addField(doc, 'Primary Contact', `${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}`, L, y)
-  addField(doc, 'Email', pc(client)?.email || "—", R, y)
+  addField(doc, 'Organization / Outlet', client.organization, L, y)
+  const formatLabel = isMedia
+    ? eventType.charAt(0).toUpperCase() + eventType.slice(1)
+    : (client.event_format?.replace('_', '-').toUpperCase() || '—')
+  addField(doc, 'Type / Format', formatLabel, R, y)
   y += 40
-  addField(doc, 'Phone', pc(client)?.phone || "—" || '—', L, y)
-  addField(doc, 'Title', pc(client)?.title || "—" || '—', R, y)
-  y += 50
 
-  section('TECHNICAL & LOGISTICS')
-  addField(doc, 'AV Requirements', client.av_needs || 'Standard setup', L, y)
-  y += 40
-  addField(doc, 'Special Requirements', client.special_requirements || 'None', L, y)
-  y += 40
-  addField(doc, 'Travel Covered', client.travel_covered ? 'Yes — Client arranges' : 'No — Speaker arranges', L, y)
-  addField(doc, 'Hotel Covered', client.hotel_covered ? 'Yes — Client arranges' : 'No — Speaker arranges', R, y)
-  y += 50
+  // Venue — only for in-person or hybrid
+  if (hasPhysicalComponent) {
+    addField(doc, 'Venue', client.event_location || '—', L, y)
+    addField(doc, 'City', client.event_city || '—', R, y)
+    y += 40
+  } else if (client.event_city) {
+    // Virtual but city is noted (e.g. "Virtual — NY timezone")
+    addField(doc, 'Location / Timezone', client.event_city, L, y)
+    y += 40
+  }
 
-  section('CHECKLIST')
-  const checks = [
-    '☐  Confirm final headcount with organizer',
-    '☐  Send speaker bio + headshot to organizer',
-    '☐  Confirm AV setup and test clicker/slides',
-    '☐  Confirm arrival time and green room location',
-    '☐  Confirm recording/photography permissions',
-    '☐  Confirm intro speaker name and pronunciation',
+  if (client.audience_size) {
+    addField(doc, isMedia ? 'Estimated Audience / Listeners' : 'Audience Size (est.)', client.audience_size.toLocaleString(), L, y)
+    if (client.session_length) addField(doc, 'Duration', `${client.session_length} minutes`, R, y)
+    y += 40
+  } else if (client.session_length) {
+    addField(doc, 'Duration', `${client.session_length} minutes`, L, y)
+    y += 40
+  }
+
+  y += 10
+
+  // ── TOPIC / CONTENT ──
+  const topicLabel = isMedia ? 'TOPIC & CONTENT' : 'PRESENTATION'
+  section(topicLabel)
+  if (client.topic) {
+    addField(doc, isMedia ? 'Discussion Topic / Angle' : 'Topic / Title', client.topic, L, y)
+    y += 40
+  }
+  if (client.notes) {
+    const notesLabel = isMedia ? 'Context & Notes' : 'Speaker Notes / Special Focus'
+    addField(doc, notesLabel, client.notes, L, y)
+    const notesLines = doc.splitTextToSize(client.notes, 512)
+    y += Math.max(40, notesLines.length * 13 + 16)
+  }
+  y += 10
+
+  // ── CONTACT ──
+  const contactLabel = hasPhysicalComponent ? 'CONTACT ON SITE' : 'PRIMARY CONTACT'
+  section(contactLabel)
+  const contact = pc(client)
+  if (contact) {
+    addField(doc, 'Name', `${contact.first_name} ${contact.last_name}`, L, y)
+    addField(doc, 'Email', contact.email || '—', R, y)
+    y += 40
+    if (contact.phone || contact.title) {
+      if (contact.phone) addField(doc, 'Phone', contact.phone, L, y)
+      if (contact.title) addField(doc, 'Title', contact.title, hasPhysicalComponent && contact.phone ? R : L, y)
+      y += 40
+    }
+  }
+  y += 10
+
+  // ── LOGISTICS — only sections that are relevant ──
+  const hasLogisticsContent = (hasPhysicalComponent && client.av_needs) ||
+    client.travel_covered !== undefined ||
+    client.hotel_covered !== undefined ||
+    client.special_requirements ||
+    (!hasPhysicalComponent && isMedia) // virtual media still needs platform info
+
+  if (hasLogisticsContent) {
+    section('LOGISTICS')
+
+    // AV — only for in-person/hybrid speaking
+    if (hasPhysicalComponent && !isMedia && client.av_needs) {
+      addField(doc, 'AV Requirements', client.av_needs, L, y)
+      y += 40
+    }
+
+    // Platform / dial-in — for virtual media appearances
+    if (!hasPhysicalComponent && isMedia) {
+      addField(doc, 'Platform / Recording Format', 'Confirm with organizer — link to be provided', L, y)
+      y += 40
+    }
+
+    // Travel — only show if relevant (in-person or hybrid)
+    if (hasPhysicalComponent) {
+      if (client.travel_covered !== undefined) {
+        addField(doc, 'Travel', client.travel_covered ? 'Covered by Client — client will arrange' : 'Self-arranged by Speaker', L, y)
+        if (client.hotel_covered !== undefined) {
+          addField(doc, 'Hotel', client.hotel_covered ? 'Covered by Client — client will arrange' : 'Self-arranged by Speaker', R, y)
+        }
+        y += 40
+      }
+    }
+
+    if (client.special_requirements) {
+      addField(doc, 'Special Requirements', client.special_requirements, L, y)
+      y += 40
+    }
+
+    y += 10
+  }
+
+  // ── CHECKLIST — adaptive by event type and format ──
+  section('PRE-EVENT CHECKLIST')
+
+  const sharedChecks = [
+    '☐  Bio and headshot confirmed with organizer',
+    '☐  Confirm introduction speaker / host name and pronunciation',
   ]
+
+  const speakingInPersonChecks = [
+    '☐  Confirm arrival time and green room or holding area',
+    '☐  Confirm AV setup — test clicker, slides, and confidence monitor',
+    '☐  Confirm final headcount with organizer',
+    '☐  Confirm recording and photography permissions',
+    '☐  Confirm run-of-show and time on stage',
+  ]
+
+  const speakingVirtualChecks = [
+    '☐  Confirm video platform and send/receive dial-in link',
+    '☐  Test audio, video, and screen share in advance',
+    '☐  Confirm final attendee count with organizer',
+    '☐  Confirm run-of-show and session timing',
+  ]
+
+  const podcastChecks = [
+    '☐  Confirm recording platform and dial-in link',
+    '☐  Test audio quality and quiet recording environment confirmed',
+    '☐  Review any prep questions or discussion guide received',
+    '☐  Confirm episode title and release timeline with producer',
+  ]
+
+  const interviewChecks = [
+    '☐  Confirm format — written, phone, or video',
+    '☐  Review questions or topic brief received from journalist',
+    '☐  Confirm publication outlet and expected publish date',
+    '☐  Confirm any embargo or approval-before-publish terms',
+  ]
+
+  const panelChecks = [
+    '☐  Confirm full panelist lineup and moderator name',
+    '☐  Review moderator prep questions',
+    '☐  Confirm virtual platform or venue details',
+    '☐  Confirm run-of-show and speaking order',
+  ]
+
+  const livestreamChecks = [
+    '☐  Confirm live platform (LinkedIn, YouTube, etc.) and join link',
+    '☐  Confirm run-of-show — conversation block vs live Q&A timing',
+    '☐  Test audio/video on platform in advance',
+    '☐  Confirm promotional posts and RSVP count with host',
+  ]
+
+  let checks: string[]
+  if (eventType === 'podcast') checks = [...podcastChecks, ...sharedChecks]
+  else if (eventType === 'interview') checks = [...interviewChecks, ...sharedChecks]
+  else if (eventType === 'panel') checks = [...panelChecks, ...sharedChecks]
+  else if (eventType === 'livestream') checks = [...livestreamChecks, ...sharedChecks]
+  else if (isInPerson) checks = [...speakingInPersonChecks, ...sharedChecks]
+  else checks = [...speakingVirtualChecks, ...sharedChecks]
+
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(30, 29, 25)

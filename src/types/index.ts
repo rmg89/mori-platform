@@ -1,7 +1,28 @@
+// ─── Event Type ───────────────────────────────────────────────────────────────
+
+export type EventType = 'speaking' | 'podcast' | 'interview' | 'panel' | 'livestream'
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  speaking:   'Speaking',
+  podcast:    'Podcast',
+  interview:  'Interview',
+  panel:      'Panel',
+  livestream: 'Livestream',
+}
+
+// Which event types are "media" (non-speaking) — affects checklist, fee display, etc.
+export const MEDIA_EVENT_TYPES: EventType[] = ['podcast', 'interview', 'panel', 'livestream']
+
 // ─── Pipeline Steps ────────────────────────────────────────────────────────────
 
-export type ProspectStep = 'inquiry' | 'outreach' | 'in_contact' | 'discussing' | 'confirmed' | 'declined'
+export type ProspectStep = 'inquiry' | 'outreach' | 'in_contact' | 'discussing' | 'proposal' | 'confirmed' | 'declined'
+
+// Speaking engagements use the full contract/logistics checklist
 export type EngagementFlag = 'contract_sent' | 'contract_signed' | 'advance_sheet_sent' | 'logistics_confirmed' | 'day_of_ready'
+
+// Media appearances use a lighter prep checklist
+export type MediaFlag = 'confirmed' | 'prep_sent' | 'bio_sent' | 'day_of_ready'
+
 export type PostEventFlag = 'invoice_sent' | 'invoice_paid' | 'media_uploaded' | 'marked_complete'
 export type Section = 'prospects' | 'engagements' | 'post-event'
 
@@ -10,6 +31,7 @@ export const PROSPECT_STEPS: { id: ProspectStep; label: string; entry?: boolean;
   { id: 'outreach',   label: 'Outreach',   entry: true },
   { id: 'in_contact', label: 'In Contact' },
   { id: 'discussing', label: 'Discussing' },
+  { id: 'proposal',   label: 'Proposal' },
   { id: 'confirmed',  label: 'Confirmed',  terminal: true },
   { id: 'declined',   label: 'Declined',   terminal: true },
 ]
@@ -20,6 +42,13 @@ export const ENGAGEMENT_FLAGS: { id: EngagementFlag; label: string }[] = [
   { id: 'advance_sheet_sent', label: 'Advance Sheet Sent' },
   { id: 'logistics_confirmed',label: 'Logistics Confirmed' },
   { id: 'day_of_ready',       label: 'Day-Of Ready' },
+]
+
+export const MEDIA_FLAGS: { id: MediaFlag; label: string }[] = [
+  { id: 'confirmed',  label: 'Confirmed' },
+  { id: 'prep_sent',  label: 'Prep/Questions Sent' },
+  { id: 'bio_sent',   label: 'Bio & Headshot Sent' },
+  { id: 'day_of_ready', label: 'Day-Of Ready' },
 ]
 
 export const POST_EVENT_FLAGS: { id: PostEventFlag; label: string }[] = [
@@ -82,7 +111,7 @@ export interface EngagementAlert {
 // ─── Review Queue Item ────────────────────────────────────────────────────────
 
 export type ReviewItemState = 'ai_sorted' | 'needs_review'
-export type ReviewAction = 'create_prospect' | 'add_to_existing' | 'ignore'
+export type ReviewAction = 'create_prospect' | 'add_to_existing' | 'update_prospect' | 'ignore'
 
 export interface ReviewItem {
   id: string
@@ -110,8 +139,10 @@ export interface Engagement {
   last_activity_at: string
 
   section: Section
+  event_type?: EventType          // defaults to 'speaking' if omitted
   prospect_step?: ProspectStep
   engagement_flags: EngagementFlag[]
+  media_flags?: MediaFlag[]       // used instead of engagement_flags for non-speaking types
   post_event_flags: PostEventFlag[]
 
   // AI confirmation status (for auto-sorted items)
