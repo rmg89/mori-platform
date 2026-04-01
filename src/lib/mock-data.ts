@@ -345,14 +345,14 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     alerts: [eventApproaching('Event May 14 — advance sheet overdue, Rachel is waiting')],
   },
 
-  // advance_sheet_sent — fully locked, event is soon
+  // client_deliverables_sent — fully locked, event is soon
   {
     id: 'e6',
     created_at: '2026-01-20T08:00:00Z',
     updated_at: '2026-03-28T11:00:00Z',
     last_activity_at: '2026-03-28T11:00:00Z',
     section: 'engagements',
-    engagement_flags: ['contract_sent', 'contract_signed', 'advance_sheet_sent', 'logistics_confirmed'],
+    engagement_flags: ['contract_sent', 'contract_signed', 'client_deliverables_sent'],
     post_event_flags: [],
     organization: 'JPMorgan Chase',
     source: 'Direct outreach',
@@ -377,14 +377,14 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     alerts: [],
   },
 
-  // day_of_ready — happening this week
+  // advance_sheet_complete — happening this week
   {
     id: 'e15',
     created_at: '2025-12-15T09:00:00Z',
     updated_at: '2026-03-29T10:00:00Z',
     last_activity_at: '2026-03-29T10:00:00Z',
     section: 'engagements',
-    engagement_flags: ['contract_sent', 'contract_signed', 'advance_sheet_sent', 'logistics_confirmed', 'day_of_ready'],
+    engagement_flags: ['contract_sent', 'contract_signed', 'client_deliverables_sent', 'advance_sheet_complete'],
     post_event_flags: [],
     organization: 'Stanford Graduate School of Business',
     source: 'Direct — faculty referral',
@@ -419,7 +419,7 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     updated_at: '2026-03-26T16:00:00Z',
     last_activity_at: '2026-03-26T16:00:00Z',
     section: 'post-event',
-    engagement_flags: ['contract_sent', 'contract_signed', 'advance_sheet_sent', 'logistics_confirmed', 'day_of_ready'],
+    engagement_flags: ['contract_sent', 'contract_signed', 'client_deliverables_sent', 'advance_sheet_complete'],
     post_event_flags: ['invoice_sent'],
     organization: 'TechCorp',
     source: 'LinkedIn referral',
@@ -451,7 +451,7 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     updated_at: '2026-03-15T14:00:00Z',
     last_activity_at: '2026-03-15T14:00:00Z',
     section: 'post-event',
-    engagement_flags: ['contract_sent', 'contract_signed', 'advance_sheet_sent', 'logistics_confirmed', 'day_of_ready'],
+    engagement_flags: ['contract_sent', 'contract_signed', 'client_deliverables_sent', 'advance_sheet_complete'],
     post_event_flags: ['invoice_sent', 'invoice_paid', 'media_uploaded'],
     organization: 'BlackRock',
     source: 'Referral from JPMorgan Chase',
@@ -482,7 +482,7 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     updated_at: '2026-02-20T10:00:00Z',
     last_activity_at: '2026-02-20T10:00:00Z',
     section: 'post-event',
-    engagement_flags: ['contract_sent', 'contract_signed', 'advance_sheet_sent', 'logistics_confirmed', 'day_of_ready'],
+    engagement_flags: ['contract_sent', 'contract_signed', 'client_deliverables_sent', 'advance_sheet_complete'],
     post_event_flags: ['invoice_sent', 'invoice_paid', 'media_uploaded', 'marked_complete'],
     organization: 'Goldman Sachs',
     source: 'Repeat client',

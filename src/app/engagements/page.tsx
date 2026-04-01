@@ -130,7 +130,7 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
 
   const doneFlagIds = [...(e.engagement_flags || []), ...((e as any).media_flags || [])]
   const bioSent = doneFlagIds.includes('bio_sent')
-  const logisticsConfirmed = doneFlagIds.includes('logistics_confirmed')
+  const clientDeliverablesSent = doneFlagIds.includes('client_deliverables_sent')
 
   return (
     <div className="space-y-6 py-2">
@@ -223,7 +223,7 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
         <div className="space-y-2">
           {checklistItems.map((item, i) => {
             const done = (item.toLowerCase().includes('bio') && bioSent) ||
-                         (item.toLowerCase().includes('logistics') && logisticsConfirmed)
+                         (item.toLowerCase().includes('logistics') && clientDeliverablesSent)
             return <CheckItem key={i} text={item} done={done} />
           })}
         </div>
