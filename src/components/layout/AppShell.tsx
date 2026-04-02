@@ -3,19 +3,19 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, UserSearch, Handshake, Archive,
-  ClipboardCheck, Sparkles, Settings, ChevronRight, Bell, Search, Building2
+  ClipboardCheck, Sparkles, Settings, Building2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MOCK_REVIEW_ITEMS } from '@/lib/mock-data'
 
 const NAV = [
-  { href: '/dashboard',    label: 'Dashboard',   icon: LayoutDashboard },
-  { href: '/prospects',    label: 'Prospects',   icon: UserSearch },
-  { href: '/engagements',  label: 'Engagements', icon: Handshake },
-  { href: '/post-event',   label: 'Post-Event',  icon: Archive },
-  { href: '/review',       label: 'Review',      icon: ClipboardCheck },
-  { href: '/companies',    label: 'Companies',   icon: Building2 },
-  { href: '/ai-tools',     label: 'AI Tools',    icon: Sparkles },
+  { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
+  { href: '/prospects',   label: 'Prospects',   icon: UserSearch },
+  { href: '/engagements', label: 'Engagements', icon: Handshake },
+  { href: '/post-event',  label: 'Post-Event',  icon: Archive },
+  { href: '/review',      label: 'Review',      icon: ClipboardCheck },
+  { href: '/companies',   label: 'Companies',   icon: Building2 },
+  { href: '/ai-tools',    label: 'AI Tools',    icon: Sparkles },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -23,85 +23,77 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const reviewCount = MOCK_REVIEW_ITEMS.filter(i => !i.confirmed_at).length
 
   return (
-    <div className="flex h-screen overflow-hidden bg-cream">
-      {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 flex flex-col bg-ink-900 border-r border-ink-800">
-        {/* Logo */}
-        <div className="px-5 py-6 border-b border-ink-800">
-          <div className="font-display text-gold text-xl font-semibold tracking-wide leading-tight">
-            Team<br />
-            <span className="text-ink-300 text-sm font-normal tracking-widest uppercase">Taheripour</span>
+    <div className="flex h-screen overflow-hidden bg-parchment">
+
+      {/* ── Sidebar ── */}
+      <aside className="w-52 flex-shrink-0 flex flex-col bg-parchment border-r border-ink-200/40">
+
+        {/* Wordmark */}
+        <div className="px-4 pt-4 pb-4 border-b border-ink-200/40">
+          <div className="font-display">
+            <span className="text-[11px] font-semibold tracking-[0.2em] uppercase text-ink-400 block">Team</span>
+            <span className="text-xl font-semibold text-gold-dark tracking-wide block leading-tight">Taheripour</span>
           </div>
-          <div className="accent-line mt-3" />
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
+        <nav className="flex-1 p-2 space-y-px overflow-y-auto">
           {NAV.map(({ href, label, icon: Icon }) => {
             const badge = href === '/review' ? (reviewCount > 0 ? reviewCount : undefined) : undefined
             const active = pathname.startsWith(href)
             return (
-              <Link
-                key={href}
-                href={href}
+              <Link key={href} href={href}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all group',
+                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all',
                   active
-                    ? 'bg-gold/10 text-gold border border-gold/20'
-                    : 'text-ink-300 hover:bg-ink-800 hover:text-cream'
+                    ? 'bg-white text-ink shadow-sm border border-ink-100'
+                    : 'text-ink-400 hover:text-ink hover:bg-white/60'
                 )}
               >
-                <Icon size={16} className={active ? 'text-gold' : 'text-ink-400 group-hover:text-cream'} />
+                <Icon size={15} className={cn('flex-shrink-0', active ? 'text-gold' : 'text-ink-300')} />
                 <span className="flex-1">{label}</span>
-                {badge ? (
-                  <span className="text-xs bg-gold text-ink-900 rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                {badge && (
+                  <span className="text-[10px] bg-gold text-ink-900 rounded-full w-4 h-4 flex items-center justify-center font-bold flex-shrink-0">
                     {badge}
                   </span>
-                ) : active ? (
-                  <ChevronRight size={12} className="text-gold/60" />
-                ) : null}
+                )}
               </Link>
             )
           })}
         </nav>
 
         {/* Bottom */}
-        <div className="px-3 py-4 border-t border-ink-800">
-          <Link
-            href="/settings"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-ink-400 hover:bg-ink-800 hover:text-cream transition-all"
-          >
-            <Settings size={16} />
+        <div className="p-2 border-t border-ink-200/40">
+          <Link href="/settings"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-ink-400 hover:text-ink hover:bg-white/60 transition-all">
+            <Settings size={15} className="flex-shrink-0 text-ink-300" />
             <span>Settings</span>
           </Link>
-          <div className="mt-3 px-3">
-            <div className="text-xs text-ink-500">Signed in as</div>
-            <div className="text-xs text-ink-300 font-medium mt-0.5 truncate">team@moritaheripour.com</div>
+          <div className="px-3 pt-2 pb-1">
+            <div className="text-[10px] uppercase tracking-widest text-ink-300 mb-0.5">Signed in as</div>
+            <div className="text-[11px] font-medium truncate text-ink-400">team@moritaheripour.com</div>
           </div>
         </div>
       </aside>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* ── Main area ── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{
+        background: 'linear-gradient(160deg, #FAF8F3 0%, #F5F1E8 60%, #FAF8F3 100%)',
+      }}>
+
         {/* Top bar */}
-        <header className="h-14 flex items-center px-6 border-b border-ink-100 bg-cream/80 backdrop-blur-sm flex-shrink-0">
-          <div className="flex-1 flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-parchment border border-ink-100 rounded-lg px-3 py-1.5 w-64">
-              <Search size={14} className="text-ink-300" />
-              <input
-                placeholder="Search clients, events..."
-                className="bg-transparent text-sm text-ink-600 placeholder:text-ink-300 outline-none flex-1"
-              />
-            </div>
+        <header className="h-10 flex items-center justify-between px-5 flex-shrink-0 border-b border-ink-100/60 bg-cream/80 backdrop-blur-sm">
+          <div className="flex items-center gap-2 rounded-lg px-2.5 py-1 w-48 bg-ink-50/60 border border-ink-100/60">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-ink-300 flex-shrink-0">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              placeholder="Search clients, events..."
+              className="bg-transparent text-xs text-ink-600 placeholder:text-ink-300 outline-none flex-1"
+            />
           </div>
-          <div className="flex items-center gap-3">
-            <button className="relative p-2 rounded-lg hover:bg-parchment transition-all">
-              <Bell size={16} className="text-ink-400" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-gold rounded-full" />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-ink-800 flex items-center justify-center text-xs font-bold text-gold">
-              MT
-            </div>
+          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-gold bg-ink-800">
+            MT
           </div>
         </header>
 
