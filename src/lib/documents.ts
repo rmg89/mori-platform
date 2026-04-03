@@ -173,220 +173,276 @@ export function generateBriefingDoc(client: Client): Blob {
   const eventType = (client as any).event_type || 'speaking'
   const isMedia = ['podcast', 'interview', 'panel', 'livestream'].includes(eventType)
   const isInPerson = client.event_format === 'in_person'
-  const isVirtual = client.event_format === 'virtual'
   const isHybrid = client.event_format === 'hybrid'
-  const hasPhysicalComponent = isInPerson || isHybrid
+  const hasPhysical = isInPerson || isHybrid
+  const isVirtual = !hasPhysical
+  const c = pc(client)
 
-  const docTitle = isMedia ? 'Briefing Document' : 'Briefing Document'
-  addHeader(doc, docTitle)
+  const typeLabels: Record<string, string> = {
+    speaking: 'Speaking Engagement', podcast: 'Podcast',
+    interview: 'Interview', panel: 'Panel', livestream: 'Livestream',
+  }
+  const typeLabel = typeLabels[eventType] || 'Engagement'
+  const formatStr = hasPhysical
+    ? `In-Person${client.event_city ? ` — ${client.event_city}` : ''}`
+    : 'Virtual'
 
-  let y = 110
+  addHeader(doc, 'Briefing Document')
+
+  let y = 100
   const L = 50, R = 330
 
-  // Adaptive intro note
-  doc.setFontSize(10)
-  doc.setTextColor(60, 58, 54)
-  const introByType: Record<string, string> = {
-    speaking:   `This advance sheet is prepared for Mori Taheripour and event staff. Please review all details and confirm any changes at least 72 hours prior to the event.`,
-    podcast:    `This appearance brief is prepared for Mori Taheripour ahead of the podcast recording. Please confirm all logistics and dial-in details at least 48 hours prior.`,
-    interview:  `This appearance brief is prepared for Mori Taheripour ahead of the interview. Please confirm format, questions received, and any final logistics at least 48 hours prior.`,
-    panel:      `This appearance brief is prepared for Mori Taheripour for the panel appearance. Please confirm panelist lineup, moderator questions, and tech setup at least 48 hours prior.`,
-    livestream: `This appearance brief is prepared for Mori Taheripour for the live appearance. Please confirm platform, dial-in link, and run-of-show at least 48 hours prior.`,
-  }
-  const note = introByType[eventType] || introByType.speaking
-  const noteLines = doc.splitTextToSize(note, 512)
-  doc.text(noteLines, 50, y)
-  y += noteLines.length * 14 + 20
-
-  const section = (title: string) => {
-    doc.setDrawColor(201, 168, 76)
-    doc.setLineWidth(0.5)
+  // Helper: divider rule
+  const rule = () => {
+    doc.setDrawColor(220, 218, 212)
+    doc.setLineWidth(0.4)
     doc.line(50, y, 562, y)
-    y += 16
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(15, 14, 12)
-    doc.text(title, 50, y)
     y += 18
   }
 
-  // ── OVERVIEW ──
-  const overviewLabel = isMedia ? 'APPEARANCE OVERVIEW' : 'EVENT OVERVIEW'
-  section(overviewLabel)
-
-  if (client.event_name) {
-    addField(doc, isMedia ? 'Appearance / Show Name' : 'Event Name', client.event_name, L, y)
-    addField(doc, 'Date', formatDate(client.event_date), R, y)
-    y += 40
-  } else {
-    addField(doc, 'Date', formatDate(client.event_date), L, y)
-    y += 40
+  // Helper: small label + value pair
+  const pf = (label: string, value: string | undefined | null, x: number, bold = false) => {
+    if (!value) return
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(140, 138, 132)
+    doc.text(label.toUpperCase(), x, y)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+    doc.setTextColor(15, 14, 12)
+    doc.text(value, x, y + 13)
   }
 
-  addField(doc, 'Organization / Outlet', client.organization, L, y)
-  const formatLabel = isMedia
-    ? eventType.charAt(0).toUpperCase() + eventType.slice(1)
-    : (client.event_format?.replace('_', '-').toUpperCase() || '—')
-  addField(doc, 'Type / Format', formatLabel, R, y)
-  y += 40
-
-  // Venue — only for in-person or hybrid
-  if (hasPhysicalComponent) {
-    addField(doc, 'Venue', client.event_location || '—', L, y)
-    addField(doc, 'City', client.event_city || '—', R, y)
-    y += 40
-  } else if (client.event_city) {
-    // Virtual but city is noted (e.g. "Virtual — NY timezone")
-    addField(doc, 'Location / Timezone', client.event_city, L, y)
-    y += 40
+  // Helper: full-width label + value (wrapping)
+  const pfWide = (label: string, value: string | undefined | null) => {
+    if (!value) return
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(140, 138, 132)
+    doc.text(label.toUpperCase(), 50, y)
+    y += 13
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(15, 14, 12)
+    const lines = doc.splitTextToSize(value, 512)
+    doc.text(lines, 50, y)
+    y += lines.length * 13 + 6
   }
 
-  if (client.audience_size) {
-    addField(doc, isMedia ? 'Estimated Audience / Listeners' : 'Audience Size (est.)', client.audience_size.toLocaleString(), L, y)
-    if (client.session_length) addField(doc, 'Duration', `${client.session_length} minutes`, R, y)
-    y += 40
-  } else if (client.session_length) {
-    addField(doc, 'Duration', `${client.session_length} minutes`, L, y)
-    y += 40
-  }
+  // ── EVENT / DATE / FORMAT ──────────────────────────────────────────────────
+  const eventName = client.event_name || client.organization
+  const dateTime = [formatDate(client.event_date), client.event_time].filter(Boolean).join(' | ')
+  pf('Event', eventName, L, true)
+  pf('Date / Time', dateTime, R, true)
+  y += 30
 
-  y += 10
+  pf('Format', `${typeLabel} — ${formatStr}`, L, true)
+  y += 28
 
-  // ── TOPIC / CONTENT ──
-  const topicLabel = isMedia ? 'TOPIC & CONTENT' : 'PRESENTATION'
-  section(topicLabel)
-  if (client.topic) {
-    addField(doc, isMedia ? 'Discussion Topic / Angle' : 'Topic / Title', client.topic, L, y)
-    y += 40
-  }
-  if (client.notes) {
-    const notesLabel = isMedia ? 'Context & Notes' : 'Speaker Notes / Special Focus'
-    addField(doc, notesLabel, client.notes, L, y)
-    const notesLines = doc.splitTextToSize(client.notes, 512)
-    y += Math.max(40, notesLines.length * 13 + 16)
-  }
-  y += 10
-
-  // ── CONTACT ──
-  const contactLabel = hasPhysicalComponent ? 'CONTACT ON SITE' : 'PRIMARY CONTACT'
-  section(contactLabel)
-  const contact = pc(client)
-  if (contact) {
-    addField(doc, 'Name', `${contact.first_name} ${contact.last_name}`, L, y)
-    addField(doc, 'Email', contact.email || '—', R, y)
-    y += 40
-    if (contact.phone || contact.title) {
-      if (contact.phone) addField(doc, 'Phone', contact.phone, L, y)
-      if (contact.title) addField(doc, 'Title', contact.title, hasPhysicalComponent && contact.phone ? R : L, y)
-      y += 40
+  // ── JOIN LINK block — virtual only ─────────────────────────────────────────
+  if (isVirtual && (client as any).join_link) {
+    doc.setFillColor(254, 249, 235)
+    doc.setDrawColor(201, 168, 76)
+    doc.setLineWidth(0.5)
+    doc.rect(50, y - 4, 512, 54, 'FD')
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(140, 100, 20)
+    doc.text('JOIN LINK', 58, y + 8)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(150, 110, 20)
+    doc.text((client as any).join_link || '', 58, y + 20)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(80, 78, 72)
+    if ((client as any).dial_in_backup) doc.text(`Backup dial-in: ${(client as any).dial_in_backup}`, 58, y + 32)
+    if ((client as any).green_room_time) doc.text(`Green room opens: ${(client as any).green_room_time}`, 58, y + 32 + ((client as any).dial_in_backup ? 12 : 0))
+    if ((client as any).go_live_time) {
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(15, 14, 12)
+      doc.text(`Go live: ${(client as any).go_live_time}`, 300, y + 32)
     }
+    y += 64
   }
-  y += 10
 
-  // ── LOGISTICS — only sections that are relevant ──
-  const hasLogisticsContent = (hasPhysicalComponent && client.av_needs) ||
-    client.travel_covered !== undefined ||
-    client.hotel_covered !== undefined ||
-    client.special_requirements ||
-    (!hasPhysicalComponent && isMedia) // virtual media still needs platform info
+  rule()
 
-  if (hasLogisticsContent) {
-    section('LOGISTICS')
+  // ── PRIMARY CONTACT ────────────────────────────────────────────────────────
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(201, 168, 76)
+  doc.text('PRIMARY CONTACT', 50, y)
+  y += 14
 
-    // AV — only for in-person/hybrid speaking
-    if (hasPhysicalComponent && !isMedia && client.av_needs) {
-      addField(doc, 'AV Requirements', client.av_needs, L, y)
-      y += 40
+  if (c) {
+    const nameTitle = c.title ? `${c.first_name} ${c.last_name}  |  ${c.title}` : `${c.first_name} ${c.last_name}`
+    doc.setFontSize(10.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(15, 14, 12)
+    doc.text(nameTitle, 50, y)
+    y += 14
+    doc.setFontSize(9.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(60, 58, 54)
+    if (c.phone) { doc.text(c.phone, 50, y); y += 13 }
+    if (c.email) { doc.text(c.email, 50, y); y += 13 }
+  }
+  y += 6
+
+  rule()
+
+  // ── PURPOSE / AUDIENCE / DURATION ─────────────────────────────────────────
+  if ((client as any).purpose) pfWide('Purpose', (client as any).purpose)
+
+  const audienceParts = [
+    (client as any).audience_description,
+    client.audience_size ? `~${client.audience_size.toLocaleString()} attendees` : null,
+  ].filter(Boolean)
+  if (audienceParts.length > 0) pfWide('Audience', audienceParts.join(' · '))
+
+  if (client.session_length) {
+    pfWide('Duration (her speaking time only)', `${client.session_length} minutes`)
+  }
+
+  if ((client as any).purpose || (client as any).audience_description || client.session_length) {
+    y += 4
+    rule()
+  }
+
+  // ── VENUE — in-person / hybrid only ───────────────────────────────────────
+  if (hasPhysical && (client.event_location || (client as any).arrival_time)) {
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(201, 168, 76)
+    doc.text('VENUE', 50, y)
+    y += 14
+
+    if (client.event_location) {
+      doc.setFontSize(10.5)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(15, 14, 12)
+      doc.text(client.event_location, 50, y)
+      y += 14
+    }
+    if ((client as any).arrival_time) {
+      pf('Arrival Time', (client as any).arrival_time, L, true)
+      y += 28
+    }
+    if ((client as any).venue_special_instructions) {
+      pfWide('Special Instructions', (client as any).venue_special_instructions)
+    }
+    y += 4
+    rule()
+  }
+
+  // ── TRAVEL DETAILS ────────────────────────────────────────────────────────
+  const hasTravel = (client as any).flight_details || (client as any).hotel_name || (client as any).drive_time
+  if (hasTravel) {
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(201, 168, 76)
+    doc.text('TRAVEL DETAILS', 50, y)
+    y += 14
+
+    if ((client as any).flight_details) {
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
+      doc.text('FLIGHT', 50, y); y += 13
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+      doc.text((client as any).flight_details, 50, y); y += 14
     }
 
-    // Platform / dial-in — for virtual media appearances
-    if (!hasPhysicalComponent && isMedia) {
-      addField(doc, 'Platform / Recording Format', 'Confirm with organizer — link to be provided', L, y)
-      y += 40
-    }
-
-    // Travel — only show if relevant (in-person or hybrid)
-    if (hasPhysicalComponent) {
-      if (client.travel_covered !== undefined) {
-        addField(doc, 'Travel', client.travel_covered ? 'Covered by Client — client will arrange' : 'Self-arranged by Speaker', L, y)
-        if (client.hotel_covered !== undefined) {
-          addField(doc, 'Hotel', client.hotel_covered ? 'Covered by Client — client will arrange' : 'Self-arranged by Speaker', R, y)
-        }
-        y += 40
+    if ((client as any).hotel_name) {
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
+      doc.text('HOTEL', 50, y); y += 13
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+      doc.text((client as any).hotel_name, 50, y); y += 14
+      const hotelMeta = [
+        (client as any).hotel_checkin ? `Check-in: ${(client as any).hotel_checkin}` : null,
+        (client as any).hotel_confirmation ? `Conf: ${(client as any).hotel_confirmation}` : null,
+      ].filter(Boolean).join('   ')
+      if (hotelMeta) {
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 97, 90)
+        doc.text(hotelMeta, 50, y); y += 14
       }
     }
 
-    if (client.special_requirements) {
-      addField(doc, 'Special Requirements', client.special_requirements, L, y)
-      y += 40
+    if ((client as any).ground_transport) {
+      pfWide('Ground Transport', (client as any).ground_transport)
     }
 
-    y += 10
+    if ((client as any).drive_time) {
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
+      doc.text('DRIVE TIME', 50, y); y += 13
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+      doc.text((client as any).drive_time, 50, y); y += 14
+    }
+
+    if ((client as any).parking_details) pfWide('Parking', (client as any).parking_details)
+
+    y += 4
+    rule()
   }
 
-  // ── CHECKLIST — adaptive by event type and format ──
-  section('PRE-EVENT CHECKLIST')
+  // ── SCHEDULE / RUN OF SHOW ────────────────────────────────────────────────
+  const ros = (client as any).run_of_show as { time: string; what: string; notes?: string }[] | undefined
+  if (ros && ros.length > 0) {
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(201, 168, 76)
+    doc.text('SCHEDULE / RUN OF SHOW', 50, y)
+    y += 14
 
-  const sharedChecks = [
-    '☐  Bio and headshot confirmed with organizer',
-    '☐  Confirm introduction speaker / host name and pronunciation',
-  ]
+    // Table header
+    doc.setFillColor(247, 246, 243)
+    doc.rect(50, y - 6, 512, 18, 'F')
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
+    doc.text('TIME', 54, y + 5)
+    doc.text("WHAT'S HAPPENING", 160, y + 5)
+    doc.text('HER ROLE / NOTES', 400, y + 5)
+    y += 18
 
-  const speakingInPersonChecks = [
-    '☐  Confirm arrival time and green room or holding area',
-    '☐  Confirm AV setup — test clicker, slides, and confidence monitor',
-    '☐  Confirm final headcount with organizer',
-    '☐  Confirm recording and photography permissions',
-    '☐  Confirm run-of-show and time on stage',
-  ]
+    doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
+    for (const row of ros) {
+      doc.setFont('helvetica', 'bold')
+      doc.text(row.time, 54, y)
+      doc.setFont('helvetica', 'normal')
+      const whatLines = doc.splitTextToSize(row.what, 220)
+      doc.text(whatLines, 160, y)
+      if (row.notes) {
+        doc.setTextColor(100, 97, 90)
+        const noteLines = doc.splitTextToSize(row.notes, 145)
+        doc.text(noteLines, 400, y)
+        doc.setTextColor(15, 14, 12)
+      }
+      doc.setDrawColor(230, 228, 224); doc.setLineWidth(0.3)
+      const rowH = Math.max(whatLines.length, 1) * 13 + 6
+      doc.line(50, y + rowH - 2, 562, y + rowH - 2)
+      y += rowH
+    }
+    y += 8
+    rule()
+  }
 
-  const speakingVirtualChecks = [
-    '☐  Confirm video platform and send/receive dial-in link',
-    '☐  Test audio, video, and screen share in advance',
-    '☐  Confirm final attendee count with organizer',
-    '☐  Confirm run-of-show and session timing',
-  ]
+  // ── PREP NOTES ────────────────────────────────────────────────────────────
+  const hasPrep = client.topic || (client as any).moderator_info || (client as any).panelist_info ||
+    (client as any).vip_info || (client as any).dress_code || (client as any).post_event_notes || client.notes
 
-  const podcastChecks = [
-    '☐  Confirm recording platform and dial-in link',
-    '☐  Test audio quality and quiet recording environment confirmed',
-    '☐  Review any prep questions or discussion guide received',
-    '☐  Confirm episode title and release timeline with producer',
-  ]
+  if (hasPrep) {
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(201, 168, 76)
+    doc.text('PREP NOTES', 50, y)
+    y += 14
 
-  const interviewChecks = [
-    '☐  Confirm format — written, phone, or video',
-    '☐  Review questions or topic brief received from journalist',
-    '☐  Confirm publication outlet and expected publish date',
-    '☐  Confirm any embargo or approval-before-publish terms',
-  ]
-
-  const panelChecks = [
-    '☐  Confirm full panelist lineup and moderator name',
-    '☐  Review moderator prep questions',
-    '☐  Confirm virtual platform or venue details',
-    '☐  Confirm run-of-show and speaking order',
-  ]
-
-  const livestreamChecks = [
-    '☐  Confirm live platform (LinkedIn, YouTube, etc.) and join link',
-    '☐  Confirm run-of-show — conversation block vs live Q&A timing',
-    '☐  Test audio/video on platform in advance',
-    '☐  Confirm promotional posts and RSVP count with host',
-  ]
-
-  let checks: string[]
-  if (eventType === 'podcast') checks = [...podcastChecks, ...sharedChecks]
-  else if (eventType === 'interview') checks = [...interviewChecks, ...sharedChecks]
-  else if (eventType === 'panel') checks = [...panelChecks, ...sharedChecks]
-  else if (eventType === 'livestream') checks = [...livestreamChecks, ...sharedChecks]
-  else if (isInPerson) checks = [...speakingInPersonChecks, ...sharedChecks]
-  else checks = [...speakingVirtualChecks, ...sharedChecks]
-
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(30, 29, 25)
-  for (const c of checks) { doc.text(c, 60, y); y += 18 }
+    if (client.topic) pfWide('Topics / Questions', client.topic)
+    if ((client as any).moderator_info) pfWide('Moderator / Co-Panelists', (client as any).moderator_info)
+    if ((client as any).panelist_info) pfWide('Co-Panelists', (client as any).panelist_info)
+    if ((client as any).vip_info) pfWide('VIPs', (client as any).vip_info)
+    if ((client as any).dress_code) pfWide('Dress Code / Vibe', (client as any).dress_code)
+    if ((client as any).post_event_notes) pfWide('Post-Event', (client as any).post_event_notes)
+    if (client.notes) pfWide('Additional Notes', client.notes)
+  }
 
   addFooter(doc, 1)
   return doc.output('blob')

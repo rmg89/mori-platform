@@ -80,20 +80,18 @@ function buildAlerts(prospects: Engagement[], active: Engagement[], postEvent: E
     const isMedia = !!(e as any).event_type && (e as any).event_type !== 'speaking'
 
     if (!isMedia) {
-      // Contract sent but unsigned — urgent if within 4 weeks, watch if further out
+      // Contract sent but not yet signed by client — escalate as event approaches
       if (flags.includes('contract_sent') && !flags.includes('contract_signed')) {
-        const contractAge = daysSince(e.comms?.find(c => c.subject?.toLowerCase().includes('agreement') || c.subject?.toLowerCase().includes('contract'))?.date ?? e.created_at)
-        if (days <= 28)
-          engagementAlerts.push({ engagement: e, severity: days <= 14 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — contract unsigned, ${contractAge}d waiting` })
-        else if (contractAge >= 14)
-          engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — contract pending signature (${contractAge}d)` })
+        const contractComm = e.comms?.find(c => c.subject?.toLowerCase().includes('agreement') || c.subject?.toLowerCase().includes('contract'))
+        const contractAge = daysSince(contractComm?.date ?? e.created_at)
+        if (days <= 14)
+          engagementAlerts.push({ engagement: e, severity: 'red', href: `/engagements/${e.id}`, label: `${e.organization} — contract not signed (${contractAge}d waiting, event in ${days}d)` })
+        else if (days <= 42)
+          engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — contract not yet signed (${contractAge}d waiting)` })
       }
-      // Contract signed but briefing doc not sent — flag if within 6 weeks
-      if (flags.includes('contract_signed') && !flags.includes('client_deliverables_sent') && days <= 42)
-        engagementAlerts.push({ engagement: e, severity: days <= 21 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document not sent, ${formatCountdown(days)}` })
-      // Briefing doc sent but not confirmed complete — flag within 3 weeks
-      if (flags.includes('client_deliverables_sent') && !flags.includes('advance_sheet_complete') && days <= 21)
-        engagementAlerts.push({ engagement: e, severity: days <= 7 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document not confirmed, ${formatCountdown(days)}` })
+      // Briefing document not marked complete within 7 days of event
+      if (!flags.includes('advance_sheet_complete') && days <= 7)
+        engagementAlerts.push({ engagement: e, severity: days <= 3 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document incomplete, event in ${days}d` })
       // Fully ready but event is tomorrow — day-of heads up
       if (flags.includes('advance_sheet_complete') && days === 1)
         engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — event tomorrow, all systems go` })

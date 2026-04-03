@@ -195,6 +195,39 @@ export interface Engagement {
   comms: CommEntry[]
   calls?: EngagementCall[]
   alerts: EngagementAlert[]
+
+  // ── Briefing document fields ──────────────────────────────────────────────
+  join_link?: string              // Zoom/StreamYard/etc. link for virtual events
+  dial_in_backup?: string         // Backup phone dial-in
+  green_room_time?: string        // e.g. "9:30am ET"
+  go_live_time?: string           // e.g. "10:00am ET" (virtual only)
+  arrival_time?: string           // e.g. "9:00am" (in-person only)
+  venue_maps_link?: string        // Google Maps URL for venue address
+  venue_special_instructions?: string
+
+  // Travel details
+  flight_details?: string         // e.g. "AA 1234 PHL → ORD | 7:45am → 9:10am"
+  flight_confirmation?: string
+  hotel_name?: string
+  hotel_checkin?: string
+  hotel_confirmation?: string
+  hotel_maps_link?: string
+  ground_transport?: string       // e.g. "Uber to hotel, client account"
+  drive_time?: string             // e.g. "2hr 15min from Philadelphia"
+  drive_route_link?: string       // Google Maps link with departure time
+  parking_details?: string
+
+  // Schedule / Run of Show
+  run_of_show?: { time: string; what: string; notes?: string }[]
+
+  // Prep notes
+  purpose?: string                // What is the event/engagement for
+  audience_description?: string   // Who is she speaking to/with (freeform)
+  moderator_info?: string         // Moderator name + link/research
+  panelist_info?: string          // Co-panelists info
+  vip_info?: string
+  dress_code?: string
+  post_event_notes?: string       // What happens after (book signing, dinner, etc.)
 }
 
 export function primaryContact(e: Engagement): EngagementContact | undefined {
