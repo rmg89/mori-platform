@@ -18,7 +18,7 @@ export const MEDIA_EVENT_TYPES: EventType[] = ['podcast', 'interview', 'panel', 
 export type ProspectStep = 'inquiry' | 'outreach' | 'in_contact' | 'confirmed' | 'declined'
 
 // Speaking engagements use the full contract/logistics checklist
-export type EngagementFlag = 'contract_sent' | 'contract_signed' | 'client_deliverables_sent' | 'advance_sheet_complete'
+export type EngagementFlag = 'contract_sent' | 'contract_signed' | 'client_deliverables_sent' | 'advance_sheet_complete' | 'materials_requested'
 
 // Media appearances use a lighter prep checklist
 export type MediaFlag = 'confirmed' | 'prep_sent' | 'bio_sent' | 'day_of_ready'
@@ -61,6 +61,7 @@ export const ENGAGEMENT_FLAGS: { id: EngagementFlag; label: string }[] = [
   { id: 'contract_signed',            label: 'Contract Signed' },
   { id: 'client_deliverables_sent',   label: 'Client Deliverables Sent' },
   { id: 'advance_sheet_complete',     label: 'Briefing Document Complete' },
+  { id: 'materials_requested',        label: 'Materials Requested from Client' },
 ]
 
 export const MEDIA_FLAGS: { id: MediaFlag; label: string }[] = [

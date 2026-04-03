@@ -86,15 +86,19 @@ function buildAlerts(prospects: Engagement[], active: Engagement[], postEvent: E
         const contractAge = daysSince(contractComm?.date ?? e.created_at)
         if (days <= 14)
           engagementAlerts.push({ engagement: e, severity: 'red', href: `/engagements/${e.id}`, label: `${e.organization} — contract not signed (${contractAge}d waiting, event in ${days}d)` })
-        else if (days <= 42)
+        else if (days <= 60)
           engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — contract not yet signed (${contractAge}d waiting)` })
       }
-      // Briefing document not marked complete within 7 days of event
+      // Briefing document not marked complete within 7 days of event — always red
       if (!flags.includes('advance_sheet_complete') && days <= 7)
-        engagementAlerts.push({ engagement: e, severity: days <= 3 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document incomplete, event in ${days}d` })
-      // Fully ready but event is tomorrow — day-of heads up
-      if (flags.includes('advance_sheet_complete') && days === 1)
-        engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — event tomorrow, all systems go` })
+        engagementAlerts.push({ engagement: e, severity: 'red', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document incomplete, event in ${days}d` })
+      // Materials requested from client but not yet received after 48h
+      if (flags.includes('materials_requested') && !flags.includes('client_deliverables_sent')) {
+        const requestComm = e.comms?.slice().reverse().find(c => c.subject?.toLowerCase().includes('materials') || c.subject?.toLowerCase().includes('deliverable') || c.subject?.toLowerCase().includes('bio') || c.subject?.toLowerCase().includes('headshot'))
+        const requestAge = daysSince(requestComm?.date ?? e.created_at)
+        if (requestAge >= 2)
+          engagementAlerts.push({ engagement: e, severity: requestAge >= 5 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — client materials not received (${requestAge}d since request)` })
+      }
     } else {
       // Media appearance — flag missing confirmation within 2 weeks
       const mediaFlags: string[] = (e as any).media_flags ?? []
