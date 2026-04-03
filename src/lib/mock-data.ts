@@ -382,11 +382,11 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     session_length: 75, fee: 24000,
     travel_covered: false, hotel_covered: false,
     av_needs: 'Lapel mic, clicker, HDMI, confidence monitor, recording setup',
-    notes: 'Requested bio, headshot, and run-of-show from Elena on Apr 1. No reply yet.',
+    notes: 'Elena requested bio and headshot on Apr 1. Not yet sent.',
     comms: [
       { id: 'cm5a', type: 'email_outbound', date: '2026-03-02T10:00:00Z', subject: 'Morgan Stanley Women Forward — Speaking Agreement', body: "Hi Elena,\n\nThank you for moving quickly on this. Please find attached the speaking agreement for April 9.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Elena Torres', contact_id: 'c5a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm5b', type: 'email_inbound', date: '2026-03-26T14:00:00Z', subject: 'Re: Morgan Stanley Women Forward — Contract Signed', body: "Hi Sarah,\n\nSigned and returned. Looking forward to working with Mori — let me know what you'll need for the briefing document.\n\nElena", from_name: 'Elena Torres', to_name: "Mori's Team", contact_id: 'c5a', channel: 'email', needs_response: false },
-      { id: 'cm5c', type: 'email_outbound', date: '2026-04-01T10:00:00Z', subject: 'Morgan Stanley Women Forward — Materials Request', body: "Hi Elena,\n\nAs we get closer to April 9, could you send over the run-of-show, expected audience breakdown, and any specific talking points you'd like Mori to address? A headshot and bio template for the event program would also be helpful.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Elena Torres', contact_id: 'c5a', staff_name: 'Sarah K.', channel: 'email', needs_response: true },
+      { id: 'cm5c', type: 'email_inbound', date: '2026-04-01T10:00:00Z', subject: 'Morgan Stanley Women Forward — Materials Request', body: "Hi Sarah,\n\nAs we finalize the program, could you send over Mori's bio and a high-res headshot for the event materials? We're also putting together the run-of-show and would love a one-line speaker intro.\n\nElena", from_name: 'Elena Torres', to_name: "Mori's Team", contact_id: 'c5a', channel: 'email', needs_response: true },
     ],
     alerts: [eventApproaching('Event Apr 9 — client materials not yet received')],
   },

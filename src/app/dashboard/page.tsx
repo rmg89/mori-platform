@@ -92,12 +92,12 @@ function buildAlerts(prospects: Engagement[], active: Engagement[], postEvent: E
       // Briefing document not marked complete within 7 days of event — always red
       if (!flags.includes('advance_sheet_complete') && days <= 7)
         engagementAlerts.push({ engagement: e, severity: 'red', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document incomplete, event in ${days}d` })
-      // Materials requested from client but not yet received after 48h
+      // Client has requested materials from us (bio, headshot, etc.) but we haven't sent yet
       if (flags.includes('materials_requested') && !flags.includes('client_deliverables_sent')) {
-        const requestComm = e.comms?.slice().reverse().find(c => c.subject?.toLowerCase().includes('materials') || c.subject?.toLowerCase().includes('deliverable') || c.subject?.toLowerCase().includes('bio') || c.subject?.toLowerCase().includes('headshot'))
+        const requestComm = e.comms?.slice().reverse().find(c => c.type === 'email_inbound')
         const requestAge = daysSince(requestComm?.date ?? e.created_at)
         if (requestAge >= 2)
-          engagementAlerts.push({ engagement: e, severity: requestAge >= 5 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — client materials not received (${requestAge}d since request)` })
+          engagementAlerts.push({ engagement: e, severity: requestAge >= 5 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — bio/materials requested by client, unsent ${requestAge <= 2 ? '48h+' : `${requestAge}d`}` })
       }
     } else {
       // Media appearance — flag missing confirmation within 2 weeks
