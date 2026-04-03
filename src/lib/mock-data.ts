@@ -20,9 +20,9 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
   // inquiry — came in this morning, no response yet
   {
     id: 'e1',
-    created_at: '2026-04-03T08:45:00Z',
-    updated_at: '2026-04-03T08:45:00Z',
-    last_activity_at: '2026-04-03T08:45:00Z',
+    created_at: '2026-03-30T08:45:00Z',
+    updated_at: '2026-03-30T08:45:00Z',
+    last_activity_at: '2026-03-30T08:45:00Z',
     section: 'prospects',
     prospect_step: 'inquiry',
     engagement_flags: [], post_event_flags: [],
@@ -31,23 +31,23 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     contacts: [{ id: 'c1a', first_name: 'Anika', last_name: 'Thomas', email: 'anika.thomas@accenture.com', title: 'VP Inclusion & Diversity', role: 'primary', is_current_point_of_contact: true, status: 'prospect_active' }],
     topic: 'Inclusive Negotiation Practices',
     event_format: 'virtual', audience_size: 250,
-    proposed_dates: ['2026-07-14', '2026-07-21', '2026-08-11'],
+    proposed_dates: [{ date: '2026-07-14', times: ['10–11am EST', '2–3pm EST'] }, { date: '2026-07-21', times: ['10–11am EST'] }, { date: '2026-08-11' }],
     notes: 'Inbound this morning via website contact form. Interested in Q3 virtual workshop for underrepresented talent.',
     comms: [{
-      id: 'cm1a', type: 'email_inbound', date: '2026-04-01T08:45:00Z',
+      id: 'cm1a', type: 'email_inbound', date: '2026-03-30T08:45:00Z',
       subject: 'Speaking Inquiry — Inclusion & Negotiation Workshop',
       body: "Hello,\n\nI'm the VP of Inclusion & Diversity at Accenture and came across Mori's work through her Wharton profile. Her approach to negotiation resonated deeply with our current programming goals.\n\nWe're planning a virtual workshop in Q3 focused on helping underrepresented talent negotiate more effectively in corporate settings. Would she be available for a 60-90 minute session?\n\nWarm regards,\nAnika Thomas\nVP, Inclusion & Diversity\nAccenture",
       from_name: 'Anika Thomas', to_name: "Mori's Team", contact_id: 'c1a', channel: 'email', needs_response: true, response_due_by: '2026-04-05T14:00:00Z',
     }],
-    alerts: [noResponse('Apr 1')],
+    alerts: [noResponse('Mar 31')],
   },
 
   // inquiry — came in Wednesday, still waiting on response
   {
     id: 'e9',
-    created_at: '2026-03-31T14:30:00Z',
-    updated_at: '2026-03-31T14:30:00Z',
-    last_activity_at: '2026-03-31T14:30:00Z',
+    created_at: '2026-03-30T14:30:00Z',
+    updated_at: '2026-03-30T14:30:00Z',
+    last_activity_at: '2026-03-30T14:30:00Z',
     section: 'prospects',
     prospect_step: 'inquiry',
     engagement_flags: [], post_event_flags: [],
@@ -59,12 +59,12 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     event_date: '2026-06-09', event_city: 'Portland, OR',
     notes: 'Came in Wednesday. Senior leadership offsite, June in Portland. No response yet — needs reply today.',
     comms: [{
-      id: 'cm9a', type: 'email_inbound', date: '2026-04-01T14:30:00Z',
+      id: 'cm9a', type: 'email_inbound', date: '2026-03-30T14:30:00Z',
       subject: 'Speaking Inquiry — Nike Executive Leadership Offsite',
       body: "Hi,\n\nMy name is Tanya Rhodes and I lead Leadership Development at Nike. We're planning an executive offsite in early June in Portland and Mori's work came highly recommended by a colleague at Wharton.\n\nWe're looking for a half-day keynote and workshop on negotiation and influence — ideally tailored for senior leaders. Could you share availability and rates?\n\nBest,\nTanya",
-      from_name: 'Tanya Rhodes', to_name: "Mori's Team", contact_id: 'c9a', channel: 'email', needs_response: true, response_due_by: '2026-04-04T00:00:00Z',
+      from_name: 'Tanya Rhodes', to_name: "Mori's Team", contact_id: 'c9a', channel: 'email', needs_response: true, response_due_by: '2026-03-30T00:00:00Z',
     }],
-    alerts: [noResponse('Apr 1')],
+    alerts: [noResponse('Mar 31')],
   },
 
   // outreach — team reached out Monday, no reply yet
@@ -121,8 +121,8 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
   {
     id: 'e2',
     created_at: '2026-03-21T10:00:00Z',
-    updated_at: '2026-04-01T10:00:00Z',
-    last_activity_at: '2026-04-01T10:00:00Z',
+    updated_at: '2026-03-30T10:00:00Z',
+    last_activity_at: '2026-03-30T10:00:00Z',
     section: 'prospects',
     prospect_step: 'in_contact',
     engagement_flags: [], post_event_flags: [],
@@ -143,21 +143,21 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     comms: [
       { id: 'cm2a', type: 'email_inbound', date: '2026-03-21T09:00:00Z', subject: 'Microsoft LEAP Summit — Speaker Inquiry', body: 'Initial outreach via Keppler. Microsoft interested in a keynote for their LEAP program leadership summit in September.', from_name: 'James Hollis', to_name: "Mori's Team", contact_id: 'c2b', channel: 'email', needs_response: false },
       { id: 'cm2b', type: 'call', date: '2026-03-21T14:00:00Z', subject: 'Intro call with Lauren Prescott — 30 min', body: "Great call. Lauren is a big fan of Bring Yourself and already has a topic in mind. Budget approval is the only hurdle — she expects to hear back from her VP by end of month.", from_name: 'EA', staff_name: 'EA', channel: 'phone', needs_response: false },
-      { id: 'cm2c', type: 'email_outbound', date: '2026-04-01T10:00:00Z', subject: "Re: Microsoft LEAP — Next Steps", body: "Hi Lauren,\n\nGreat connecting last week. I wanted to follow up and see if there's any update on budget approval. We're happy to hold the Sep 11 date while you finalize internally.\n\nLet me know if you need any additional materials.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Lauren Prescott', contact_id: 'c2a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
+      { id: 'cm2c', type: 'email_outbound', date: '2026-03-30T10:00:00Z', subject: "Re: Microsoft LEAP — Next Steps", body: "Hi Lauren,\n\nGreat connecting last week. I wanted to follow up and see if there's any update on budget approval. We're happy to hold the Sep 11 date while you finalize internally.\n\nLet me know if you need any additional materials.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Lauren Prescott', contact_id: 'c2a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
     ],
     calls: [
-      { id: 'call_e2_1', type: 'discovery', status: 'completed', number: 1, completed_date: '2026-03-21', notes: 'Great call with Lauren — enthusiastic, budget approval the only hurdle.', added_by: 'manual' },
-      { id: 'call_e2_2', type: 'mori', status: 'requested', number: 1, added_by: 'manual' },
+      { id: 'call_e2_1', type: 'discovery', status: 'completed', number: 1, requested_at: '2026-03-19T14:00:00Z', scheduled_at: '2026-03-21T14:00:00Z', completed_at: '2026-03-21T14:00:00Z', notes: 'Great call with Lauren — enthusiastic, budget approval the only hurdle.', added_by: 'manual' },
+      { id: 'call_e2_2', type: 'mori', status: 'requested', number: 1, requested_at: '2026-04-01T10:00:00Z', added_by: 'manual' },
     ],
-    alerts: [followUp('Apr 2')],
+    alerts: [followUp('Mar 31')],
   },
 
   // in_contact — multi-contact, active thread, speaker packet sent this week
   {
     id: 'e12',
     created_at: '2026-03-19T09:00:00Z',
-    updated_at: '2026-04-03T16:00:00Z',
-    last_activity_at: '2026-04-03T16:00:00Z',
+    updated_at: '2026-03-30T16:00:00Z',
+    last_activity_at: '2026-03-30T16:00:00Z',
     section: 'prospects',
     prospect_step: 'in_contact',
     engagement_flags: [], post_event_flags: [],
@@ -176,7 +176,7 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     comms: [
       { id: 'cm12a', type: 'email_inbound', date: '2026-03-19T09:00:00Z', subject: 'Amazon Leadership Conference — Speaker Inquiry', body: 'Via Washington Speakers Bureau. Patricia Yuen at Amazon interested in Mori for their annual leadership conference in August.', from_name: 'Carlos Mendes', to_name: "Mori's Team", contact_id: 'c12b', channel: 'email', needs_response: false },
       { id: 'cm12b', type: 'call', date: '2026-03-25T15:00:00Z', subject: 'Intro call with Patricia Yuen — 45 min', body: "Excellent call. Patricia has read Bring Yourself and came with prepared questions. She wants a hybrid format with breakout components. Patricia said she'll push this through internally.", from_name: 'EA', staff_name: 'EA', channel: 'phone', needs_response: false },
-      { id: 'cm12c', type: 'email_outbound', date: '2026-04-03T16:00:00Z', subject: 'Re: Amazon Leadership Conference — Speaker Packet + Hybrid Format Notes', body: "Hi Patricia,\n\nReally enjoyed our conversation last week. As discussed, I'm attaching Mori's full speaker packet along with some notes on how she's structured hybrid keynotes in the past — including the Q&A and breakout components.\n\nLet us know when you'd like to connect again.\n\nBest,\nRyan G.", from_name: "Mori's Team", to_name: 'Patricia Yuen', contact_id: 'c12a', staff_name: 'Ryan G.', channel: 'email', needs_response: false },
+      { id: 'cm12c', type: 'email_outbound', date: '2026-03-30T16:00:00Z', subject: 'Re: Amazon Leadership Conference — Speaker Packet + Hybrid Format Notes', body: "Hi Patricia,\n\nReally enjoyed our conversation last week. As discussed, I'm attaching Mori's full speaker packet along with some notes on how she's structured hybrid keynotes in the past — including the Q&A and breakout components.\n\nLet us know when you'd like to connect again.\n\nBest,\nRyan G.", from_name: "Mori's Team", to_name: 'Patricia Yuen', contact_id: 'c12a', staff_name: 'Ryan G.', channel: 'email', needs_response: false },
     ],
     alerts: [],
   },
@@ -185,8 +185,8 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
   {
     id: 'e3',
     created_at: '2026-03-16T10:00:00Z',
-    updated_at: '2026-03-31T09:00:00Z',
-    last_activity_at: '2026-03-31T09:00:00Z',
+    updated_at: '2026-03-30T09:00:00Z',
+    last_activity_at: '2026-03-30T09:00:00Z',
     section: 'prospects',
     prospect_step: 'in_contact',
     engagement_flags: [], post_event_flags: [],
@@ -211,17 +211,17 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
       { id: 'cm3c', type: 'email_outbound', date: '2026-03-21T09:00:00Z', subject: 'Re: Vistage Summit — Proposal', body: 'Sent formal proposal: 90 min keynote + Q&A at $25,000. Travel and hotel required.', from_name: "Mori's Team", to_name: 'David Koslowski', contact_id: 'c3a', staff_name: 'EA', channel: 'email', needs_response: false },
       { id: 'cm3d', type: 'email_inbound', date: '2026-03-26T11:00:00Z', subject: 'Re: Vistage Summit — Counter Proposal', body: "Hi, we appreciate the proposal. Our budget for this session tops out at $22,000 — is there any flexibility? Happy to discuss.", from_name: 'David Koslowski', to_name: "Mori's Team", contact_id: 'c3a', channel: 'email', needs_response: false },
       { id: 'cm3e', type: 'email_outbound', date: '2026-03-27T10:00:00Z', subject: 'Re: Vistage Summit — Response to Counter', body: "Hi David,\n\nThank you for coming back to us. We've reviewed your counter and unfortunately aren't able to move on the fee for a 90-minute engagement. Mori's rate for this format is $25,000.\n\nWe could offer a 60-minute keynote at $20,000 if that's more workable — the session would still be comprehensive but more tightly structured.\n\nLet us know how you'd like to proceed.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'David Koslowski', contact_id: 'c3a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
-      { id: 'cm3f', type: 'email_inbound', date: '2026-03-31T09:00:00Z', subject: 'Re: Vistage Summit — One More Ask', body: "We still prefer the 90-minute format. Our board reviewed and unfortunately can't go above $22k. I know this isn't what you're looking for — is there truly no flexibility? We're huge fans of Mori's work.", from_name: 'David Koslowski', to_name: "Mori's Team", contact_id: 'c3a', channel: 'email', needs_response: true, response_due_by: '2026-04-04T00:00:00Z' },
+      { id: 'cm3f', type: 'email_inbound', date: '2026-03-30T09:00:00Z', subject: 'Re: Vistage Summit — One More Ask', body: "We still prefer the 90-minute format. Our board reviewed and unfortunately can't go above $22k. I know this isn't what you're looking for — is there truly no flexibility? We're huge fans of Mori's work.", from_name: 'David Koslowski', to_name: "Mori's Team", contact_id: 'c3a', channel: 'email', needs_response: true, response_due_by: '2026-03-30T00:00:00Z' },
     ],
-    alerts: [noResponse('Apr 3')],
+    alerts: [noResponse('Mar 31')],
   },
 
   // discussing — ready to move to contract, needs agreement sent
   {
     id: 'e13',
     created_at: '2026-03-13T10:00:00Z',
-    updated_at: '2026-04-02T14:00:00Z',
-    last_activity_at: '2026-04-02T14:00:00Z',
+    updated_at: '2026-03-30T14:00:00Z',
+    last_activity_at: '2026-03-30T14:00:00Z',
     section: 'prospects',
     prospect_step: 'in_contact',
     engagement_flags: [], post_event_flags: [],
@@ -249,8 +249,8 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
   {
     id: 'e14',
     created_at: '2026-03-06T09:00:00Z',
-    updated_at: '2026-04-02T14:00:00Z',
-    last_activity_at: '2026-04-02T14:00:00Z',
+    updated_at: '2026-03-30T14:00:00Z',
+    last_activity_at: '2026-03-30T14:00:00Z',
     section: 'prospects',
     prospect_step: 'in_contact',
     engagement_flags: [], post_event_flags: [],
@@ -273,23 +273,23 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
       { id: 'cm14a', type: 'email_inbound', date: '2026-03-06T09:00:00Z', subject: 'Citi Women in Finance — Speaker Inquiry', body: 'Via Keppler. Nadia Hassan at Citi interested in a keynote for their Women in Finance Leadership Day in late May.', from_name: 'Erin Cho', to_name: "Mori's Team", contact_id: 'c14b', channel: 'email', needs_response: false },
       { id: 'cm14b', type: 'call', date: '2026-03-13T11:00:00Z', subject: 'Intro call with Nadia — 30 min', body: "Good call. Nadia very engaged, has attended Mori's sessions before at Wharton executive ed. Fast mover — wants to finalize quickly.", from_name: 'EA', staff_name: 'EA', channel: 'phone', needs_response: false },
       { id: 'cm14c', type: 'email_outbound', date: '2026-03-26T09:00:00Z', subject: 'Citi Women in Finance — Formal Proposal', body: "Hi Nadia,\n\nThank you for the great conversation earlier this month. I'm pleased to send over a formal proposal for Mori's keynote at your Women in Finance Leadership Day on May 30.\n\nPlease find attached: speaker brief, session outline, and fee agreement. We look forward to your confirmation.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Nadia Hassan', contact_id: 'c14a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
-      { id: 'cm14d', type: 'email_inbound', date: '2026-04-02T14:00:00Z', subject: 'Re: Citi Women in Finance — CFO Sign-Off Confirmed', body: "Hi Sarah,\n\nGreat news — CFO approved. I'll be sending formal sign-off today or first thing tomorrow. We're very excited to have Mori.\n\nNadia", from_name: 'Nadia Hassan', to_name: "Mori's Team", contact_id: 'c14a', channel: 'email', needs_response: false },
+      { id: 'cm14d', type: 'email_inbound', date: '2026-03-30T14:00:00Z', subject: 'Re: Citi Women in Finance — CFO Sign-Off Confirmed', body: "Hi Sarah,\n\nGreat news — CFO approved. I'll be sending formal sign-off today or first thing tomorrow. We're very excited to have Mori.\n\nNadia", from_name: 'Nadia Hassan', to_name: "Mori's Team", contact_id: 'c14a', channel: 'email', needs_response: false },
     ],
     calls: [
-      { id: 'call_e13_1', type: 'discovery', status: 'completed', number: 1, completed_date: '2026-03-18', notes: 'Strong chemistry — Diana is a former Wharton student.', added_by: 'manual' },
-      { id: 'call_e13_2', type: 'mori', status: 'completed', number: 1, completed_date: '2026-03-22', notes: 'Mori and Diana connected directly — confirmed 90-min format.', added_by: 'manual' },
+      { id: 'call_e13_1', type: 'discovery', status: 'completed', number: 1, requested_at: '2026-03-16T09:00:00Z', scheduled_at: '2026-03-18T11:00:00Z', completed_at: '2026-03-18T11:00:00Z', notes: 'Strong chemistry — Diana is a former Wharton student.', added_by: 'manual' },
+      { id: 'call_e13_2', type: 'mori', status: 'completed', number: 1, requested_at: '2026-03-19T10:00:00Z', scheduled_at: '2026-03-22T14:00:00Z', completed_at: '2026-03-22T14:00:00Z', notes: 'Mori and Diana connected directly — confirmed 90-min format.', added_by: 'manual' },
     ],
     alerts: [],
   },
 
   // ── ENGAGEMENTS ────────────────────────────────────────────────────────────
 
-  // TODAY — happening today April 3 (demo), fully ready
+  // TODAY — happening today April 3, fully ready
   {
     id: 'e17',
     created_at: '2026-01-21T09:00:00Z',
-    updated_at: '2026-04-03T15:00:00Z',
-    last_activity_at: '2026-04-03T15:00:00Z',
+    updated_at: '2026-03-30T15:00:00Z',
+    last_activity_at: '2026-03-30T15:00:00Z',
     section: 'engagements',
     engagement_flags: ['contract_sent', 'contract_signed', 'client_deliverables_sent', 'advance_sheet_complete'],
     post_event_flags: [],
@@ -301,7 +301,7 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
       { id: 'c17b', first_name: 'Chris', last_name: 'Park', email: 'cpark@wharton.upenn.edu', title: 'Events Coordinator', role: 'assistant', is_current_point_of_contact: false, notes: 'Managing day-of logistics. Confirmed 8:30am setup call.' },
     ],
     event_name: 'Women in Leadership Summit 2026',
-    event_date: '2026-04-04',
+    event_date: '2026-03-30',
     event_location: 'Huntsman Hall, Room 300', event_city: 'Philadelphia, PA',
     event_format: 'in_person', audience_size: 250,
     topic: 'Negotiation & Influence for Executive Women',
@@ -310,11 +310,11 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     av_needs: 'Lapel mic, clicker, HDMI, confidence monitor, recording setup',
     notes: "Today's event. Everything fully confirmed — Rachel signed off last week. Chris confirmed AV check at 8:30am. Mori is speaking at 10am.",
     comms: [
-      { id: 'cm17a', type: 'email_outbound', date: '2026-02-16T10:00:00Z', subject: 'Women in Leadership Summit — Speaking Agreement', body: "Hi Rachel,\n\nSo glad to be working together again. Please find attached the speaking agreement for April 4.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Rachel Simmons', contact_id: 'c17a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
+      { id: 'cm17a', type: 'email_outbound', date: '2026-02-16T10:00:00Z', subject: 'Women in Leadership Summit — Speaking Agreement', body: "Hi Rachel,\n\nSo glad to be working together again. Please find attached the speaking agreement for April 1.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Rachel Simmons', contact_id: 'c17a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm17b', type: 'email_inbound', date: '2026-02-19T09:00:00Z', subject: 'Re: Women in Leadership Summit — Contract Signed', body: "Signed and returned — so excited to have Mori back for a fourth year. She's always the highlight of the summit.\n\nRachel", from_name: 'Rachel Simmons', to_name: "Mori's Team", contact_id: 'c17a', channel: 'email', needs_response: false },
-      { id: 'cm17c', type: 'email_outbound', date: '2026-03-21T09:00:00Z', subject: 'Women in Leadership Summit — Briefing Document', body: "Hi Rachel,\n\nAttached is the briefing document for April 4. Please review and confirm everything looks accurate.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Rachel Simmons', contact_id: 'c17a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
+      { id: 'cm17c', type: 'email_outbound', date: '2026-03-21T09:00:00Z', subject: 'Women in Leadership Summit — Briefing Document', body: "Hi Rachel,\n\nAttached is the briefing document for April 1. Please review and confirm everything looks accurate.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Rachel Simmons', contact_id: 'c17a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm17d', type: 'email_inbound', date: '2026-03-23T10:00:00Z', subject: 'Re: Women in Leadership Summit — Briefing Document Confirmed', body: "Everything looks perfect. Final headcount is 247. Chris will handle the AV check at 8:30am — Mori is on at 10am sharp.\n\nRachel", from_name: 'Rachel Simmons', to_name: "Mori's Team", contact_id: 'c17a', channel: 'email', needs_response: false },
-      { id: 'cm17e', type: 'email_inbound', date: '2026-04-03T15:00:00Z', subject: "Women in Leadership — See You Today!", body: "Hi,\n\nJust confirming everything is set for this morning. Chris will be in the lobby of Huntsman Hall at 8:30am. We're all very excited.\n\nRachel", from_name: 'Rachel Simmons', to_name: "Mori's Team", contact_id: 'c17a', channel: 'email', needs_response: false },
+      { id: 'cm17e', type: 'email_inbound', date: '2026-03-30T15:00:00Z', subject: "Women in Leadership — See You Today!", body: "Hi,\n\nJust confirming everything is set for this morning. Chris will be in the lobby of Huntsman Hall at 8:30am. We're all very excited.\n\nRachel", from_name: 'Rachel Simmons', to_name: "Mori's Team", contact_id: 'c17a', channel: 'email', needs_response: false },
     ],
     alerts: [eventApproaching("Today — Wharton Women in Leadership, 10am in Philadelphia")],
   },
@@ -323,8 +323,8 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
   {
     id: 'e4',
     created_at: '2026-03-02T09:00:00Z',
-    updated_at: '2026-04-04T09:15:00Z',
-    last_activity_at: '2026-04-04T09:15:00Z',
+    updated_at: '2026-03-30T09:15:00Z',
+    last_activity_at: '2026-03-30T09:15:00Z',
     section: 'engagements',
     engagement_flags: ['contract_sent'],
     post_event_flags: [],
@@ -345,14 +345,14 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     session_length: 60, fee: 28000,
     travel_covered: true, hotel_covered: true,
     av_needs: 'Handheld mic preferred, full AV team on site, confidence monitor',
-    notes: 'Contract sent Mar 21. Legal addendum came back this morning from Jennifer — needs review and sign-off today. Event April 16, 2 weeks out.',
+    notes: 'Contract sent Mar 21. Legal addendum came back this morning from Jennifer — needs review and sign-off today. Event April 15, 2 weeks out.',
     comms: [
       { id: 'cm4a', type: 'email_outbound', date: '2026-03-21T10:00:00Z', subject: 'Deloitte Leadership Forum 2026 — Speaking Agreement', body: "Hi Marcus,\n\nPlease find attached the speaking agreement for the Deloitte Leadership Forum on June 4. I've cc'd Jennifer on logistics.\n\nLet us know if you have any questions.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Marcus Webb', contact_id: 'c4a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm4b', type: 'email_inbound', date: '2026-03-26T14:00:00Z', subject: 'Re: Deloitte Leadership Forum — Legal Review', body: "Our legal team (David Chen, cc'd) has reviewed the agreement. Two items to address: IP clause and recording rights addendum. Nothing major.\n\nMarcus", from_name: 'Marcus Webb', to_name: "Mori's Team", contact_id: 'c4a', channel: 'email', needs_response: false },
-      { id: 'cm4c', type: 'call', date: '2026-03-28T10:00:00Z', subject: 'Legal review call with David Chen — 20 min', body: "Good call. Both issues are minor. David drafting a short addendum. Back to us by April 3.", from_name: 'EA', staff_name: 'EA', channel: 'phone', needs_response: false },
-      { id: 'cm4d', type: 'email_inbound', date: '2026-04-04T09:15:00Z', subject: 'Re: Deloitte Leadership Forum — Addendum Ready for Review', body: "Hi,\n\nDavid has drafted the addendum — attached. Please review and let us know if the language works on your end. Once agreed, Marcus will sign the full agreement.\n\nJennifer Park\nEA to Marcus Webb", from_name: 'Jennifer Park', to_name: "Mori's Team", contact_id: 'c4b', channel: 'email', needs_response: true, response_due_by: '2026-04-05T00:00:00Z' },
+      { id: 'cm4c', type: 'call', date: '2026-03-28T10:00:00Z', subject: 'Legal review call with David Chen — 20 min', body: "Good call. Both issues are minor. David drafting a short addendum. Back to us by April 1.", from_name: 'EA', staff_name: 'EA', channel: 'phone', needs_response: false },
+      { id: 'cm4d', type: 'email_inbound', date: '2026-03-30T09:15:00Z', subject: 'Re: Deloitte Leadership Forum — Addendum Ready for Review', body: "Hi,\n\nDavid has drafted the addendum — attached. Please review and let us know if the language works on your end. Once agreed, Marcus will sign the full agreement.\n\nJennifer Park\nEA to Marcus Webb", from_name: 'Jennifer Park', to_name: "Mori's Team", contact_id: 'c4b', channel: 'email', needs_response: true, response_due_by: '2026-04-05T00:00:00Z' },
     ],
-    alerts: [noResponse('Apr 3')],
+    alerts: [noResponse('Mar 31')],
   },
 
   // contract_signed — briefing doc still needed
@@ -414,9 +414,9 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     session_length: 45, fee: 18000,
     travel_covered: false, hotel_covered: false,
     av_needs: 'Podium mic, projector, no clicker needed — slides advanced by AV tech',
-    notes: 'Everything locked. Event is April 16 — 14 days out. Briefing document not yet sent to Priya — needs to go today.',
+    notes: 'Everything locked. Event is April 15 — 14 days out. Briefing document not yet sent to Priya — needs to go today.',
     comms: [
-      { id: 'cm6a', type: 'email_outbound', date: '2026-03-11T09:00:00Z', subject: "Chase Women's Network — Briefing Document", body: "Hi Priya,\n\nAttached is the briefing document for the April 23 conference. Please review and confirm all details are accurate.\n\nAlso cc'ing Tom on AV logistics.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Priya Nair', contact_id: 'c6a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
+      { id: 'cm6a', type: 'email_outbound', date: '2026-03-11T09:00:00Z', subject: "Chase Women's Network — Briefing Document", body: "Hi Priya,\n\nAttached is the briefing document for the April 13 conference. Please review and confirm all details are accurate.\n\nAlso cc'ing Tom on AV logistics.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Priya Nair', contact_id: 'c6a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm6b', type: 'email_inbound', date: '2026-03-15T10:00:00Z', subject: "Re: Chase Women's Network — Briefing Document Confirmed", body: "All confirmed. One update: we've moved to the main auditorium on floor 2 — Tom will have everything set up. AV check is at 8:30am.\n\nCurrent headcount is 178. We're so excited to have Mori.\n\nPriya", from_name: 'Priya Nair', to_name: "Mori's Team", contact_id: 'c6a', channel: 'email', needs_response: false },
       { id: 'cm6c', type: 'email_inbound', date: '2026-03-29T11:00:00Z', subject: "Chase Conference — Final Headcount & Run of Show", body: "Final headcount confirmed at 182. Attached is the full run of show — Mori is on at 10:15am following opening remarks.\n\nPriya", from_name: 'Priya Nair', to_name: "Mori's Team", contact_id: 'c6a', channel: 'email', needs_response: false },
     ],
@@ -427,8 +427,8 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
   {
     id: 'em4',
     created_at: '2026-03-11T09:00:00Z',
-    updated_at: '2026-04-02T10:00:00Z',
-    last_activity_at: '2026-04-02T10:00:00Z',
+    updated_at: '2026-03-30T10:00:00Z',
+    last_activity_at: '2026-03-30T10:00:00Z',
     section: 'engagements',
     event_type: 'livestream',
     engagement_flags: [], media_flags: ['confirmed', 'bio_sent'],
@@ -442,23 +442,23 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     event_format: 'virtual',
     audience_size: 10000,
     topic: 'Live Q&A: How to Negotiate Anything Without Losing Yourself',
-    notes: 'LinkedIn Live April 26 — 12 days out. 2,400+ RSVPs already. Prep questions expected from Marcus this week.',
+    notes: 'LinkedIn Live April 15 — 12 days out. 2,400+ RSVPs already. Prep questions expected from Marcus this week.',
     comms: [
-      { id: 'cm_em4a', type: 'email_inbound', date: '2026-03-11T09:00:00Z', subject: 'LinkedIn Live — Creator Feature Invitation', body: "Hi,\n\nWe're the LinkedIn Live editorial team and we'd love to feature Mori for a live negotiation masterclass on April 26. Expected audience: 8,000–12,000 live viewers plus replay.\n\nMarcus Webb\nCreator Partnerships, LinkedIn", from_name: 'Marcus Webb', to_name: "Mori's Team", contact_id: 'cm4a_c', channel: 'email', needs_response: false },
-      { id: 'cm_em4b', type: 'email_outbound', date: '2026-03-16T10:00:00Z', subject: 'Re: LinkedIn Live — Confirmed for April 26', body: "Hi Marcus,\n\nMori would love to participate — April 26 works perfectly. Attaching bio and headshot for promotional use.\n\nCould you send over the format details and any prep questions you'd like her to review in advance?\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Marcus Webb', contact_id: 'cm4a_c', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
-      { id: 'cm_em4c', type: 'email_inbound', date: '2026-04-02T10:00:00Z', subject: 'LinkedIn Live — 2,400 RSVPs + Format Details', body: "Hi Sarah,\n\nWe're pushing promo for the April 26 session — already 2,400 RSVPs. Format will be 20 min conversation + 40 min live Q&A from the audience.\n\nI'll send suggested discussion questions by April 5.\n\nMarcus", from_name: 'Marcus Webb', to_name: "Mori's Team", contact_id: 'cm4a_c', channel: 'email', needs_response: false },
+      { id: 'cm_em4a', type: 'email_inbound', date: '2026-03-11T09:00:00Z', subject: 'LinkedIn Live — Creator Feature Invitation', body: "Hi,\n\nWe're the LinkedIn Live editorial team and we'd love to feature Mori for a live negotiation masterclass on April 15. Expected audience: 8,000–12,000 live viewers plus replay.\n\nMarcus Webb\nCreator Partnerships, LinkedIn", from_name: 'Marcus Webb', to_name: "Mori's Team", contact_id: 'cm4a_c', channel: 'email', needs_response: false },
+      { id: 'cm_em4b', type: 'email_outbound', date: '2026-03-16T10:00:00Z', subject: 'Re: LinkedIn Live — Confirmed for April 15', body: "Hi Marcus,\n\nMori would love to participate — April 15 works perfectly. Attaching bio and headshot for promotional use.\n\nCould you send over the format details and any prep questions you'd like her to review in advance?\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Marcus Webb', contact_id: 'cm4a_c', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
+      { id: 'cm_em4c', type: 'email_inbound', date: '2026-03-30T10:00:00Z', subject: 'LinkedIn Live — 2,400 RSVPs + Format Details', body: "Hi Sarah,\n\nWe're pushing promo for the April 15 session — already 2,400 RSVPs. Format will be 20 min conversation + 40 min live Q&A from the audience.\n\nI'll send suggested discussion questions by April 5.\n\nMarcus", from_name: 'Marcus Webb', to_name: "Mori's Team", contact_id: 'cm4a_c', channel: 'email', needs_response: false },
     ],
-    alerts: [{ type: 'event_approaching', label: 'LinkedIn Live Apr 26 — prep questions not yet received', severity: 'medium' }],
+    alerts: [{ type: 'event_approaching', label: 'LinkedIn Live Mar 316 — prep questions not yet received', severity: 'medium' }],
   },
 
   // ── POST-EVENT ─────────────────────────────────────────────────────────────
 
-  // Stanford GSB — happened yesterday April 3, invoice needs to go out
+  // Stanford GSB — happened yesterday April 2, invoice needs to go out
   {
     id: 'e15',
     created_at: '2025-12-16T09:00:00Z',
-    updated_at: '2026-04-03T18:00:00Z',
-    last_activity_at: '2026-04-03T18:00:00Z',
+    updated_at: '2026-03-30T18:00:00Z',
+    last_activity_at: '2026-03-30T18:00:00Z',
     section: 'post-event',
     engagement_flags: ['contract_sent', 'contract_signed', 'client_deliverables_sent', 'advance_sheet_complete'],
     post_event_flags: [],
@@ -470,19 +470,19 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
       { id: 'c15b', first_name: 'Chris', last_name: 'Tanaka', email: 'ctanaka@gsb.stanford.edu', title: 'Events Coordinator', role: 'assistant', is_current_point_of_contact: false, notes: 'Managed all day-of logistics.' },
     ],
     event_name: 'GSB Executive Leadership Program — Negotiation Module',
-    event_date: '2026-04-01',
+    event_date: '2026-03-30',
     event_location: 'Knight Management Center', event_city: 'Stanford, CA',
     event_format: 'in_person', audience_size: 60,
     topic: 'Bring Yourself: Authentic Negotiation for Executive Leaders',
     session_length: 120, fee: 30000,
     travel_covered: true, hotel_covered: true,
     av_needs: 'Lapel mic, HDMI, whiteboard, no slides — discussion format',
-    notes: 'Happened 2 days ago — great session. Elena sent a glowing note. Invoice needs to go out today.',
+    notes: 'Happened yesterday — great session. Elena sent a glowing note. Invoice needs to go out today.',
     comms: [
       { id: 'cm15a', type: 'stage_change', date: '2026-01-11T11:00:00Z', subject: 'Contract signed', staff_name: 'Sarah K.', needs_response: false },
-      { id: 'cm15b', type: 'email_outbound', date: '2026-03-16T09:00:00Z', subject: 'GSB Executive Program — Briefing Document', body: "Hi Elena,\n\nAttached is the briefing document for April 3. Please review and confirm everything is accurate.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Elena Vasquez', contact_id: 'c15a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
+      { id: 'cm15b', type: 'email_outbound', date: '2026-03-16T09:00:00Z', subject: 'GSB Executive Program — Briefing Document', body: "Hi Elena,\n\nAttached is the briefing document for April 1. Please review and confirm everything is accurate.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Elena Vasquez', contact_id: 'c15a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm15c', type: 'email_inbound', date: '2026-03-19T10:00:00Z', subject: 'Re: GSB — Briefing Document Confirmed', body: "Everything looks perfect. Chris will handle day-of. The cohort is very excited — several participants have read Bring Yourself already.\n\nElena", from_name: 'Elena Vasquez', to_name: "Mori's Team", contact_id: 'c15a', channel: 'email', needs_response: false },
-      { id: 'cm15d', type: 'email_inbound', date: '2026-04-03T18:00:00Z', subject: 'GSB — Thank You, Incredible Session', body: "Hi,\n\nWhat an extraordinary morning. The cohort was completely captivated — I had executives come up to me afterward saying it was the most valuable session they've attended in years.\n\nPlease send over the invoice when you're ready. And let's absolutely do this again next year.\n\nElena", from_name: 'Elena Vasquez', to_name: "Mori's Team", contact_id: 'c15a', channel: 'email', needs_response: true },
+      { id: 'cm15d', type: 'email_inbound', date: '2026-03-30T18:00:00Z', subject: 'GSB — Thank You, Incredible Session', body: "Hi,\n\nWhat an extraordinary morning. The cohort was completely captivated — I had executives come up to me afterward saying it was the most valuable session they've attended in years.\n\nPlease send over the invoice when you're ready. And let's absolutely do this again next year.\n\nElena", from_name: 'Elena Vasquez', to_name: "Mori's Team", contact_id: 'c15a', channel: 'email', needs_response: true },
     ],
     alerts: [{ type: 'event_approaching', label: 'Event complete — invoice not yet sent', severity: 'high' }],
   },
@@ -511,11 +511,11 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     topic: 'Negotiation Skills for Tech Leaders',
     session_length: 60, fee: 20000,
     travel_covered: true, hotel_covered: true,
-    notes: 'Event March 5 — strong feedback. Invoice sent Mar 1, was due Mar 22. Now 32 days overdue. Stephanie says payment releasing Apr 8.',
+    notes: 'Event March 5 — strong feedback. Invoice sent Mar 1, was due Mar 22. Now 32 days overdue. Stephanie says payment releasing Apr 6.',
     comms: [
       { id: 'cm7a', type: 'email_outbound', date: '2026-03-01T09:00:00Z', subject: 'Invoice #2026-004 — TechCorp Leadership Day', body: "Hi Stephanie,\n\nThank you for a wonderful event yesterday. Please find attached Invoice #2026-004 for $20,000, due March 27.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Stephanie Cho', contact_id: 'c7a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm7b', type: 'email_inbound', date: '2026-03-09T11:00:00Z', subject: 'Re: Invoice — Thank you!', body: "Hi Sarah,\n\nReceived! The session was absolutely phenomenal. Finance will process this on the 27th.\n\nSteph", from_name: 'Stephanie Cho', to_name: "Mori's Team", contact_id: 'c7a', channel: 'email', needs_response: false },
-      { id: 'cm7c', type: 'email_inbound', date: '2026-03-29T16:00:00Z', subject: 'Re: Invoice #2026-004 — Payment Update', body: "Hi,\n\nSorry for the slight delay — finance had a system migration last week that held up a batch of payments. It's been released and should hit your account by Apr 8.\n\nSteph", from_name: 'Stephanie Cho', to_name: "Mori's Team", contact_id: 'c7a', channel: 'email', needs_response: false },
+      { id: 'cm7c', type: 'email_inbound', date: '2026-03-29T16:00:00Z', subject: 'Re: Invoice #2026-004 — Payment Update', body: "Hi,\n\nSorry for the slight delay — finance had a system migration last week that held up a batch of payments. It's been released and should hit your account by Apr 6.\n\nSteph", from_name: 'Stephanie Cho', to_name: "Mori's Team", contact_id: 'c7a', channel: 'email', needs_response: false },
     ],
     alerts: [invoiceOverdue()],
   },
@@ -546,7 +546,7 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     travel_covered: false, hotel_covered: false,
     notes: 'Excellent event March 12. Invoice paid March 15. Media received and uploaded. Needs marked complete.',
     comms: [
-      { id: 'cm16a', type: 'email_outbound', date: '2026-03-14T09:00:00Z', subject: "Invoice #2026-003 — BlackRock Women's Leadership Forum", body: "Hi Sandra,\n\nThank you for a wonderful event yesterday. Please find attached Invoice #2026-003 for $25,000, due April 4.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Sandra Obi', contact_id: 'c16a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
+      { id: 'cm16a', type: 'email_outbound', date: '2026-03-14T09:00:00Z', subject: "Invoice #2026-003 — BlackRock Women's Leadership Forum", body: "Hi Sandra,\n\nThank you for a wonderful event yesterday. Please find attached Invoice #2026-003 for $25,000, due April 1.\n\nBest,\nSarah K.", from_name: "Mori's Team", to_name: 'Sandra Obi', contact_id: 'c16a', staff_name: 'Sarah K.', channel: 'email', needs_response: false },
       { id: 'cm16b', type: 'email_inbound', date: '2026-03-16T14:00:00Z', subject: 'Re: Invoice + Media Files', body: "Hi Sarah,\n\nPayment sent this morning. Also attaching the professional photos and video recording from the session as promised.\n\nThe feedback has been extraordinary — we'll definitely be back in touch for next year.\n\nSandra", from_name: 'Sandra Obi', to_name: "Mori's Team", contact_id: 'c16a', channel: 'email', needs_response: false },
     ],
     alerts: [],
@@ -585,12 +585,12 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
 
   // ── MEDIA APPEARANCES ─────────────────────────────────────────────────────
 
-  // podcast — pre-call is today April 4
+  // podcast — pre-call is today April 1
   {
     id: 'em1',
     created_at: '2026-03-28T10:00:00Z',
-    updated_at: '2026-04-03T13:00:00Z',
-    last_activity_at: '2026-04-03T13:00:00Z',
+    updated_at: '2026-03-30T13:00:00Z',
+    last_activity_at: '2026-03-30T13:00:00Z',
     section: 'prospects',
     event_type: 'podcast',
     prospect_step: 'in_contact',
@@ -604,10 +604,10 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
     comms: [
       { id: 'cm_em1a', type: 'email_inbound', date: '2026-03-28T10:00:00Z', subject: 'How I Built This — Guest Invitation for Mori Taheripour', body: "Hi,\n\nI'm a senior producer at How I Built This with Guy Raz. We've been following Mori's work and would love to have her on for a conversation about her journey — from professor to author to in-demand speaker.\n\nJessica Park\nSenior Producer, How I Built This / NPR", from_name: 'Jessica Park', to_name: "Mori's Team", contact_id: 'cm1a_c', channel: 'email', needs_response: false },
       { id: 'cm_em1b', type: 'email_outbound', date: '2026-03-29T09:00:00Z', subject: 'Re: How I Built This — Thank You, Topic Discussion', body: "Hi Jessica,\n\nThank you for reaching out — Mori would be delighted to join. We'd love to focus the conversation around her leadership philosophy and the themes in Bring Yourself.\n\nCould we schedule a brief pre-call to align on the angle?\n\nBest,\nRyan G.", from_name: "Mori's Team", to_name: 'Jessica Park', contact_id: 'cm1a_c', staff_name: 'Ryan G.', channel: 'email', needs_response: false },
-      { id: 'cm_em1c', type: 'email_inbound', date: '2026-04-02T13:00:00Z', subject: 'Re: How I Built This — Pre-Call Today at 2pm ET', body: "Hi — just confirming our pre-call today at 2pm ET. Looking forward to it. We're also open to the leadership angle — just want some of the personal journey woven in.\n\nJessica", from_name: 'Jessica Park', to_name: "Mori's Team", contact_id: 'cm1a_c', channel: 'email', needs_response: false },
+      { id: 'cm_em1c', type: 'email_inbound', date: '2026-03-30T13:00:00Z', subject: 'Re: How I Built This — Pre-Call Today at 2pm ET', body: "Hi — just confirming our pre-call today at 2pm ET. Looking forward to it. We're also open to the leadership angle — just want some of the personal journey woven in.\n\nJessica", from_name: 'Jessica Park', to_name: "Mori's Team", contact_id: 'cm1a_c', channel: 'email', needs_response: false },
     ],
     calls: [
-      { id: 'call_em1_1', type: 'discovery', status: 'scheduled', number: 1, scheduled_date: '2026-04-03', added_by: 'ai' },
+      { id: 'call_em1_1', type: 'discovery', status: 'scheduled', number: 1, scheduled_at: '2026-03-30', added_by: 'ai' },
     ],
     alerts: [],
   },
@@ -672,7 +672,7 @@ export const MOCK_ENGAGEMENTS: Engagement[] = [
 export const MOCK_REVIEW_ITEMS: ReviewItem[] = [
   {
     id: 'r1',
-    received_at: '2026-04-04T07:55:00Z',
+    received_at: '2026-03-30T07:55:00Z',
     from_name: 'Keisha Drummond',
     from_email: 'kdrummond@blackrock.com',
     subject: "Speaker Inquiry — BlackRock Women's Leadership Forum (Oct)",
@@ -685,7 +685,7 @@ export const MOCK_REVIEW_ITEMS: ReviewItem[] = [
   },
   {
     id: 'r2',
-    received_at: '2026-04-04T09:15:00Z',
+    received_at: '2026-03-30T09:15:00Z',
     from_name: 'Tom Ridley',
     from_email: 'tridley@hbr.org',
     subject: 'Harvard Business Review — Feature Collaboration',
@@ -698,7 +698,7 @@ export const MOCK_REVIEW_ITEMS: ReviewItem[] = [
   },
   {
     id: 'r3',
-    received_at: '2026-04-03T16:45:00Z',
+    received_at: '2026-03-30T16:45:00Z',
     from_name: 'Mailchimp',
     from_email: 'noreply@mailchimp.com',
     subject: 'Your March campaign report is ready',
@@ -711,7 +711,7 @@ export const MOCK_REVIEW_ITEMS: ReviewItem[] = [
   },
   {
     id: 'r4',
-    received_at: '2026-04-03T11:20:00Z',
+    received_at: '2026-03-30T11:20:00Z',
     from_name: 'Priya Mehta',
     from_email: 'pmehta@mckinsey.com',
     subject: 'McKinsey Global Leadership Summit — Availability Check',
@@ -724,7 +724,7 @@ export const MOCK_REVIEW_ITEMS: ReviewItem[] = [
   },
   {
     id: 'r5',
-    received_at: '2026-04-04T08:10:00Z',
+    received_at: '2026-03-30T08:10:00Z',
     from_name: 'David Koslowski',
     from_email: 'dkoslowski@vistage.com',
     subject: 'Re: Vistage Summit — One More Ask',
@@ -737,7 +737,7 @@ export const MOCK_REVIEW_ITEMS: ReviewItem[] = [
   },
   {
     id: 'r6',
-    received_at: '2026-04-03T15:30:00Z',
+    received_at: '2026-03-30T15:30:00Z',
     from_name: 'Google Alerts',
     from_email: 'googlealerts-noreply@google.com',
     subject: 'Google Alert — "Mori Taheripour"',
@@ -779,7 +779,7 @@ export const MOCK_COMPANIES: Company[] = [
     watching: false,
     teams: [{ id: 't6', name: "Women's Network" }],
     engagement_ids: ['e6'], contact_ids: ['c6a', 'c6b'],
-    notes: 'Event Apr 16 — 14 days out. Briefing document needed urgently.',
+    notes: 'Event Mar 316 — 14 days out. Briefing document needed urgently.',
   },
   {
     id: 'co5', name: 'Vistage Worldwide', industry: 'Executive Coaching', website: 'vistage.com',
@@ -800,7 +800,7 @@ export const MOCK_COMPANIES: Company[] = [
     watching: false,
     teams: [],
     engagement_ids: ['e7'], contact_ids: ['c7a'],
-    notes: 'Invoice 7 days overdue — Stephanie says payment releasing Apr 8.',
+    notes: 'Invoice 7 days overdue — Stephanie says payment releasing Apr 6.',
   },
   {
     id: 'co8', name: 'Goldman Sachs', industry: 'Financial Services', website: 'goldmansachs.com',
@@ -815,12 +815,12 @@ export const MOCK_COMPANIES: Company[] = [
   { id: 'co12', name: 'Amazon',      industry: 'Technology',            website: 'amazon.com',        watching: true,  teams: [{ id: 't11', name: 'Global L&D' }],                engagement_ids: ['e12'],      contact_ids: ['c12a', 'c12b'], notes: 'Large hybrid — 800 attendees. Speaker packet sent yesterday.' },
   { id: 'co13', name: 'PwC',         industry: 'Professional Services', website: 'pwc.com',           watching: false, teams: [{ id: 't12', name: 'Partners Summit' }],            engagement_ids: ['e13'],      contact_ids: ['c13a'],         notes: 'Diana confirmed 90-min format yesterday. Ready for contract.' },
   { id: 'co14', name: 'Citi',        industry: 'Financial Services',    website: 'citi.com',          watching: false, teams: [{ id: 't13', name: 'Women in Finance' }],           engagement_ids: ['e14'],      contact_ids: ['c14a', 'c14b'], notes: 'CFO sign-off confirmed yesterday. Formal confirmation expected today.' },
-  { id: 'co15', name: 'Stanford GSB',industry: 'Education',             website: 'gsb.stanford.edu',  watching: true,  teams: [{ id: 't14', name: 'Executive Programs' }],         engagement_ids: ['e15'],      contact_ids: ['c15a', 'c15b'], notes: 'Event was yesterday Apr 3 — great session. Elena sent glowing note. Invoice needed.' },
+  { id: 'co15', name: 'Stanford GSB',industry: 'Education',             website: 'gsb.stanford.edu',  watching: true,  teams: [{ id: 't14', name: 'Executive Programs' }],         engagement_ids: ['e15'],      contact_ids: ['c15a', 'c15b'], notes: 'Event was yesterday Mar 31 — great session. Elena sent glowing note. Invoice needed.' },
   { id: 'co16', name: 'BlackRock',   industry: 'Financial Services',    website: 'blackrock.com',     watching: true,  teams: [{ id: 't15', name: "Women's Leadership" }],         engagement_ids: ['e16'],      contact_ids: ['c16a'],         notes: 'Mar 13 event — complete and paid. Keisha already reaching out about October.' },
   { id: 'co17', name: 'NPR / How I Built This', industry: 'Media',            website: 'npr.org',         watching: true,  teams: [],                                               engagement_ids: ['em1'], contact_ids: ['cm1a_c'],  notes: 'Pre-call today at 2pm ET. Topic angle in discussion.' },
   { id: 'co18', name: 'World Economic Forum',   industry: 'Nonprofit / Policy', website: 'weforum.org',     watching: true,  teams: [{ id: 't16', name: 'Leadership Series' }],       engagement_ids: ['em2'], contact_ids: ['cm2a_c'],  notes: 'Panel May 7 confirmed. Tech check not yet scheduled.' },
   { id: 'co19', name: 'Forbes',                 industry: 'Media',              website: 'forbes.com',      watching: true,  teams: [{ id: 't17', name: 'Leadership Editorial' }],    engagement_ids: ['em3'], contact_ids: ['cm3a_c'],  notes: 'Feature published Mar 19. Rachel asking about follow-up.' },
-  { id: 'co20', name: 'LinkedIn',               industry: 'Technology / Media', website: 'linkedin.com',    watching: false, teams: [{ id: 't18', name: 'Creator Partnerships' }],    engagement_ids: ['em4'], contact_ids: ['cm4a_c'],  notes: 'LinkedIn Live Apr 26 — 2,400 RSVPs already.' },
+  { id: 'co20', name: 'LinkedIn',               industry: 'Technology / Media', website: 'linkedin.com',    watching: false, teams: [{ id: 't18', name: 'Creator Partnerships' }],    engagement_ids: ['em4'], contact_ids: ['cm4a_c'],  notes: 'LinkedIn Live Mar 316 — 2,400 RSVPs already.' },
   {
     id: 'co21', name: 'Morgan Stanley', industry: 'Financial Services', website: 'morganstanley.com',
     watching: true, teams: [{ id: 't19', name: "Women Forward" }],

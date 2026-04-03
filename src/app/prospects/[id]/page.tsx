@@ -2,13 +2,20 @@
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { PROSPECT_STEPS, ProspectStep, EngagementCall, CommEntry, primaryContact } from '@/types'
+import { PROSPECT_STEPS, ProspectStep, EngagementCall, CallFormat, CommEntry, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Circle,
   Phone, Edit3, Check, X, Plus
 } from 'lucide-react'
 import Link from 'next/link'
+
+function formatDT(iso?: string) {
+  if (!iso) return null
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
 
 const STEP_COLORS: Record<string, string> = {
   inquiry:    'bg-red-50 text-red-500 border-red-100',
@@ -75,22 +82,80 @@ function formatDateDisplay(dateStr: string) {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function DatesField({ engagementId, proposedDates, confirmedDate }: {
+function LocationField({ engagementId, city, format }: {
   engagementId: string
-  proposedDates?: string[]
-  confirmedDate?: string
+  city?: string | null
+  format?: string | null
 }) {
-  const { addProposedDate, removeProposedDate, confirmProposedDate, updateEngagement } = useStore()
+  const { updateEngagement } = useStore()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(city ?? '')
+  const isVirtual = format === 'virtual'
+
+  const save = () => { updateEngagement(engagementId, { event_city: draft }); setEditing(false) }
+  const cancel = () => { setDraft(city ?? ''); setEditing(false) }
+  const toggleVirtual = () => {
+    if (isVirtual) {
+      updateEngagement(engagementId, { event_format: undefined as any })
+    } else {
+      updateEngagement(engagementId, { event_format: 'virtual', event_city: undefined as any })
+    }
+  }
+
+  return (
+    <div className="group flex items-start gap-2 min-h-[28px]">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300 w-20 flex-shrink-0 mt-1">Location</span>
+      <div className="flex-1 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <button onClick={toggleVirtual}
+            className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border transition-all ${
+              isVirtual ? 'bg-gold/10 text-gold-dark border-gold/20' : 'bg-parchment text-ink-300 border-ink-100 hover:border-ink-300'
+            }`}>
+            {isVirtual ? <CheckCircle2 size={9} /> : <Circle size={9} />} Virtual
+          </button>
+        </div>
+        {!isVirtual && (
+          editing ? (
+            <div className="flex items-center gap-1.5">
+              <input autoFocus type="text" value={draft} placeholder="City or venue"
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
+                className="flex-1 text-sm border border-gold/40 rounded-md px-2 py-1 bg-white outline-none focus:border-gold" />
+              <button onClick={save} className="text-sage"><Check size={13} /></button>
+              <button onClick={cancel} className="text-ink-300"><X size={13} /></button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-ink">{city || <span className="text-ink-200 italic">—</span>}</span>
+              <button onClick={() => { setDraft(city ?? ''); setEditing(true) }}
+                className="opacity-0 group-hover:opacity-100 transition-all text-ink-300 hover:text-gold">
+                <Edit3 size={11} />
+              </button>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DatesField({ engagementId, proposedDates, confirmedDate, confirmedTime }: {
+  engagementId: string
+  proposedDates?: { date: string; times?: string[] }[]
+  confirmedDate?: string
+  confirmedTime?: string
+}) {
+  const { addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime, updateEngagement } = useStore()
   const [addingDate, setAddingDate] = useState(false)
   const [newDate, setNewDate] = useState('')
+  const [addingTimeFor, setAddingTimeFor] = useState<string | null>(null)
+  const [newTime, setNewTime] = useState('')
   const [editingConfirmed, setEditingConfirmed] = useState(false)
   const [confirmedDraft, setConfirmedDraft] = useState(confirmedDate ?? '')
-
   const hasProposed = proposedDates && proposedDates.length > 0
 
   return (
     <div className="space-y-2">
-      {/* Confirmed date */}
       {confirmedDate ? (
         <div className="group flex items-start gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300 w-20 flex-shrink-0 mt-1">Confirmed</span>
@@ -103,12 +168,15 @@ function DatesField({ engagementId, proposedDates, confirmedDate }: {
                   if (e.key === 'Escape') { setConfirmedDraft(confirmedDate); setEditingConfirmed(false) }
                 }}
                 className="flex-1 text-sm border border-gold/40 rounded-md px-2 py-1 bg-white outline-none focus:border-gold" />
-              <button onClick={() => { updateEngagement(engagementId, { event_date: confirmedDraft }); setEditingConfirmed(false) }} className="text-sage hover:text-sage-dark"><Check size={13} /></button>
-              <button onClick={() => { setConfirmedDraft(confirmedDate); setEditingConfirmed(false) }} className="text-ink-300 hover:text-ink-500"><X size={13} /></button>
+              <button onClick={() => { updateEngagement(engagementId, { event_date: confirmedDraft }); setEditingConfirmed(false) }} className="text-sage"><Check size={13} /></button>
+              <button onClick={() => { setConfirmedDraft(confirmedDate); setEditingConfirmed(false) }} className="text-ink-300"><X size={13} /></button>
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1">
-              <span className="text-sm font-medium text-sage-dark">{formatDateDisplay(confirmedDate)}</span>
+              <div>
+                <span className="text-sm font-medium text-sage-dark">{formatDateDisplay(confirmedDate)}</span>
+                {confirmedTime && <span className="text-sm text-ink-500 ml-2">{confirmedTime}</span>}
+              </div>
               <button onClick={() => { setConfirmedDraft(confirmedDate); setEditingConfirmed(true) }}
                 className="opacity-0 group-hover:opacity-100 transition-all text-ink-300 hover:text-gold">
                 <Edit3 size={11} />
@@ -117,31 +185,67 @@ function DatesField({ engagementId, proposedDates, confirmedDate }: {
           )}
         </div>
       ) : (
-        /* Proposed dates */
         <div className="flex items-start gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300 w-20 flex-shrink-0 mt-1">
             {hasProposed ? 'Proposed' : 'Date'}
           </span>
-          <div className="flex-1 space-y-1.5">
-            {hasProposed ? (
-              proposedDates.map(d => (
-                <div key={d} className="flex items-center gap-2 group/date">
-                  <span className="text-sm text-ink">{formatDateDisplay(d)}</span>
+          <div className="flex-1 space-y-2">
+            {hasProposed && proposedDates.map(entry => (
+              <div key={entry.date} className="group/date space-y-1">
+                {/* Date row */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-ink">{formatDateDisplay(entry.date)}</span>
                   <button
-                    onClick={() => confirmProposedDate(engagementId, d)}
+                    onClick={() => confirmProposedDate(engagementId, entry.date)}
                     className="opacity-0 group-hover/date:opacity-100 text-[10px] font-semibold text-sage-dark bg-sage/10 border border-sage/20 px-2 py-0.5 rounded-md hover:bg-sage/20 transition-all">
                     Confirm
                   </button>
                   <button
-                    onClick={() => removeProposedDate(engagementId, d)}
+                    onClick={() => removeProposedDate(engagementId, entry.date)}
                     className="opacity-0 group-hover/date:opacity-100 text-ink-200 hover:text-red-400 transition-all ml-auto">
                     <X size={11} />
                   </button>
                 </div>
-              ))
-            ) : (
-              <span className="text-ink-200 italic text-sm">—</span>
-            )}
+                {/* Time slots */}
+                <div className="pl-2 space-y-0.5">
+                  {(entry.times ?? []).map(time => (
+                    <div key={time} className="group/time flex items-center gap-2">
+                      <span className="text-xs text-ink-500">{time}</span>
+                      <button
+                        onClick={() => confirmProposedDate(engagementId, entry.date, time)}
+                        className="opacity-0 group-hover/time:opacity-100 text-[10px] font-semibold text-sage-dark bg-sage/10 border border-sage/20 px-1.5 py-0.5 rounded hover:bg-sage/20 transition-all">
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => removeProposedTime(engagementId, entry.date, time)}
+                        className="opacity-0 group-hover/time:opacity-100 text-ink-200 hover:text-red-400 transition-all">
+                        <X size={9} />
+                      </button>
+                    </div>
+                  ))}
+                  {/* Add time slot */}
+                  {addingTimeFor === entry.date ? (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <input autoFocus type="text" value={newTime}
+                        placeholder="e.g. 10–10:45am EST"
+                        onChange={e => setNewTime(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && newTime) { addProposedTime(engagementId, entry.date, newTime); setNewTime(''); setAddingTimeFor(null) }
+                          if (e.key === 'Escape') { setNewTime(''); setAddingTimeFor(null) }
+                        }}
+                        className="text-xs border border-gold/40 rounded px-2 py-1 bg-white outline-none focus:border-gold flex-1" />
+                      <button onClick={() => { if (newTime) { addProposedTime(engagementId, entry.date, newTime); setNewTime('') }; setAddingTimeFor(null) }} className="text-sage"><Check size={11} /></button>
+                      <button onClick={() => { setNewTime(''); setAddingTimeFor(null) }} className="text-ink-300"><X size={11} /></button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setAddingTimeFor(entry.date)}
+                      className="text-[10px] text-ink-300 hover:text-gold transition-all flex items-center gap-0.5 mt-0.5">
+                      <Plus size={9} /> Add time
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
             {/* Add date */}
             {addingDate ? (
               <div className="flex items-center gap-1.5">
@@ -151,10 +255,8 @@ function DatesField({ engagementId, proposedDates, confirmedDate }: {
                     if (e.key === 'Escape') { setNewDate(''); setAddingDate(false) }
                   }}
                   className="text-sm border border-gold/40 rounded-md px-2 py-1 bg-white outline-none focus:border-gold" />
-                <button onClick={() => { if (newDate) { addProposedDate(engagementId, newDate); setNewDate('') }; setAddingDate(false) }}
-                  className="text-sage hover:text-sage-dark"><Check size={13} /></button>
-                <button onClick={() => { setNewDate(''); setAddingDate(false) }}
-                  className="text-ink-300 hover:text-ink-500"><X size={13} /></button>
+                <button onClick={() => { if (newDate) { addProposedDate(engagementId, newDate); setNewDate('') }; setAddingDate(false) }} className="text-sage"><Check size={13} /></button>
+                <button onClick={() => { setNewDate(''); setAddingDate(false) }} className="text-ink-300"><X size={13} /></button>
               </div>
             ) : (
               <button onClick={() => setAddingDate(true)}
@@ -231,6 +333,120 @@ function LogCommPanel({ engagementId, onClose }: { engagementId: string; onClose
   )
 }
 
+function CallRow({ call, engagementId, label }: {
+  call: EngagementCall; engagementId: string; label: string
+}) {
+  const { updateCall } = useStore()
+  const [scheduling, setScheduling] = useState(false)
+  const [schedDate, setSchedDate] = useState('')
+  const [schedTime, setSchedTime] = useState('')
+  const [format, setFormat] = useState<'phone' | 'video' | 'in_person'>('video')
+  const [details, setDetails] = useState(call.details ?? '')
+
+  const saveSchedule = () => {
+    const scheduled_at = schedDate ? `${schedDate}T${schedTime || '00:00'}:00Z` : undefined
+    updateCall(engagementId, call.id, { status: 'scheduled', scheduled_at, format, details: details || undefined })
+    setScheduling(false)
+  }
+
+  const handleStatusClick = (s: 'requested' | 'scheduled' | 'completed') => {
+    if (s === 'scheduled' && call.status !== 'scheduled') {
+      setScheduling(true)
+      return
+    }
+    if (s === 'completed') {
+      updateCall(engagementId, call.id, { status: 'completed', completed_at: new Date().toISOString() })
+      return
+    }
+    updateCall(engagementId, call.id, { status: s })
+  }
+
+  const formatIcon = call.format === 'phone' ? '📞' : call.format === 'in_person' ? '📍' : '🎥'
+
+  return (
+    <div className="border border-ink-50 rounded-xl p-3 space-y-2.5">
+      {/* Header row */}
+      <div className="flex items-center gap-3">
+        <Phone size={12} className="text-ink-300 flex-shrink-0" />
+        <span className="text-sm font-medium text-ink flex-1">{label}</span>
+        <div className="flex gap-1.5">
+          {(['requested', 'scheduled', 'completed'] as const).map(s => (
+            <button key={s} onClick={() => handleStatusClick(s)}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-md border capitalize transition-all ${
+                call.status === s
+                  ? s === 'completed' ? 'bg-sage/10 text-sage border-sage/20'
+                    : s === 'scheduled' ? 'bg-gold/10 text-gold-dark border-gold/20'
+                    : 'bg-parchment text-ink-400 border-ink-200'
+                  : 'bg-transparent text-ink-200 border-ink-100 hover:border-ink-300 hover:text-ink-400'
+              }`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Timestamps */}
+      <div className="flex gap-4 text-[10px] text-ink-300 pl-5">
+        {call.requested_at && (
+          <span>Requested: <span className="text-ink-500">{formatDT(call.requested_at)}</span></span>
+        )}
+        {call.scheduled_at && (
+          <span className="flex items-center gap-1">
+            {formatIcon} Scheduled: <span className="text-gold-dark font-medium">{formatDT(call.scheduled_at)}</span>
+          </span>
+        )}
+        {call.completed_at && (
+          <span>Completed: <span className="text-sage-dark font-medium">{formatDT(call.completed_at)}</span></span>
+        )}
+      </div>
+
+      {/* Existing details */}
+      {call.details && !scheduling && (
+        <div className="pl-5 text-[11px] text-ink-400 bg-parchment/60 rounded-lg px-3 py-2">
+          {call.details}
+        </div>
+      )}
+
+      {/* Inline scheduling form */}
+      {scheduling && (
+        <div className="pl-5 space-y-2.5 border-t border-ink-50 pt-2.5">
+          <p className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Schedule this call</p>
+          <div className="flex gap-2">
+            <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)}
+              className="text-sm border border-ink-100 rounded-lg px-3 py-1.5 outline-none focus:border-gold bg-white flex-1" />
+            <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
+              className="text-sm border border-ink-100 rounded-lg px-3 py-1.5 outline-none focus:border-gold bg-white w-32" />
+          </div>
+          <div className="flex gap-2">
+            {(['phone', 'video', 'in_person'] as const).map(f => (
+              <button key={f} onClick={() => setFormat(f)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                  format === f ? 'bg-ink text-cream border-ink' : 'bg-white text-ink-400 border-ink-100 hover:border-ink-300'
+                }`}>
+                {f === 'in_person' ? 'In Person' : f === 'video' ? 'Video' : 'Phone'}
+              </button>
+            ))}
+          </div>
+          <textarea value={details} onChange={e => setDetails(e.target.value)}
+            placeholder="Link, phone number, who's calling, any other details..."
+            rows={2}
+            className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold resize-none bg-white" />
+          <div className="flex gap-2">
+            <button onClick={saveSchedule}
+              className="text-xs font-medium text-white bg-ink px-4 py-1.5 rounded-lg hover:bg-ink-700 transition-all">
+              Save
+            </button>
+            <button onClick={() => setScheduling(false)}
+              className="text-xs font-medium text-ink-400 px-4 py-1.5 rounded-lg hover:text-ink transition-all">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AddCallPanel({ engagementId, existingCalls, onClose }: {
   engagementId: string; existingCalls?: EngagementCall[]; onClose: () => void
 }) {
@@ -242,7 +458,7 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
     const sameType = (existingCalls ?? []).filter(c => c.type === callType)
     addCall(engagementId, {
       id: `call_${Date.now()}`, type: callType, status, number: sameType.length + 1,
-      scheduled_date: status === 'scheduled' ? date : undefined, added_by: 'manual',
+      scheduled_at: status === 'scheduled' ? date + 'T00:00:00Z' : undefined, added_by: 'manual',
     })
     onClose()
   }
@@ -344,6 +560,18 @@ export default function ProspectDetailPage() {
               <div>↘</div><div>↗</div>
             </td>
             <td className="align-middle w-full px-1">
+              {/* Initial + last contact dates above In Contact */}
+              {e.comms && e.comms.length > 0 && (() => {
+                const sorted = [...e.comms].sort((a, b) => a.date > b.date ? 1 : -1)
+                const first = sorted[0]
+                const last = sorted[sorted.length - 1]
+                return (
+                  <div className="flex justify-between text-[9px] text-ink-300 mb-1 px-1">
+                    <span>Initial: {formatDT(first.date)}</span>
+                    <span>Most Recent: {formatDT(last.date)}</span>
+                  </div>
+                )
+              })()}
               <button onClick={() => setProspectStep(e.id, 'in_contact')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all hover:opacity-80 w-full justify-center ${stepClass('in_contact')}`}>
                 {isActive('in_contact') || isPast('in_contact') ? <CheckCircle2 size={12} /> : <Circle size={12} />}
@@ -358,12 +586,16 @@ export default function ProspectDetailPage() {
                 {terminalSteps.map(stepId => {
                   const step = PROSPECT_STEPS.find(s => s.id === stepId)
                   if (!step) return null
+                  const ts = stepId === 'confirmed' ? e.confirmed_at : stepId === 'declined' ? e.declined_at : undefined
                   return (
-                    <button key={stepId} onClick={() => setProspectStep(e.id, stepId as ProspectStep)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all hover:opacity-80 ${stepClass(stepId)}`}>
-                      {isActive(stepId) ? <CheckCircle2 size={12} /> : <Circle size={12} />}
-                      {step.label}
-                    </button>
+                    <div key={stepId} className="flex flex-col items-stretch gap-0.5">
+                      <button onClick={() => { setProspectStep(e.id, stepId as ProspectStep); if (stepId === 'confirmed') updateEngagement(e.id, { confirmed_at: new Date().toISOString() }); if (stepId === 'declined') updateEngagement(e.id, { declined_at: new Date().toISOString() }) }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all hover:opacity-80 ${stepClass(stepId)}`}>
+                        {isActive(stepId) ? <CheckCircle2 size={12} /> : <Circle size={12} />}
+                        {step.label}
+                      </button>
+                      {ts && <span className="text-[9px] text-ink-300 text-center">{formatDT(ts)}</span>}
+                    </div>
                   )
                 })}
               </div>
@@ -391,26 +623,36 @@ export default function ProspectDetailPage() {
                     {callSteps.map((step, i) => {
                       const isPastStep = i < activeIdx
                       const isActiveStep = i === activeIdx
+                      const ts = step.id === 'requested' ? call.requested_at
+                        : step.id === 'scheduled' ? call.scheduled_at
+                        : call.completed_at
                       return (
                         <div key={step.id} className={`flex items-center ${i < callSteps.length - 1 ? 'flex-1' : ''}`}>
-                          <button
-                            onClick={() => updateCall(e.id, call.id, {
-                              status: step.id,
-                              ...(step.id === 'completed' ? { completed_date: new Date().toISOString().split('T')[0] } : {}),
-                            })}
-                            className="flex flex-col items-center gap-0.5 group/step"
-                          >
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                              isPastStep || isActiveStep ? 'border-sage bg-sage/10' : 'border-ink-200 bg-white group-hover/step:border-ink-400'
-                            }`}>
-                              {(isPastStep || isActiveStep) && <CheckCircle2 size={8} className="text-sage" />}
-                            </div>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button
+                              onClick={() => updateCall(e.id, call.id, {
+                                status: step.id,
+                                ...(step.id === 'completed' ? { completed_at: new Date().toISOString() } : {}),
+                              })}
+                              className="group/step"
+                            >
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                                isPastStep || isActiveStep ? 'border-sage bg-sage/10' : 'border-ink-200 bg-white group-hover/step:border-ink-400'
+                              }`}>
+                                {(isPastStep || isActiveStep) && <CheckCircle2 size={8} className="text-sage" />}
+                              </div>
+                            </button>
                             <span className={`text-[9px] leading-tight whitespace-nowrap ${isActiveStep ? 'text-ink font-medium' : isPastStep ? 'text-sage-dark' : 'text-ink-300'}`}>
                               {step.label}
                             </span>
-                          </button>
+                            {ts && (
+                              <span className="text-[8px] text-ink-300 whitespace-nowrap leading-tight">
+                                {formatDT(ts)}
+                              </span>
+                            )}
+                          </div>
                           {i < callSteps.length - 1 && (
-                            <div className={`flex-1 h-px mb-3 ${isPastStep ? 'bg-sage/40' : 'bg-ink-100'}`} />
+                            <div className={`flex-1 h-px mb-6 ${isPastStep ? 'bg-sage/40' : 'bg-ink-100'}`} />
                           )}
                         </div>
                       )
@@ -440,11 +682,9 @@ export default function ProspectDetailPage() {
           <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Event Details</p>
           <div className="space-y-3">
             <EditableField label="Topic" value={e.topic} onSave={v => updateEngagement(e.id, { topic: v })} />
-            <DatesField engagementId={e.id} proposedDates={e.proposed_dates} confirmedDate={e.event_date} />
-            <EditableField label="Time" value={e.event_time} onSave={v => updateEngagement(e.id, { event_time: v })} placeholder="e.g. 10am, 10–11:30am, morning (~2hrs)" />
-            <EditableField label="City" value={e.event_city} onSave={v => updateEngagement(e.id, { event_city: v })} />
+            <DatesField engagementId={e.id} proposedDates={e.proposed_dates} confirmedDate={e.event_date} confirmedTime={e.event_time} />
+            <LocationField engagementId={e.id} city={e.event_city} format={e.event_format} />
             <EditableField label="Audience" value={e.audience_size} onSave={v => updateEngagement(e.id, { audience_size: Number(v) })} type="number" />
-            <EditableField label="Fee" value={e.fee} onSave={v => updateEngagement(e.id, { fee: Number(v) })} type="number" prefix="$" />
           </div>
         </div>
 
@@ -487,36 +727,13 @@ export default function ProspectDetailPage() {
           </button>
         </div>
         {e.calls && e.calls.length > 0 ? (
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {e.calls.map(call => {
               const typeLabel = call.type === 'discovery' ? 'Discovery Call' : 'Mori Call'
               const num = call.number > 1 ? ` #${call.number}` : ''
               return (
-                <div key={call.id} className="flex items-center gap-3 py-2 border-b border-ink-50 last:border-0">
-                  <Phone size={12} className="text-ink-300 flex-shrink-0" />
-                  <span className="text-sm font-medium text-ink flex-1">{typeLabel}{num}</span>
-                  <div className="flex gap-1.5">
-                    {(['requested', 'scheduled', 'completed'] as const).map(s => (
-                      <button key={s}
-                        onClick={() => updateCall(e.id, call.id, {
-                          status: s,
-                          ...(s === 'completed' ? { completed_date: new Date().toISOString().split('T')[0] } : {})
-                        })}
-                        className={`text-[10px] font-semibold px-2 py-1 rounded-md border capitalize transition-all ${
-                          call.status === s
-                            ? s === 'completed' ? 'bg-sage/10 text-sage border-sage/20'
-                              : s === 'scheduled' ? 'bg-gold/10 text-gold-dark border-gold/20'
-                              : 'bg-parchment text-ink-400 border-ink-200'
-                            : 'bg-transparent text-ink-200 border-ink-100 hover:border-ink-300 hover:text-ink-400'
-                        }`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                  {(call.scheduled_date || call.completed_date) && (
-                    <span className="text-xs text-ink-300">{formatDate((call.completed_date ?? call.scheduled_date)!, 'MMM d')}</span>
-                  )}
-                </div>
+                <CallRow key={call.id} call={call} engagementId={e.id}
+                  label={typeLabel + num} />
               )
             })}
           </div>
@@ -525,6 +742,7 @@ export default function ProspectDetailPage() {
         )}
         {showAddCall && <AddCallPanel engagementId={e.id} existingCalls={e.calls} onClose={() => setShowAddCall(false)} />}
       </div>
+
 
       {/* Timeline */}
       <div className="bg-white border border-ink-100 rounded-xl p-5">

@@ -28,7 +28,9 @@ interface StoreActions {
   // Proposed dates
   addProposedDate: (id: string, date: string) => void
   removeProposedDate: (id: string, date: string) => void
-  confirmProposedDate: (id: string, date: string) => void
+  confirmProposedDate: (id: string, date: string, time?: string) => void
+  addProposedTime: (id: string, date: string, time: string) => void
+  removeProposedTime: (id: string, date: string, time: string) => void
 
   // Calls
   addCall: (engagementId: string, call: EngagementCall) => void
@@ -104,8 +106,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
       const existing = e.proposed_dates ?? []
-      if (existing.includes(date)) return e
-      return { ...e, proposed_dates: [...existing, date].sort(), updated_at: new Date().toISOString() }
+      if (existing.some(d => d.date === date)) return e
+      const newDates = [...existing, { date }].sort((a, b) => a.date > b.date ? 1 : -1)
+      return { ...e, proposed_dates: newDates, updated_at: new Date().toISOString() }
     }))
   }, [])
 
@@ -113,17 +116,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id !== id ? e : {
         ...e,
-        proposed_dates: (e.proposed_dates ?? []).filter(d => d !== date),
+        proposed_dates: (e.proposed_dates ?? []).filter(d => d.date !== date),
         updated_at: new Date().toISOString(),
       }
     ))
   }, [])
 
-  const confirmProposedDate = useCallback((id: string, date: string) => {
+  const addProposedTime = useCallback((id: string, date: string, time: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      return {
+        ...e,
+        proposed_dates: (e.proposed_dates ?? []).map(d =>
+          d.date === date ? { ...d, times: [...(d.times ?? []), time] } : d
+        ),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+  }, [])
+
+  const removeProposedTime = useCallback((id: string, date: string, time: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      return {
+        ...e,
+        proposed_dates: (e.proposed_dates ?? []).map(d =>
+          d.date === date ? { ...d, times: (d.times ?? []).filter(t => t !== time) } : d
+        ),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+  }, [])
+
+  const confirmProposedDate = useCallback((id: string, date: string, time?: string) => {
     setEngagements(prev => prev.map(e =>
       e.id !== id ? e : {
         ...e,
         event_date: date,
+        event_time: time,
         proposed_dates: [],
         updated_at: new Date().toISOString(),
       }
@@ -177,7 +207,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       engagements, reviewItems, companies,
       updateEngagement, setProspectStep,
       toggleEngagementFlag, toggleMediaFlag, togglePostEventFlag,
-      addProposedDate, removeProposedDate, confirmProposedDate,
+      addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm,
       confirmReviewItem, dismissReviewItem,
     }}>

@@ -207,10 +207,10 @@ function callLabel(call: EngagementCall) {
   const typeLabel = call.type === 'discovery' ? 'Discovery Call' : 'Mori Call'
   const num = call.number > 1 ? ` #${call.number}` : ''
   const name = `${typeLabel}${num}`
-  if (call.status === 'completed' && call.completed_date)
-    return `${name} — ${new Date(call.completed_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-  if (call.status === 'scheduled' && call.scheduled_date)
-    return `${name} — scheduled ${new Date(call.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  if (call.status === 'completed' && call.completed_at)
+    return `${name} — ${new Date(call.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  if (call.status === 'scheduled' && call.scheduled_at)
+    return `${name} — scheduled ${new Date(call.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
   return `${name} — requested`
 }
 

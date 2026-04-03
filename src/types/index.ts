@@ -40,13 +40,18 @@ export type CallType = 'discovery' | 'mori'
 
 export type CallStatus = 'requested' | 'scheduled' | 'completed'
 
+export type CallFormat = 'phone' | 'video' | 'in_person'
+
 export interface EngagementCall {
   id: string
   type: CallType
   status: CallStatus
-  number: number           // 1, 2, 3... per type — so Discovery #2, Mori Call #1, etc.
-  scheduled_date?: string
-  completed_date?: string
+  number: number
+  requested_at?: string      // when the call was requested (ISO datetime)
+  scheduled_at?: string      // planned date+time of the call
+  completed_at?: string      // when it actually happened
+  format?: CallFormat        // phone, video, in-person
+  details?: string           // freeform: link, phone #, person calling, etc.
   notes?: string
   added_by: 'ai' | 'manual'
 }
@@ -162,13 +167,15 @@ export interface Engagement {
   // AI confirmation status (for auto-sorted items)
   ai_created?: boolean
   human_confirmed?: boolean
+  confirmed_at?: string
+  declined_at?: string
 
   organization: string
   source?: string
   contacts: EngagementContact[]
 
   event_name?: string
-  proposed_dates?: string[]    // tentative options being discussed before event_date confirmed
+  proposed_dates?: { date: string; times?: string[] }[]  // each date can have multiple freeform time options
   event_date?: string
   event_time?: string          // freeform: "10am", "10–11:30am", "morning (~2hrs)"
   event_location?: string
