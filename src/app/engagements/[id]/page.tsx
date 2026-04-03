@@ -1,7 +1,7 @@
 'use client'
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
-import { MOCK_ENGAGEMENTS } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 import { ENGAGEMENT_FLAGS, MEDIA_FLAGS, EngagementFlag, MediaFlag, Engagement, primaryContact } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import {
@@ -32,9 +32,9 @@ function eventTypeLabel(type: string) {
   return map[type] || 'Engagement'
 }
 
-// ─── Advance Sheet inline view ────────────────────────────────────────────────
+// ─── Briefing Document inline view ────────────────────────────────────────────────
 
-function AdvanceSheetSection({ title, children }: { title: string; children: React.ReactNode }) {
+function BriefingDocSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-3">
@@ -72,7 +72,7 @@ function CheckItem({ text, done = false }: { key?: number; text: string; done?: 
   )
 }
 
-function AdvanceSheetPanel({ e }: { e: Engagement }) {
+function BriefingDocPanel({ e }: { e: Engagement }) {
   const eventType = (e as any).event_type || 'speaking'
   const isMedia = MEDIA_TYPES.includes(eventType)
   const isInPerson = e.event_format === 'in_person'
@@ -136,7 +136,7 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
     <div className="space-y-6 py-2">
 
       {/* Overview */}
-      <AdvanceSheetSection title={isMedia ? 'Appearance Overview' : 'Event Overview'}>
+      <BriefingDocSection title={isMedia ? 'Appearance Overview' : 'Event Overview'}>
         <SheetRow>
           <SheetField label={isMedia ? 'Show / Outlet' : 'Event Name'} value={e.event_name || e.organization} />
           <SheetField label="Date" value={formatDate(e.event_date)} />
@@ -165,19 +165,19 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
             <SheetField label="Duration" value={`${e.session_length} minutes`} />
           )}
         </SheetRow>
-      </AdvanceSheetSection>
+      </BriefingDocSection>
 
       {/* Topic */}
       {(e.topic || e.notes) && (
-        <AdvanceSheetSection title={isMedia ? 'Topic & Content' : 'Presentation'}>
+        <BriefingDocSection title={isMedia ? 'Topic & Content' : 'Presentation'}>
           {e.topic && <SheetField label={isMedia ? 'Discussion Topic / Angle' : 'Topic / Title'} value={e.topic} />}
           {e.notes && <SheetField label={isMedia ? 'Context & Notes' : 'Speaker Notes'} value={e.notes} />}
-        </AdvanceSheetSection>
+        </BriefingDocSection>
       )}
 
       {/* Contact */}
       {contact && (
-        <AdvanceSheetSection title={hasPhysical ? 'On-Site Contact' : 'Primary Contact'}>
+        <BriefingDocSection title={hasPhysical ? 'On-Site Contact' : 'Primary Contact'}>
           <SheetRow>
             <SheetField label="Name" value={`${contact.first_name} ${contact.last_name}`} />
             <SheetField label="Title" value={contact.title} />
@@ -186,12 +186,12 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
             <SheetField label="Email" value={contact.email} />
             {contact.phone && <SheetField label="Phone" value={contact.phone} />}
           </SheetRow>
-        </AdvanceSheetSection>
+        </BriefingDocSection>
       )}
 
       {/* Logistics — only what's relevant */}
       {(hasPhysical || isMedia) && (e.av_needs || e.travel_covered !== undefined || e.hotel_covered !== undefined || e.special_requirements || (!hasPhysical && isMedia)) && (
-        <AdvanceSheetSection title="Logistics">
+        <BriefingDocSection title="Logistics">
           {hasPhysical && !isMedia && e.av_needs && (
             <SheetField label="AV Requirements" value={e.av_needs} />
           )}
@@ -215,11 +215,11 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
           {e.special_requirements && (
             <SheetField label="Special Requirements" value={e.special_requirements} />
           )}
-        </AdvanceSheetSection>
+        </BriefingDocSection>
       )}
 
       {/* Checklist */}
-      <AdvanceSheetSection title="Pre-Event Checklist">
+      <BriefingDocSection title="Pre-Event Checklist">
         <div className="space-y-2">
           {checklistItems.map((item, i) => {
             const done = (item.toLowerCase().includes('bio') && bioSent) ||
@@ -227,7 +227,7 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
             return <CheckItem key={i} text={item} done={done} />
           })}
         </div>
-      </AdvanceSheetSection>
+      </BriefingDocSection>
 
     </div>
   )
@@ -237,24 +237,25 @@ function AdvanceSheetPanel({ e }: { e: Engagement }) {
 
 export default function EngagementDetailPage() {
   const { id } = useParams()
+  const { engagements: allEngagements, toggleEngagementFlag, toggleMediaFlag } = useStore()
   const [sheetOpen, setSheetOpen] = useState(true)
   const [downloading, setDownloading] = useState(false)
-  const e = MOCK_ENGAGEMENTS.find(e => e.id === id)
+  const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
   const eventType = (e as any).event_type || 'speaking'
   const isMedia = MEDIA_TYPES.includes(eventType)
   const contact = primaryContact(e)
   const flags = isMedia ? MEDIA_FLAGS : ENGAGEMENT_FLAGS
 
-  async function handleDownloadAdvanceSheet() {
+  async function handleDownload() {
     setDownloading(true)
     try {
-      const { generateAdvanceSheet } = await import('@/lib/documents')
-      const blob = generateAdvanceSheet(e!)
+      const { generateBriefingDoc } = await import('@/lib/documents')
+      const blob = generateBriefingDoc(e!)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `advance-sheet-${e!.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
+      a.download = `briefing-${e!.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } finally {
@@ -301,11 +302,22 @@ export default function EngagementDetailPage() {
           {flags.map(flag => {
             const allFlags = [...(e.engagement_flags || []), ...((e as any).media_flags || [])]
             const done = allFlags.includes(flag.id as any)
+            const isEngFlag = ENGAGEMENT_FLAGS.some(f => f.id === flag.id)
+            const isMediaFlag = MEDIA_FLAGS.some(f => f.id === flag.id)
             return (
-              <div key={flag.id} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium ${done ? 'bg-sage/8 border-sage/20 text-sage' : 'bg-parchment border-ink-100 text-ink-400'}`}>
-                {done ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+              <button
+                key={flag.id}
+                onClick={() => {
+                  if (isEngFlag) toggleEngagementFlag(e.id, flag.id as EngagementFlag)
+                  else if (isMediaFlag) toggleMediaFlag(e.id, flag.id as MediaFlag)
+                }}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium text-left transition-all hover:opacity-80 active:scale-95 ${
+                  done ? 'bg-sage/8 border-sage/20 text-sage' : 'bg-parchment border-ink-100 text-ink-400 hover:border-ink-300'
+                }`}
+              >
+                {done ? <CheckCircle2 size={14} className="flex-shrink-0" /> : <Circle size={14} className="flex-shrink-0" />}
                 {flag.label}
-              </div>
+              </button>
             )
           })}
         </div>
@@ -319,6 +331,11 @@ export default function EngagementDetailPage() {
             {e.event_date && (
               <div className="flex items-center gap-2 text-sm">
                 <Calendar size={14} className="text-ink-300" />{formatDate(e.event_date)}
+              </div>
+            )}
+            {(e as any).event_time && (
+              <div className="flex items-center gap-2 text-sm">
+                <Clock size={14} className="text-ink-300" />{(e as any).event_time}
               </div>
             )}
             {e.event_city && (
@@ -380,7 +397,7 @@ export default function EngagementDetailPage() {
         </div>
       </div>
 
-      {/* ── Advance Sheet ── */}
+      {/* ── Briefing Document ── */}
       <div className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
         {/* Header row */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
@@ -389,11 +406,11 @@ export default function EngagementDetailPage() {
             className="flex items-center gap-2 text-sm font-semibold text-ink hover:text-gold transition-colors"
           >
             <FileText size={15} className="text-gold" />
-            {isMedia ? 'Appearance Brief' : 'Advance Sheet'}
+            {isMedia ? 'Briefing Document' : 'Briefing Document'}
             {sheetOpen ? <ChevronUp size={14} className="text-ink-300 ml-1" /> : <ChevronDown size={14} className="text-ink-300 ml-1" />}
           </button>
           <button
-            onClick={handleDownloadAdvanceSheet}
+            onClick={handleDownload}
             disabled={downloading}
             className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50"
           >
@@ -405,7 +422,7 @@ export default function EngagementDetailPage() {
         {/* Sheet body */}
         {sheetOpen && (
           <div className="px-6 py-5">
-            <AdvanceSheetPanel e={e} />
+            <BriefingDocPanel e={e} />
           </div>
         )}
       </div>

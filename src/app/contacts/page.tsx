@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { MOCK_ENGAGEMENTS } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 import { EngagementContact, Engagement, ContactStatus } from '@/types'
 import { getInitials } from '@/lib/utils'
 import { Search, Mail, ArrowRight, Eye } from 'lucide-react'
@@ -46,10 +46,11 @@ const FILTERS: { id: FilterStatus; label: string }[] = [
 ]
 
 export default function ContactsPage() {
+  const { engagements: allEngagements } = useStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterStatus>('all')
 
-  const all: ContactWithEngagement[] = MOCK_ENGAGEMENTS.flatMap(e =>
+  const all: ContactWithEngagement[] = allEngagements.flatMap(e =>
     e.contacts.map(c => ({ ...c, engagement: e }))
   )
 
@@ -73,7 +74,7 @@ export default function ContactsPage() {
     <div className="p-8 max-w-5xl mx-auto animate-fade-in">
       <div className="mb-8">
         <h1 className="font-display text-3xl font-semibold text-ink">Contacts</h1>
-        <p className="text-ink-400 text-sm mt-1">{all.length} contacts across {MOCK_ENGAGEMENTS.length} engagements</p>
+        <p className="text-ink-400 text-sm mt-1">{all.length} contacts across {allEngagements.length} engagements</p>
         <div className="accent-line mt-3 w-24" />
       </div>
 

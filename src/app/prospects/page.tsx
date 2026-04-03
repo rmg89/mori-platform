@@ -1,16 +1,16 @@
 'use client'
 import { useState } from 'react'
-import { MOCK_ENGAGEMENTS, MOCK_COMPANIES } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 import { Engagement, PROSPECT_STEPS, primaryContact, getProspectStepLabel } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-import { Plus, AlertTriangle, Calendar, ArrowRight, Users, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, AlertTriangle, Calendar, ArrowRight, Users, CheckCircle2, XCircle, ChevronDown, ChevronUp, Phone, Video } from 'lucide-react'
 import Link from 'next/link'
+import { EngagementCall } from '@/types'
 
 const STEP_COLORS: Record<string, string> = {
   inquiry:    '#E05252',
   outreach:   '#E05252',
   in_contact: '#C9A84C',
-  discussing: '#7A9E87',
   confirmed:  '#7A9E87',
   declined:   '#9CA3AF',
 }
@@ -31,8 +31,9 @@ const RECENTLY_RESOLVED = ALL_RESOLVED
 export default function ProspectsPage() {
   const [resolvedOpen, setResolvedOpen] = useState(false)
 
-  const activeSteps = ['inquiry', 'outreach', 'in_contact', 'discussing']
-  const prospects = MOCK_ENGAGEMENTS.filter(e =>
+  const activeSteps = ['inquiry', 'outreach', 'in_contact']
+  const { engagements } = useStore()
+  const prospects = engagements.filter(e =>
     e.section === 'prospects' && activeSteps.includes(e.prospect_step ?? '')
   )
   const totalAlerts = prospects.reduce((n, e) => n + e.alerts.length, 0)
@@ -119,6 +120,29 @@ export default function ProspectsPage() {
             </div>
           )
         })}
+        {/* Calls pending card */}
+        {(() => {
+          const scheduled = prospects.flatMap(e => e.calls ?? []).filter(c => c.status === 'scheduled').length
+          const requested = prospects.flatMap(e => e.calls ?? []).filter(c => c.status === 'requested').length
+          const pending = scheduled + requested
+          return (
+            <div className="bg-white border border-ink-100 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Phone size={10} className="text-ink-400" />
+                <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider">Calls Pending</span>
+              </div>
+              <p className="text-2xl font-semibold text-ink">{pending}</p>
+              {pending > 0 ? (
+                <div className="flex gap-2 mt-1">
+                  {scheduled > 0 && <span className="text-[10px] text-gold-dark font-medium">{scheduled} scheduled</span>}
+                  {requested > 0 && <span className="text-[10px] text-ink-300 font-medium">{requested} requested</span>}
+                </div>
+              ) : (
+                <p className="text-[10px] text-ink-300 mt-1">All clear</p>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Entry points: Inquiry + Outreach side by side */}
@@ -148,9 +172,9 @@ export default function ProspectsPage() {
         })}
       </div>
 
-      {/* Middle + terminal steps stacked */}
+      {/* Middle steps stacked */}
       <div className="space-y-8">
-        {(['in_contact', 'discussing'] as const).map(stepId => {
+        {(['in_contact'] as const).map(stepId => {
           const step = PROSPECT_STEPS.find(s => s.id === stepId)!
           const items = prospects.filter(e => e.prospect_step === stepId)
           if (items.length === 0) return null
@@ -173,9 +197,39 @@ export default function ProspectsPage() {
   )
 }
 
+function callStatusIcon(status: EngagementCall['status']) {
+  if (status === 'completed') return '✓'
+  if (status === 'scheduled') return '◷'
+  return '○'
+}
+
+function callLabel(call: EngagementCall) {
+  const typeLabel = call.type === 'discovery' ? 'Discovery Call' : 'Mori Call'
+  const num = call.number > 1 ? ` #${call.number}` : ''
+  const name = `${typeLabel}${num}`
+  if (call.status === 'completed' && call.completed_date)
+    return `${name} — ${new Date(call.completed_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  if (call.status === 'scheduled' && call.scheduled_date)
+    return `${name} — scheduled ${new Date(call.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  return `${name} — requested`
+}
+
 function ProspectCard({ engagement: e, color }: { engagement: Engagement, color: string }) {
   const pc = primaryContact(e)
   const stepLabel = getProspectStepLabel(e.prospect_step!)
+  const eventType = (e as any).event_type as string | undefined
+  const isMedia = eventType && eventType !== 'speaking'
+
+  const formatTag = e.event_format === 'in_person' ? 'In Person'
+    : e.event_format === 'virtual' ? 'Virtual'
+    : e.event_format === 'hybrid' ? 'Hybrid'
+    : null
+
+  const eventTypeLabel = eventType === 'podcast' ? 'Podcast'
+    : eventType === 'interview' ? 'Interview'
+    : eventType === 'panel' ? 'Panel'
+    : eventType === 'livestream' ? 'Livestream'
+    : 'Speaking'
 
   return (
     <Link
@@ -206,8 +260,38 @@ function ProspectCard({ engagement: e, color }: { engagement: Engagement, color:
             {stepLabel}
           </span>
         </div>
+
+        {/* Context tags row */}
+        <div className="flex flex-wrap items-center gap-2 mt-2.5">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-ink-50 text-ink-400 border border-ink-100">
+            {eventTypeLabel}
+          </span>
+          {formatTag && (
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+              e.event_format === 'in_person' ? 'bg-sage/8 text-sage-dark border-sage/20'
+              : e.event_format === 'virtual' ? 'bg-blue-50 text-blue-600 border-blue-100'
+              : 'bg-amber-50 text-amber-600 border-amber-100'
+            }`}>
+              {formatTag}
+            </span>
+          )}
+          {e.audience_size && (
+            <span className="text-[10px] text-ink-300 flex items-center gap-1">
+              <Users size={9} />{e.audience_size.toLocaleString()} {isMedia ? 'audience' : 'attendees'}
+            </span>
+          )}
+          {e.event_date && (
+            <span className="text-[10px] text-ink-400 flex items-center gap-1">
+              <Calendar size={9} />
+              <span className="text-ink-300">Target:</span> {formatDate(e.event_date, 'MMM d, yyyy')}
+              {e.event_city && <span className="text-ink-200 mx-1">·</span>}
+              {e.event_city && <span>{e.event_city}</span>}
+            </span>
+          )}
+        </div>
+
         {e.alerts.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2.5">
+          <div className="flex flex-wrap gap-2 mt-2">
             {e.alerts.map((alert, i) => (
               <span key={i} className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border ${alert.severity === 'high' ? 'text-red-500 bg-red-50 border-red-100' : 'text-gold bg-gold/8 border-gold/20'}`}>
                 <AlertTriangle size={9} />{alert.label}
@@ -215,14 +299,24 @@ function ProspectCard({ engagement: e, color }: { engagement: Engagement, color:
             ))}
           </div>
         )}
-      </div>
-      <div className="flex-shrink-0 text-right space-y-1">
-        {e.event_date && (
-          <p className="text-xs text-ink-400 flex items-center gap-1 justify-end">
-            <Calendar size={10} />{formatDate(e.event_date, 'MMM d')}
-          </p>
+
+        {/* Calls block — only shown if calls exist */}
+        {e.calls && e.calls.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-ink-50 pt-2.5">
+            {e.calls.map(call => (
+              <span key={call.id} className={`flex items-center gap-1.5 text-[10px] font-medium ${
+                call.status === 'completed' ? 'text-sage-dark' :
+                call.status === 'scheduled' ? 'text-gold-dark' :
+                'text-ink-300'
+              }`}>
+                <Phone size={9} className="flex-shrink-0" />
+                <span className={call.added_by === 'ai' ? 'italic' : ''}>
+                  {callStatusIcon(call.status)} {callLabel(call)}
+                </span>
+              </span>
+            ))}
+          </div>
         )}
-        {e.event_city && <p className="text-xs text-ink-300">{e.event_city}</p>}
       </div>
       <ArrowRight size={14} className="text-ink-200 group-hover:text-gold transition-all flex-shrink-0 mt-1" />
     </Link>

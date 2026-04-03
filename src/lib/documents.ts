@@ -165,9 +165,9 @@ export function generateContract(client: Client): Blob {
   return doc.output('blob')
 }
 
-// ─── Advance Sheet ────────────────────────────────────────────────────────────
+// ─── Briefing Document ────────────────────────────────────────────────────────────
 
-export function generateAdvanceSheet(client: Client): Blob {
+export function generateBriefingDoc(client: Client): Blob {
   const doc = createDoc()
 
   const eventType = (client as any).event_type || 'speaking'
@@ -177,7 +177,7 @@ export function generateAdvanceSheet(client: Client): Blob {
   const isHybrid = client.event_format === 'hybrid'
   const hasPhysicalComponent = isInPerson || isHybrid
 
-  const docTitle = isMedia ? 'Appearance Brief' : 'Advance Sheet'
+  const docTitle = isMedia ? 'Briefing Document' : 'Briefing Document'
   addHeader(doc, docTitle)
 
   let y = 110

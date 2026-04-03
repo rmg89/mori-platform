@@ -1,5 +1,5 @@
 'use client'
-import { MOCK_ENGAGEMENTS } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 import { ENGAGEMENT_FLAGS, MEDIA_FLAGS, EngagementFlag, MediaFlag, Engagement, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, Circle, MapPin, Users } from 'lucide-react'
@@ -75,7 +75,8 @@ function EngagementCard({ engagement: e }: { engagement: Engagement }) {
 }
 
 export default function EngagementsPage() {
-  const engagements = MOCK_ENGAGEMENTS.filter(e => e.section === 'engagements')
+  const { engagements: allEngagements } = useStore()
+  const engagements = allEngagements.filter(e => e.section === 'engagements')
   const totalAlerts = engagements.reduce((n, e) => n + e.alerts.length, 0)
 
   return (

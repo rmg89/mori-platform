@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { MOCK_ENGAGEMENTS } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 import { primaryContact, ENGAGEMENT_FLAGS, EngagementFlag, POST_EVENT_FLAGS, PostEventFlag, ContactStatus } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { ArrowLeft, Mail, Phone, Eye, EyeOff, ArrowRight, AlertTriangle, CheckCircle2, Circle, Building2 } from 'lucide-react'
@@ -20,10 +20,11 @@ const STATUS_COLORS: Record<ContactStatus, string> = {
 }
 
 export default function ContactProfilePage() {
+  const { engagements: allEngagements } = useStore()
   const { id } = useParams()
 
   // Find the contact across all engagements
-  const allContacts = MOCK_ENGAGEMENTS.flatMap(e =>
+  const allContacts = allEngagements.flatMap(e =>
     e.contacts.map(c => ({ ...c, engagement: e }))
   )
   const match = allContacts.find(c => c.id === id)
@@ -31,7 +32,7 @@ export default function ContactProfilePage() {
   if (!match) return <div className="p-8 text-ink-400">Contact not found.</div>
 
   // Get all engagements this contact appears in
-  const contactEngagements = MOCK_ENGAGEMENTS.filter(e =>
+  const contactEngagements = allEngagements.filter(e =>
     e.contacts.some(c => c.id === id)
   )
 

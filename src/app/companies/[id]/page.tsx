@@ -1,7 +1,7 @@
 'use client'
+import { useStore } from '@/lib/store'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { MOCK_COMPANIES, MOCK_ENGAGEMENTS } from '@/lib/mock-data'
 import { PROSPECT_STEPS, ENGAGEMENT_FLAGS, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { ArrowLeft, Eye, EyeOff, Building2, Mail, Calendar, CheckCircle2, Circle, ArrowRight, AlertTriangle, Users, Plus } from 'lucide-react'
@@ -11,14 +11,15 @@ type Tab = 'engagements' | 'contacts' | 'teams'
 
 export default function CompanyProfilePage() {
   const { id } = useParams()
-  const company = MOCK_COMPANIES.find(c => c.id === id)
+  const { companies, engagements: allEngagements } = useStore()
+  const company = companies.find(c => c.id === id)
   const [tab, setTab] = useState<Tab>('engagements')
   const [watching, setWatching] = useState(company?.watching ?? false)
 
   if (!company) return <div className="p-8 text-ink-400">Company not found.</div>
 
-  const engagements = MOCK_ENGAGEMENTS.filter(e => company.engagement_ids.includes(e.id))
-  const allContacts = MOCK_ENGAGEMENTS
+  const engagements = allEngagements.filter(e => company.engagement_ids.includes(e.id))
+  const allContacts = engagements
     .filter(e => company.engagement_ids.includes(e.id))
     .flatMap(e => e.contacts)
     .filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i) // dedupe

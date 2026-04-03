@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { MOCK_REVIEW_ITEMS } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 import { ReviewItem, ReviewAction } from '@/types'
 import { formatDate } from '@/lib/utils'
 import { Sparkles, CheckCircle2, AlertCircle, Clock, ChevronRight, Mail, UserPlus, EyeOff, HelpCircle } from 'lucide-react'
@@ -9,16 +9,19 @@ const ACTION_LABELS: Record<ReviewAction, string> = {
   create_prospect: 'Create Prospect',
   add_to_existing: 'Add to Existing',
   ignore: 'Ignore',
+  update_prospect: 'Update Prospect',
 }
 
 const ACTION_COLORS: Record<ReviewAction, string> = {
   create_prospect: 'text-sage bg-sage/10 border-sage/20',
   add_to_existing: 'text-gold bg-gold/10 border-gold/20',
   ignore: 'text-ink-400 bg-parchment border-ink-200',
+  update_prospect: 'text-blue-600 bg-blue-50 border-blue-100',
 }
 
 export default function ReviewPage() {
-  const [items, setItems] = useState(MOCK_REVIEW_ITEMS)
+  const { reviewItems } = useStore()
+  const [items, setItems] = useState(reviewItems)
 
   const pending = items.filter(i => !i.confirmed_at)
   const confirmed = items.filter(i => i.confirmed_at)

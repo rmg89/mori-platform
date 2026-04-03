@@ -15,7 +15,7 @@ export const MEDIA_EVENT_TYPES: EventType[] = ['podcast', 'interview', 'panel', 
 
 // ─── Pipeline Steps ────────────────────────────────────────────────────────────
 
-export type ProspectStep = 'inquiry' | 'outreach' | 'in_contact' | 'discussing' | 'proposal' | 'confirmed' | 'declined'
+export type ProspectStep = 'inquiry' | 'outreach' | 'in_contact' | 'confirmed' | 'declined'
 
 // Speaking engagements use the full contract/logistics checklist
 export type EngagementFlag = 'contract_sent' | 'contract_signed' | 'client_deliverables_sent' | 'advance_sheet_complete'
@@ -30,17 +30,32 @@ export const PROSPECT_STEPS: { id: ProspectStep; label: string; entry?: boolean;
   { id: 'inquiry',    label: 'Inquiry',    entry: true },
   { id: 'outreach',   label: 'Outreach',   entry: true },
   { id: 'in_contact', label: 'In Contact' },
-  { id: 'discussing', label: 'Discussing' },
-  { id: 'proposal',   label: 'Proposal' },
   { id: 'confirmed',  label: 'Confirmed',  terminal: true },
   { id: 'declined',   label: 'Declined',   terminal: true },
 ]
+
+// ─── Calls ────────────────────────────────────────────────────────────────────
+
+export type CallType = 'discovery' | 'mori'
+
+export type CallStatus = 'requested' | 'scheduled' | 'completed'
+
+export interface EngagementCall {
+  id: string
+  type: CallType
+  status: CallStatus
+  number: number           // 1, 2, 3... per type — so Discovery #2, Mori Call #1, etc.
+  scheduled_date?: string
+  completed_date?: string
+  notes?: string
+  added_by: 'ai' | 'manual'
+}
 
 export const ENGAGEMENT_FLAGS: { id: EngagementFlag; label: string }[] = [
   { id: 'contract_sent',              label: 'Contract Sent' },
   { id: 'contract_signed',            label: 'Contract Signed' },
   { id: 'client_deliverables_sent',   label: 'Client Deliverables Sent' },
-  { id: 'advance_sheet_complete',     label: 'Advance Sheet Complete' },
+  { id: 'advance_sheet_complete',     label: 'Briefing Document Complete' },
 ]
 
 export const MEDIA_FLAGS: { id: MediaFlag; label: string }[] = [
@@ -153,7 +168,9 @@ export interface Engagement {
   contacts: EngagementContact[]
 
   event_name?: string
+  proposed_dates?: string[]    // tentative options being discussed before event_date confirmed
   event_date?: string
+  event_time?: string          // freeform: "10am", "10–11:30am", "morning (~2hrs)"
   event_location?: string
   event_city?: string
   event_format?: 'in_person' | 'virtual' | 'hybrid'
@@ -169,6 +186,7 @@ export interface Engagement {
   booker_name?: string
 
   comms: CommEntry[]
+  calls?: EngagementCall[]
   alerts: EngagementAlert[]
 }
 
@@ -185,7 +203,7 @@ export function getProspectStepLabel(step: ProspectStep): string {
 export interface GeneratedDocument {
   id: string
   engagement_id: string
-  type: 'contract' | 'advance_sheet' | 'invoice'
+  type: 'contract' | 'briefing_doc' | 'invoice'
   generated_at: string
   file_url?: string
   version: number

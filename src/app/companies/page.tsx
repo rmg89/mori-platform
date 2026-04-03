@@ -1,17 +1,17 @@
 'use client'
+import { useStore } from '@/lib/store'
 import { useState } from 'react'
-import { MOCK_COMPANIES, MOCK_ENGAGEMENTS } from '@/lib/mock-data'
 import { Company } from '@/types'
 import { Search, Eye, ArrowRight, Plus, BookUser, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 type Filter = 'all' | 'prospects' | 'engagements' | 'post-event' | 'client' | 'expired' | 'watching'
 
-function getCompanyStage(company: Company) {
-  const engagements = MOCK_ENGAGEMENTS.filter(e => company.engagement_ids.includes(e.id))
-  const hasProspect = engagements.some(e => e.section === 'prospects')
-  const hasEngagement = engagements.some(e => e.section === 'engagements')
-  const hasPostEvent = engagements.some(e => e.section === 'post-event')
+function getCompanyStage(company: Company, engagements: any[]) {
+  const companyEngagements = engagements.filter(e => company.engagement_ids.includes(e.id))
+  const hasProspect = companyEngagements.some(e => e.section === 'prospects')
+  const hasEngagement = companyEngagements.some(e => e.section === 'engagements')
+  const hasPostEvent = companyEngagements.some(e => e.section === 'post-event')
   const isFullyComplete = engagements
     .filter(e => e.section === 'post-event')
     .every(e => e.post_event_flags.includes('marked_complete'))
@@ -51,17 +51,18 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 export default function CompaniesPage() {
+  const { companies, engagements } = useStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
 
-  const filtered = MOCK_COMPANIES.filter(company => {
+  const filtered = companies.filter(company => {
     const q = search.toLowerCase()
     const matchesSearch = company.name.toLowerCase().includes(q) || (company.industry ?? '').toLowerCase().includes(q)
     if (!matchesSearch) return false
 
     if (filter === 'all') return true
     if (filter === 'watching') return !!company.watching
-    return getCompanyStage(company) === filter
+    return getCompanyStage(company, engagements) === filter
   })
 
   return (
@@ -69,7 +70,7 @@ export default function CompaniesPage() {
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="font-display text-3xl font-semibold text-ink">Companies</h1>
-          <p className="text-ink-400 text-sm mt-1">{MOCK_COMPANIES.length} companies in your network</p>
+          <p className="text-ink-400 text-sm mt-1">{companies.length} companies in your network</p>
           <div className="accent-line mt-3 w-24" />
         </div>
         <div className="flex items-center gap-2">
@@ -135,7 +136,7 @@ export default function CompaniesPage() {
         ) : (
           <div className="divide-y divide-ink-50">
             {filtered.map(company => (
-              <CompanyRow key={company.id} company={company} />
+              <CompanyRow engagements={engagements} key={company.id} company={company} />
             ))}
           </div>
         )}
@@ -144,8 +145,8 @@ export default function CompaniesPage() {
   )
 }
 
-function CompanyRow({ company }: { company: Company }) {
-  const stage = getCompanyStage(company)
+function CompanyRow({ company, engagements }: { company: Company; engagements: any[] }) {
+  const stage = getCompanyStage(company, engagements)
   const stageColor = STAGE_COLORS[stage] ?? STAGE_COLORS.expired
   const stageLabel = STAGE_LABELS[stage] ?? '—'
 

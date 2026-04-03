@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { MOCK_ENGAGEMENTS, MOCK_REVIEW_ITEMS } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 import { Engagement, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import {
   AlertTriangle, ArrowRight, Bell, ChevronRight, ChevronLeft,
-  Users, Zap, CheckCircle2, Circle
+  Users, Zap, CheckCircle2, Circle, FileText
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -47,49 +47,91 @@ function buildAlerts(prospects: Engagement[], active: Engagement[], postEvent: E
   const engagementAlerts: AlertItem[] = []
   const postEventAlerts: AlertItem[] = []
 
+  // ── Prospects ────────────────────────────────────────────────────────────
   for (const e of prospects) {
     const lastComm = e.comms?.[e.comms.length - 1]
     const lastDate = lastComm?.date ?? e.last_activity_at
     const age = daysSince(lastDate)
+    const hasUnreplied = e.comms?.some(c => c.needs_response)
+
     if (e.prospect_step === 'inquiry') {
-      const hasUnreplied = e.comms?.some(c => c.needs_response)
-      if (hasUnreplied && age >= 2) {
+      // Any unanswered inquiry over 1 day is urgent
+      if (hasUnreplied && age >= 1)
         prospectAlerts.push({ engagement: e, severity: 'red', href: `/prospects/${e.id}`, label: `${e.organization} — inquiry unanswered ${age}d` })
-        continue
-      }
+    } else if (e.prospect_step === 'outreach') {
+      // No reply to our outreach after 5 days — time to follow up
+      if (age >= 5)
+        prospectAlerts.push({ engagement: e, severity: 'yellow', href: `/prospects/${e.id}`, label: `${e.organization} — follow-up overdue (${age}d since last touch)` })
+    } else if (e.prospect_step === 'in_contact') {
+      // Unanswered inbound from them
+      if (hasUnreplied && age >= 1)
+        prospectAlerts.push({ engagement: e, severity: 'red', href: `/prospects/${e.id}`, label: `${e.organization} — reply needed (${age}d)` })
+      // Active negotiation gone quiet 5+ days
+      else if (!hasUnreplied && age >= 5)
+        prospectAlerts.push({ engagement: e, severity: 'yellow', href: `/prospects/${e.id}`, label: `${e.organization} — no activity in ${age}d` })
     }
-    if (e.prospect_step === 'outreach' && age >= 5)
-      prospectAlerts.push({ engagement: e, severity: 'yellow', href: `/prospects/${e.id}`, label: `${e.organization} — follow-up overdue (${age}d since last touch)` })
-    if ((e.prospect_step === 'in_contact' || e.prospect_step === 'discussing') && age >= 7)
-      prospectAlerts.push({ engagement: e, severity: 'yellow', href: `/prospects/${e.id}`, label: `${e.organization} — no activity in ${age}d` })
   }
 
+  // ── Engagements ───────────────────────────────────────────────────────────
   for (const e of active) {
     if (!e.event_date) continue
     const days = daysUntil(e.event_date)
     const flags = e.engagement_flags
-    if (flags.includes('contract_sent') && !flags.includes('contract_signed') && days <= 21)
-      engagementAlerts.push({ engagement: e, severity: 'red', href: `/engagements/${e.id}`, label: `${e.organization} — contract unsigned, ${formatCountdown(days)}` })
-    if (!flags.includes('advance_sheet_complete') && days <= 14)
-      engagementAlerts.push({ engagement: e, severity: 'red', href: `/engagements/${e.id}`, label: `${e.organization} — advance sheet incomplete, ${formatCountdown(days)}` })
-    if (flags.includes('contract_sent') && !flags.includes('contract_signed') && days > 21)
-      engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — awaiting contract signature` })
-    if (flags.includes('contract_signed') && !flags.includes('client_deliverables_sent'))
-      engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — client deliverables not sent` })
+    const isMedia = !!(e as any).event_type && (e as any).event_type !== 'speaking'
+
+    if (!isMedia) {
+      // Contract sent but unsigned — urgent if within 4 weeks, watch if further out
+      if (flags.includes('contract_sent') && !flags.includes('contract_signed')) {
+        const contractAge = daysSince(e.comms?.find(c => c.subject?.toLowerCase().includes('agreement') || c.subject?.toLowerCase().includes('contract'))?.date ?? e.created_at)
+        if (days <= 28)
+          engagementAlerts.push({ engagement: e, severity: days <= 14 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — contract unsigned, ${contractAge}d waiting` })
+        else if (contractAge >= 14)
+          engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — contract pending signature (${contractAge}d)` })
+      }
+      // Contract signed but briefing doc not sent — flag if within 6 weeks
+      if (flags.includes('contract_signed') && !flags.includes('client_deliverables_sent') && days <= 42)
+        engagementAlerts.push({ engagement: e, severity: days <= 21 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document not sent, ${formatCountdown(days)}` })
+      // Briefing doc sent but not confirmed complete — flag within 3 weeks
+      if (flags.includes('client_deliverables_sent') && !flags.includes('advance_sheet_complete') && days <= 21)
+        engagementAlerts.push({ engagement: e, severity: days <= 7 ? 'red' : 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — briefing document not confirmed, ${formatCountdown(days)}` })
+      // Fully ready but event is tomorrow — day-of heads up
+      if (flags.includes('advance_sheet_complete') && days === 1)
+        engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — event tomorrow, all systems go` })
+    } else {
+      // Media appearance — flag missing confirmation within 2 weeks
+      const mediaFlags: string[] = (e as any).media_flags ?? []
+      if (!mediaFlags.includes('confirmed') && days <= 14)
+        engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — appearance not yet confirmed, ${formatCountdown(days)}` })
+      if (mediaFlags.includes('confirmed') && !mediaFlags.includes('prep_sent') && days <= 7)
+        engagementAlerts.push({ engagement: e, severity: 'yellow', href: `/engagements/${e.id}`, label: `${e.organization} — prep questions not yet received, ${formatCountdown(days)}` })
+    }
   }
 
+  // ── Post-Event ────────────────────────────────────────────────────────────
   for (const e of postEvent) {
+    if (e.post_event_flags.includes('marked_complete')) continue
     const flags = e.post_event_flags
-    if (flags.includes('invoice_sent') && !flags.includes('invoice_paid')) {
-      const sentComm = e.comms?.find(c => c.subject?.toLowerCase().includes('invoice'))
-      const age = daysSince(sentComm?.date ?? e.updated_at)
-      postEventAlerts.push({ engagement: e, severity: age >= 30 ? 'red' : 'yellow', href: `/post-event/${e.id}`,
-        label: age >= 30 ? `${e.organization} — invoice unpaid ${age}d` : `${e.organization} — invoice outstanding` })
+    const eventAge = e.event_date ? daysSince(e.event_date) : 0
+
+    // Invoice not sent — urgent if more than 3 days post-event
+    if (!flags.includes('invoice_sent')) {
+      postEventAlerts.push({ engagement: e, severity: eventAge >= 3 ? 'red' : 'yellow', href: `/post-event/${e.id}`,
+        label: eventAge >= 3 ? `${e.organization} — invoice not sent (${eventAge}d post-event)` : `${e.organization} — invoice not yet sent` })
     }
-    if (!flags.includes('invoice_sent') && !flags.includes('marked_complete'))
-      postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — invoice not yet sent` })
-    if (!flags.includes('media_uploaded') && !flags.includes('marked_complete'))
-      postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — media not uploaded` })
+    // Invoice sent but unpaid — escalate by age
+    else if (!flags.includes('invoice_paid')) {
+      const invoiceComm = e.comms?.find(c => c.subject?.toLowerCase().includes('invoice'))
+      const invoiceAge = daysSince(invoiceComm?.date ?? e.updated_at)
+      if (invoiceAge >= 30)
+        postEventAlerts.push({ engagement: e, severity: 'red', href: `/post-event/${e.id}`, label: `${e.organization} — invoice unpaid ${invoiceAge}d` })
+      else if (invoiceAge >= 14)
+        postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — invoice outstanding ${invoiceAge}d` })
+      else
+        postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — invoice sent, awaiting payment` })
+    }
+    // Paid but no media — nudge after 7 days
+    if (flags.includes('invoice_paid') && !flags.includes('media_uploaded') && eventAge >= 7)
+      postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — media not yet received` })
   }
 
   const groups: AlertGroup[] = []
@@ -116,16 +158,16 @@ function prospectOneLiner(e: Engagement): { text: string; urgent: boolean } {
   return { text: 'No recent activity', urgent: false }
 }
 
-// ─── Advance Sheet Carousel ───────────────────────────────────────────────────
+// ─── Briefing Document Carousel ───────────────────────────────────────────────────
 
 const CHECKLIST_FLAGS = [
   { id: 'contract_sent',            label: 'Contract Sent' },
   { id: 'contract_signed',          label: 'Contract Signed' },
   { id: 'client_deliverables_sent', label: 'Client Deliverables Sent' },
-  { id: 'advance_sheet_complete',   label: 'Advance Sheet Complete' },
+  { id: 'advance_sheet_complete',   label: 'Briefing Document Complete' },
 ]
 
-function AdvanceSheetCard({ engagement: e }: { engagement: Engagement }) {
+function BriefingDocCard({ engagement: e }: { engagement: Engagement }) {
   const days = daysUntil(e.event_date!)
   const flags = e.engagement_flags
   const isComplete = flags.includes('advance_sheet_complete')
@@ -149,54 +191,61 @@ function AdvanceSheetCard({ engagement: e }: { engagement: Engagement }) {
     : 'border-t-ink-100'
 
   return (
-    <Link href={`/engagements/${e.id}`}
-      className={`flex-1 min-w-0 flex flex-col gap-3.5 p-5 rounded-xl border-t-2 border border-ink-100 bg-white hover:shadow-md hover:border-gold/20 transition-all group ${topAccent}`}>
+    <div className={`flex-1 min-w-0 flex flex-col rounded-xl border-t-2 border border-ink-100 bg-white overflow-hidden ${topAccent}`}>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-display text-lg font-semibold text-ink leading-tight truncate">{e.organization}</p>
-          <p className="text-xs text-ink-400 truncate mt-0.5">{e.event_name || e.topic}</p>
+      {/* Clickable card body → engagement detail */}
+      <Link href={`/engagements/${e.id}`}
+        className="flex flex-col gap-3.5 p-5 hover:bg-parchment/40 transition-all group">
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-display text-lg font-semibold text-ink leading-tight truncate">{e.organization}</p>
+            <p className="text-xs text-ink-400 truncate mt-0.5">{e.event_name || e.topic}</p>
+          </div>
+          <div className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full border ${countdownColor}`}>
+            {formatCountdown(days)}
+          </div>
         </div>
-        <div className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full border ${countdownColor}`}>
-          {formatCountdown(days)}
+
+        {/* Date + location */}
+        <p className="text-xs text-ink-300">{e.event_city} · {formatDate(e.event_date!)}</p>
+
+        {/* Checklist */}
+        <div className="space-y-1.5">
+          {CHECKLIST_FLAGS.map(flag => {
+            const done = flags.includes(flag.id as typeof flags[number])
+            return (
+              <div key={flag.id} className={`flex items-center gap-2 text-xs ${done ? 'text-sage-dark' : 'text-ink-300'}`}>
+                {done
+                  ? <CheckCircle2 size={11} className="flex-shrink-0 text-sage" />
+                  : <Circle size={11} className="flex-shrink-0" />}
+                {flag.label}
+              </div>
+            )
+          })}
         </div>
-      </div>
 
-      {/* Date + location */}
-      <p className="text-xs text-ink-300">{e.event_city} · {formatDate(e.event_date!)}</p>
-
-      {/* Checklist */}
-      <div className="space-y-1.5">
-        {CHECKLIST_FLAGS.map(flag => {
-          const done = flags.includes(flag.id as typeof flags[number])
-          return (
-            <div key={flag.id} className={`flex items-center gap-2 text-xs ${done ? 'text-sage-dark' : 'text-ink-300'}`}>
-              {done
-                ? <CheckCircle2 size={11} className="flex-shrink-0 text-sage" />
-                : <Circle size={11} className="flex-shrink-0" />}
-              {flag.label}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-ink-50">
+        {/* Status */}
         <span className={`text-[11px] font-semibold ${
           isComplete ? 'text-sage-dark' : isUrgent ? 'text-red-500' : isWarning ? 'text-amber-600' : 'text-ink-400'
         }`}>
           {isComplete ? '✓ Ready' : isUrgent ? 'Needs attention' : 'In progress'}
         </span>
-        <span className="text-[11px] text-gold/60 group-hover:text-gold-dark transition-all font-medium">
-          {isComplete ? 'View sheet →' : 'Open sheet →'}
-        </span>
-      </div>
-    </Link>
+      </Link>
+
+      {/* Briefing Document button — full width, prominent */}
+      <Link href={`/engagements/${e.id}/briefing`}
+        className="px-5 py-3.5 bg-gold/10 border-t border-gold/20 hover:bg-gold/20 transition-all flex items-center justify-center gap-2 group mt-auto">
+        <FileText size={13} className="text-gold" />
+        <span className="text-sm font-semibold text-gold-dark">View Briefing Document</span>
+        <ArrowRight size={12} className="text-gold/50 group-hover:text-gold transition-all" />
+      </Link>
+    </div>
   )
 }
 
-function AdvanceSheetCarousel({ events }: { events: Engagement[] }) {
+function BriefingDocCarousel({ events }: { events: Engagement[] }) {
   const [page, setPage] = useState(0)
   const perPage = 3
   const totalPages = Math.ceil(events.length / perPage)
@@ -232,7 +281,7 @@ function AdvanceSheetCarousel({ events }: { events: Engagement[] }) {
 
       {/* Cards */}
       <div className="flex gap-3 p-5">
-        {visible.map(e => <AdvanceSheetCard key={e.id} engagement={e} />)}
+        {visible.map(e => <BriefingDocCard key={e.id} engagement={e} />)}
         {visible.length < perPage && Array.from({ length: perPage - visible.length }).map((_, i) => (
           <div key={i} className="flex-1 min-w-0" />
         ))}
@@ -295,12 +344,10 @@ const STEP_COLORS: Record<string, string> = {
   inquiry:    'text-blue-600 bg-blue-50',
   outreach:   'text-purple-600 bg-purple-50',
   in_contact: 'text-sage-dark bg-sage/10',
-  discussing: 'text-gold-dark bg-gold/10',
-  proposal:   'text-amber-700 bg-amber-50',
 }
 
 export default function DashboardPage() {
-  const allEngagements = MOCK_ENGAGEMENTS
+  const { engagements: allEngagements, reviewItems } = useStore()
   const prospects = allEngagements.filter(e => e.section === 'prospects')
   const active = allEngagements.filter(e => e.section === 'engagements')
   const postEvent = allEngagements.filter(e => e.section === 'post-event')
@@ -316,7 +363,7 @@ export default function DashboardPage() {
   const carouselEvents = within2Weeks.length >= 3 ? within2Weeks : [...within2Weeks, ...beyond2Weeks.slice(0, 3 - within2Weeks.length)]
 
   const alertGroups = buildAlerts(prospects, active, postEvent)
-  const reviewCount = MOCK_REVIEW_ITEMS.filter(r => !r.confirmed_by).length
+  const reviewCount = reviewItems.filter(r => !r.confirmed_by).length
   const needsResponseCount = allEngagements.filter(e => e.comms?.some(c => c.needs_response)).length
 
   return (
@@ -338,8 +385,8 @@ export default function DashboardPage() {
           </div>
 
           {/* Pipeline — center */}
-          <div className="flex-1 flex flex-col gap-2.5 pb-1">
-            <div className="flex h-1.5 rounded-full overflow-hidden gap-px">
+          <div className="flex flex-col gap-2.5 w-80">
+            <div className="flex h-4 rounded-full overflow-hidden gap-px">
               <div className="rounded-l-full transition-all" style={{ width: `${pPct}%`, backgroundColor: '#7A9E87' }} />
               <div className="transition-all" style={{ width: `${aPct}%`, backgroundColor: '#C9A84C' }} />
               <div className="rounded-r-full transition-all" style={{ width: `${pePct}%`, backgroundColor: '#4A4740' }} />
@@ -350,7 +397,7 @@ export default function DashboardPage() {
                 { label: 'Engagements', count: active.length, color: '#C9A84C', href: '/engagements' },
                 { label: 'Post-Event', count: postEvent.length, color: '#4A4740', href: '/post-event' },
               ].map(s => (
-                <Link key={s.label} href={s.href} className="flex items-center gap-1.5 hover:opacity-60 transition-all">
+                <Link key={s.label} href={s.href} className="flex items-center gap-1.5 whitespace-nowrap hover:opacity-60 transition-all">
                   <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
                   <span className="text-sm font-semibold text-ink">{s.count}</span>
                   <span className="text-xs text-ink-400">{s.label}</span>
@@ -360,7 +407,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Action pills */}
-          <div className="flex items-center gap-2.5 flex-shrink-0 pb-1">
+          <div className="flex items-center gap-2.5 flex-shrink-0">
             {reviewCount > 0 && (
               <Link href="/review"
                 className="flex items-center gap-2 px-4 py-2.5 bg-gold/8 border border-gold/25 rounded-xl hover:bg-gold/12 transition-all group">
@@ -383,7 +430,7 @@ export default function DashboardPage() {
         {/* ── Carousel ── */}
         {carouselEvents.length > 0 && (
           <div className="mb-6">
-            <AdvanceSheetCarousel events={carouselEvents} />
+            <BriefingDocCarousel events={carouselEvents} />
           </div>
         )}
 
