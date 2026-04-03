@@ -233,7 +233,7 @@ function BriefingDocCard({ engagement: e }: { engagement: Engagement }) {
       </Link>
 
       {/* Briefing Document button — full width, prominent */}
-      <Link href={`/engagements/${e.id}/briefing`}
+      <Link href={`/engagements/${e.id}#briefing`}
         className="px-5 py-3.5 bg-gold/10 border-t border-gold/20 hover:bg-gold/20 transition-all flex items-center justify-center gap-2 group mt-auto">
         <FileText size={13} className="text-gold" />
         <span className="text-sm font-semibold text-gold-dark">View Briefing Document</span>

@@ -1,17 +1,19 @@
 'use client'
+import React from 'react'
 import { useParams } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import { ENGAGEMENT_FLAGS, MEDIA_FLAGS, EngagementFlag, MediaFlag, Engagement, primaryContact } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import {
   ArrowLeft, Calendar, MapPin, Users, AlertTriangle, CheckCircle2, Circle,
-  Download, FileText, ChevronDown, ChevronUp, Mic, Video, Radio, Newspaper,
-  Phone, Mail, Building, Clock, Wifi, Hotel, Plane, Monitor
+  Download, FileText, Mic, Radio, Newspaper,
+  Clock, Wifi, Hotel, Plane, ExternalLink,
+  Pencil, Check, X, Plus, Trash2, GripVertical, ChevronDown
 } from 'lucide-react'
 import Link from 'next/link'
 
-// ─── Event type helpers ───────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MEDIA_TYPES = ['podcast', 'interview', 'panel', 'livestream']
 
@@ -32,203 +34,581 @@ function eventTypeLabel(type: string) {
   return map[type] || 'Engagement'
 }
 
-// ─── Briefing Document inline view ────────────────────────────────────────────────
+// ─── Inline edit primitives ───────────────────────────────────────────────────
 
-function BriefingDocSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="flex items-center gap-3 mb-3">
-        <div className="h-px flex-1 bg-gold/30" />
-        <span className="text-[10px] font-bold uppercase tracking-widest text-gold">{title}</span>
-        <div className="h-px flex-1 bg-gold/30" />
-      </div>
-      <div className="space-y-3">{children}</div>
-    </div>
-  )
-}
+function EditableField({
+  label, value, placeholder, onSave, multiline, link
+}: {
+  label: string
+  value?: string | null
+  placeholder?: string
+  onSave: (v: string) => void
+  multiline?: boolean
+  link?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value || '')
 
-function SheetField({ label, value }: { label: string; value?: string | null }) {
-  if (!value) return null
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300">{label}</span>
-      <span className="text-sm text-ink leading-snug">{value}</span>
-    </div>
-  )
-}
+  function commit() {
+    onSave(draft)
+    setEditing(false)
+  }
+  function cancel() {
+    setDraft(value || '')
+    setEditing(false)
+  }
 
-function SheetRow({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-4">{children}</div>
-}
-
-function CheckItem({ text, done = false }: { key?: number; text: string; done?: boolean }) {
-  return (
-    <div className={`flex items-start gap-2 text-sm ${done ? 'text-ink-300 line-through' : 'text-ink'}`}>
-      <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border ${done ? 'bg-sage/20 border-sage/30' : 'border-ink-200'}`}>
-        {done && <CheckCircle2 size={10} className="text-sage" />}
-      </div>
-      {text}
-    </div>
-  )
-}
-
-function BriefingDocPanel({ e }: { e: Engagement }) {
-  const eventType = (e as any).event_type || 'speaking'
-  const isMedia = MEDIA_TYPES.includes(eventType)
-  const isInPerson = e.event_format === 'in_person'
-  const isHybrid = e.event_format === 'hybrid'
-  const hasPhysical = isInPerson || isHybrid
-  const contact = primaryContact(e)
-
-  // Checklists per type
-  const checklistItems: string[] = (() => {
-    if (eventType === 'podcast') return [
-      'Confirm recording platform and dial-in link',
-      'Test audio quality — quiet recording environment confirmed',
-      'Review prep questions or discussion guide',
-      'Confirm episode title and expected release timeline',
-      'Bio and headshot sent to producer',
-    ]
-    if (eventType === 'interview') return [
-      'Confirm format — written, phone, or video',
-      'Review questions or topic brief from journalist',
-      'Confirm publication outlet and expected publish date',
-      'Confirm any embargo or approval-before-publish terms',
-      'Bio and headshot sent to editor',
-    ]
-    if (eventType === 'panel') return [
-      'Confirm full panelist lineup and moderator name',
-      'Review moderator prep questions',
-      'Confirm platform or venue details',
-      'Confirm run-of-show and speaking order',
-      'Bio and headshot sent to organizer',
-    ]
-    if (eventType === 'livestream') return [
-      'Confirm platform and join/stream link',
-      'Confirm run-of-show — conversation vs live Q&A timing',
-      'Test audio and video on platform in advance',
-      'Confirm promotional posts and RSVP count with host',
-      'Bio and headshot sent to host',
-    ]
-    if (hasPhysical) return [
-      'Confirm arrival time and green room or holding area',
-      'Confirm AV setup — test clicker, slides, and confidence monitor',
-      'Confirm final headcount with organizer',
-      'Confirm recording and photography permissions',
-      'Confirm run-of-show and time on stage',
-      'Bio and headshot confirmed with organizer',
-      'Confirm intro speaker name and pronunciation',
-    ]
-    return [
-      'Confirm video platform and dial-in link',
-      'Test audio, video, and screen share in advance',
-      'Confirm final attendee count with organizer',
-      'Confirm run-of-show and session timing',
-      'Bio and headshot confirmed with organizer',
-    ]
-  })()
-
-  const doneFlagIds = [...(e.engagement_flags || []), ...((e as any).media_flags || [])]
-  const bioSent = doneFlagIds.includes('bio_sent')
-  const clientDeliverablesSent = doneFlagIds.includes('client_deliverables_sent')
+  const displayPlaceholder = placeholder || `Add ${label.toLowerCase()}…`
 
   return (
-    <div className="space-y-6 py-2">
-
-      {/* Overview */}
-      <BriefingDocSection title={isMedia ? 'Appearance Overview' : 'Event Overview'}>
-        <SheetRow>
-          <SheetField label={isMedia ? 'Show / Outlet' : 'Event Name'} value={e.event_name || e.organization} />
-          <SheetField label="Date" value={formatDate(e.event_date)} />
-        </SheetRow>
-        <SheetRow>
-          <SheetField label="Organization" value={e.organization} />
-          <SheetField label="Type" value={eventTypeLabel(eventType)} />
-        </SheetRow>
-        {hasPhysical && (
-          <SheetRow>
-            <SheetField label="Venue" value={e.event_location} />
-            <SheetField label="City" value={e.event_city} />
-          </SheetRow>
-        )}
-        {!hasPhysical && e.event_city && (
-          <SheetField label="Location / Timezone" value={e.event_city} />
-        )}
-        <SheetRow>
-          {e.audience_size && (
-            <SheetField
-              label={isMedia ? 'Est. Audience / Listeners' : 'Audience Size'}
-              value={e.audience_size.toLocaleString()}
+    <div className="group flex flex-col gap-1.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">{label}</p>
+      {editing ? (
+        <div className="flex items-start gap-2">
+          {multiline ? (
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(ev: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(ev.target.value)}
+              rows={3}
+              className="flex-1 text-sm text-ink bg-parchment border border-gold/40 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold resize-none"
+            />
+          ) : (
+            <input
+              autoFocus
+              value={draft}
+              onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setDraft(ev.target.value)}
+              onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => { if (ev.key === 'Enter') commit(); if (ev.key === 'Escape') cancel() }}
+              className="flex-1 text-sm text-ink bg-parchment border border-gold/40 rounded-lg px-2.5 py-1 focus:outline-none focus:border-gold"
             />
           )}
-          {e.session_length && (
-            <SheetField label="Duration" value={`${e.session_length} minutes`} />
-          )}
-        </SheetRow>
-      </BriefingDocSection>
-
-      {/* Topic */}
-      {(e.topic || e.notes) && (
-        <BriefingDocSection title={isMedia ? 'Topic & Content' : 'Presentation'}>
-          {e.topic && <SheetField label={isMedia ? 'Discussion Topic / Angle' : 'Topic / Title'} value={e.topic} />}
-          {e.notes && <SheetField label={isMedia ? 'Context & Notes' : 'Speaker Notes'} value={e.notes} />}
-        </BriefingDocSection>
-      )}
-
-      {/* Contact */}
-      {contact && (
-        <BriefingDocSection title={hasPhysical ? 'On-Site Contact' : 'Primary Contact'}>
-          <SheetRow>
-            <SheetField label="Name" value={`${contact.first_name} ${contact.last_name}`} />
-            <SheetField label="Title" value={contact.title} />
-          </SheetRow>
-          <SheetRow>
-            <SheetField label="Email" value={contact.email} />
-            {contact.phone && <SheetField label="Phone" value={contact.phone} />}
-          </SheetRow>
-        </BriefingDocSection>
-      )}
-
-      {/* Logistics — only what's relevant */}
-      {(hasPhysical || isMedia) && (e.av_needs || e.travel_covered !== undefined || e.hotel_covered !== undefined || e.special_requirements || (!hasPhysical && isMedia)) && (
-        <BriefingDocSection title="Logistics">
-          {hasPhysical && !isMedia && e.av_needs && (
-            <SheetField label="AV Requirements" value={e.av_needs} />
-          )}
-          {!hasPhysical && isMedia && (
-            <SheetField label="Platform / Recording Format" value="Confirm with organizer — link to be provided" />
-          )}
-          {hasPhysical && e.travel_covered !== undefined && (
-            <SheetRow>
-              <SheetField
-                label="Travel"
-                value={e.travel_covered ? 'Covered by Client — client will arrange' : 'Self-arranged by Speaker'}
-              />
-              {e.hotel_covered !== undefined && (
-                <SheetField
-                  label="Hotel"
-                  value={e.hotel_covered ? 'Covered by Client — client will arrange' : 'Self-arranged by Speaker'}
-                />
-              )}
-            </SheetRow>
-          )}
-          {e.special_requirements && (
-            <SheetField label="Special Requirements" value={e.special_requirements} />
-          )}
-        </BriefingDocSection>
-      )}
-
-      {/* Checklist */}
-      <BriefingDocSection title="Pre-Event Checklist">
-        <div className="space-y-2">
-          {checklistItems.map((item, i) => {
-            const done = (item.toLowerCase().includes('bio') && bioSent) ||
-                         (item.toLowerCase().includes('logistics') && clientDeliverablesSent)
-            return <CheckItem key={i} text={item} done={done} />
-          })}
+          <button onClick={commit} className="p-1 text-sage hover:text-sage-dark mt-0.5 flex-shrink-0"><Check size={13} /></button>
+          <button onClick={cancel} className="p-1 text-ink-300 hover:text-ink mt-0.5 flex-shrink-0"><X size={13} /></button>
         </div>
-      </BriefingDocSection>
+      ) : (
+        <button
+          onClick={() => { setDraft(value || ''); setEditing(true) }}
+          className="text-left"
+        >
+          {value ? (
+            link ? (
+              <span className="text-sm font-semibold text-gold hover:text-gold-dark inline-flex items-center gap-1">
+                {value} <ExternalLink size={10} />
+              </span>
+            ) : (
+              <span className="text-sm text-ink leading-snug group-hover:underline decoration-dashed decoration-ink-200 underline-offset-2">
+                {value}
+              </span>
+            )
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-ink-300 border border-dashed border-ink-200 rounded px-2 py-0.5 hover:border-gold/40 hover:text-gold/70 transition-colors">
+              <Plus size={9} className="flex-shrink-0" />{displayPlaceholder}
+            </span>
+          )}
+        </button>
+      )}
+    </div>
+  )
+}
 
+function BDivider() {
+  return <div className="border-t border-ink-100 my-5" />
+}
+
+function BSectionHeader({
+  children, onRemove
+}: {
+  children: React.ReactNode
+  onRemove?: () => void
+}) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div className="h-px flex-1 bg-gold/25" />
+      <span className="text-[10px] font-bold uppercase tracking-widest text-gold">{children}</span>
+      <div className="h-px flex-1 bg-gold/25" />
+      {onRemove && (
+        <button onClick={onRemove} className="text-ink-200 hover:text-red-400 transition-colors flex-shrink-0" title="Remove section">
+          <X size={12} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function BTwoCol({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-x-8 gap-y-5">{children}</div>
+}
+
+// ─── Section types ────────────────────────────────────────────────────────────
+
+type SectionKey = 'header' | 'contact' | 'details' | 'venue' | 'travel' | 'runofshow' | 'prepnotes'
+
+const ALL_SECTIONS: { key: SectionKey; label: string; always?: boolean }[] = [
+  { key: 'header',     label: 'Event / Date / Format', always: true },
+  { key: 'contact',    label: 'Primary Contact',        always: true },
+  { key: 'details',    label: 'Event Details',          always: true },
+  { key: 'venue',      label: 'Venue' },
+  { key: 'travel',     label: 'Travel Details' },
+  { key: 'runofshow',  label: 'Run of Show' },
+  { key: 'prepnotes',  label: 'Prep Notes',             always: true },
+]
+
+function getDefaultSections(e: Engagement): SectionKey[] {
+  const hasPhysical = e.event_format === 'in_person' || e.event_format === 'hybrid'
+  const hasTravel = (e as any).flight_details || (e as any).hotel_name || (e as any).drive_time
+  const hasRos = (e as any).run_of_show?.length > 0
+  const base: SectionKey[] = ['header', 'contact', 'details', 'prepnotes']
+  if (hasPhysical) base.splice(3, 0, 'venue')
+  if (hasTravel || hasPhysical) base.splice(-1, 0, 'travel')
+  if (hasRos) base.splice(-1, 0, 'runofshow')
+  return base
+}
+
+// ─── Section: Event Header ────────────────────────────────────────────────────
+
+function SectionHeader({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const hasPhysical = e.event_format === 'in_person' || e.event_format === 'hybrid'
+  const isVirtual = !hasPhysical
+  const eventType = (e as any).event_type || 'speaking'
+  const formatStr = hasPhysical
+    ? `In-Person${e.event_city ? ` — ${e.event_city}` : ''}`
+    : 'Virtual'
+
+  return (
+    <div className="space-y-4">
+      <BTwoCol>
+        <EditableField label="Event" value={e.event_name || e.organization}
+          onSave={v => save({ event_name: v })} />
+        <EditableField label="Date / Time"
+          value={[formatDate(e.event_date), e.event_time].filter(Boolean).join(' | ')}
+          placeholder="Date and time"
+          onSave={v => save({ event_time: v })} />
+      </BTwoCol>
+      <EditableField label="Format" value={`${eventTypeLabel(eventType)} — ${formatStr}`}
+        placeholder="Format and location"
+        onSave={v => save({ event_city: v })} />
+
+      {isVirtual && (
+        <div className="bg-gold/6 border border-gold/20 rounded-xl px-4 py-3 space-y-3">
+          <EditableField label="Join Link" value={(e as any).join_link}
+            placeholder="Join link"
+            onSave={v => save({ join_link: v } as any)} />
+          <BTwoCol>
+            <EditableField label="Backup Dial-In" value={(e as any).dial_in_backup}
+              placeholder="Backup dial-in number"
+              onSave={v => save({ dial_in_backup: v } as any)} />
+            <EditableField label="Green Room Opens" value={(e as any).green_room_time}
+              placeholder="Green room time"
+              onSave={v => save({ green_room_time: v } as any)} />
+          </BTwoCol>
+          <EditableField label="Go Live" value={(e as any).go_live_time}
+            placeholder="Go live time"
+            onSave={v => save({ go_live_time: v } as any)} />
+        </div>
+      )}
+
+      {hasPhysical && (
+        <BTwoCol>
+          <EditableField label="Green Room / Load-In" value={(e as any).green_room_time}
+            placeholder="Green room / load-in time"
+            onSave={v => save({ green_room_time: v } as any)} />
+        </BTwoCol>
+      )}
+    </div>
+  )
+}
+
+// ─── Section: Primary Contact ─────────────────────────────────────────────────
+
+function SectionContact({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const contact = primaryContact(e)
+  const fullName = contact ? `${contact.first_name} ${contact.last_name}` : ''
+  const nameTitle = contact?.title ? `${fullName}  |  ${contact.title}` : fullName
+
+  return (
+    <div className="space-y-5">
+      <BSectionHeader>Primary Contact</BSectionHeader>
+      <BTwoCol>
+        <EditableField label="Name / Title" value={nameTitle}
+          placeholder="Name and title"
+          onSave={() => {}} />
+        <div className="space-y-3">
+          <EditableField label="Cell" value={contact?.phone}
+            placeholder="Cell number"
+            onSave={() => {}} />
+          <EditableField label="Email" value={contact?.email}
+            placeholder="Email address"
+            onSave={() => {}} />
+        </div>
+      </BTwoCol>
+    </div>
+  )
+}
+
+// ─── Section: Event Details ───────────────────────────────────────────────────
+
+function SectionDetails({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const eventType = (e as any).event_type || 'speaking'
+  const isMedia = MEDIA_TYPES.includes(eventType)
+
+  return (
+    <div className="space-y-5">
+      <BSectionHeader>Event Details</BSectionHeader>
+      <EditableField label="Purpose" value={(e as any).purpose}
+        placeholder="What is this event / engagement for?"
+        multiline
+        onSave={v => save({ purpose: v } as any)} />
+      <EditableField label="Audience" value={(e as any).audience_description || (e.audience_size ? `~${e.audience_size.toLocaleString()} attendees` : '')}
+        placeholder="Who is she speaking to/with?"
+        onSave={v => save({ audience_description: v } as any)} />
+      <EditableField
+        label={isMedia ? 'Her Duration' : 'Duration (her speaking time only)'}
+        value={e.session_length ? `${e.session_length} minutes` : ''}
+        placeholder="Duration in minutes"
+        onSave={v => save({ session_length: parseInt(v) || undefined })} />
+    </div>
+  )
+}
+
+// ─── Section: Venue ───────────────────────────────────────────────────────────
+
+function SectionVenue({ e, save, onRemove }: { e: Engagement; save: (p: Partial<Engagement>) => void; onRemove: () => void }) {
+  return (
+    <div className="space-y-4">
+      <BDivider />
+      <BSectionHeader onRemove={onRemove}>Venue</BSectionHeader>
+      <EditableField label="Venue Name" value={e.event_location}
+        placeholder="Venue name"
+        onSave={v => save({ event_location: v })} />
+      <EditableField label="Full Address (Google Maps link)" value={(e as any).venue_maps_link}
+        placeholder="Google Maps link"
+        onSave={v => save({ venue_maps_link: v } as any)} />
+      <BTwoCol>
+        <EditableField label="Arrival Time" value={(e as any).arrival_time}
+          placeholder="Arrival time"
+          onSave={v => save({ arrival_time: v } as any)} />
+        <EditableField label="Special Instructions" value={(e as any).venue_special_instructions}
+          placeholder="Special instructions"
+          onSave={v => save({ venue_special_instructions: v } as any)} />
+      </BTwoCol>
+    </div>
+  )
+}
+
+// ─── Section: Travel ──────────────────────────────────────────────────────────
+
+function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial<Engagement>) => void; onRemove: () => void }) {
+  const [mode, setMode] = useState<'fly' | 'drive'>((e as any).drive_time && !(e as any).flight_details ? 'drive' : 'fly')
+
+  return (
+    <div className="space-y-4">
+      <BDivider />
+      <div className="flex items-center gap-3 mb-4">
+        <div className="h-px flex-1 bg-gold/25" />
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gold">Travel Details</span>
+        <div className="h-px flex-1 bg-gold/25" />
+        {/* mode toggle */}
+        <div className="flex rounded-lg border border-ink-100 overflow-hidden text-[10px] font-bold uppercase tracking-wide flex-shrink-0">
+          <button onClick={() => setMode('fly')}
+            className={`px-2.5 py-1 transition-colors ${mode === 'fly' ? 'bg-ink text-cream' : 'text-ink-400 hover:text-ink'}`}>
+            ✈ Fly
+          </button>
+          <button onClick={() => setMode('drive')}
+            className={`px-2.5 py-1 transition-colors ${mode === 'drive' ? 'bg-ink text-cream' : 'text-ink-400 hover:text-ink'}`}>
+            ⛽ Drive
+          </button>
+        </div>
+        <button onClick={onRemove} className="text-ink-200 hover:text-red-400 transition-colors flex-shrink-0" title="Remove section">
+          <X size={12} />
+        </button>
+      </div>
+
+      {mode === 'fly' ? (
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Flight</p>
+            <EditableField label="Airline + Flight #  |  Route  |  Times" value={(e as any).flight_details}
+              placeholder="Airline, flight number, route, times"
+              onSave={v => save({ flight_details: v } as any)} />
+            <EditableField label="Confirmation Link" value={(e as any).flight_confirmation}
+              placeholder="Confirmation link"
+              onSave={v => save({ flight_confirmation: v } as any)} />
+          </div>
+          <div className="space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Hotel</p>
+            <EditableField label="Hotel Name" value={(e as any).hotel_name}
+              placeholder="Hotel name"
+              onSave={v => save({ hotel_name: v } as any)} />
+            <BTwoCol>
+              <EditableField label="Check-In Date" value={(e as any).hotel_checkin}
+                placeholder="Check-in date"
+                onSave={v => save({ hotel_checkin: v } as any)} />
+              <EditableField label="Confirmation #" value={(e as any).hotel_confirmation}
+                placeholder="Confirmation number"
+                onSave={v => save({ hotel_confirmation: v } as any)} />
+            </BTwoCol>
+            <EditableField label="Hotel Address (Google Maps link)" value={(e as any).hotel_maps_link}
+              placeholder="Google Maps link"
+              onSave={v => save({ hotel_maps_link: v } as any)} />
+          </div>
+          <div className="space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Ground</p>
+            <EditableField label="Airport → Hotel → Venue" value={(e as any).ground_transport}
+              placeholder="How she gets from airport to hotel to venue"
+              multiline
+              onSave={v => save({ ground_transport: v } as any)} />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <EditableField label="Drive Time from Her Location" value={(e as any).drive_time}
+            placeholder="Drive time from her location"
+            onSave={v => save({ drive_time: v } as any)} />
+          <EditableField label="Route (Google Maps link with departure time)" value={(e as any).drive_route_link}
+            placeholder="Google Maps link"
+            onSave={v => save({ drive_route_link: v } as any)} />
+          <EditableField label="Parking" value={(e as any).parking_details}
+            placeholder="Parking details"
+            onSave={v => save({ parking_details: v } as any)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Section: Run of Show ─────────────────────────────────────────────────────
+
+type RosRow = { time: string; what: string; notes?: string }
+
+function SectionRunOfShow({ e, save, onRemove }: { e: Engagement; save: (p: Partial<Engagement>) => void; onRemove: () => void }) {
+  const rows: RosRow[] = (e as any).run_of_show ?? []
+
+  function updateRows(next: RosRow[]) {
+    save({ run_of_show: next } as any)
+  }
+
+  function updateRow(i: number, patch: Partial<RosRow>) {
+    const next = rows.map((r, idx) => idx === i ? { ...r, ...patch } : r)
+    updateRows(next)
+  }
+
+  function addRow() {
+    updateRows([...rows, { time: '', what: '', notes: '' }])
+  }
+
+  function removeRow(i: number) {
+    updateRows(rows.filter((_, idx) => idx !== i))
+  }
+
+  return (
+    <div className="space-y-3">
+      <BDivider />
+      <BSectionHeader onRemove={onRemove}>Schedule / Run of Show</BSectionHeader>
+      <div className="rounded-xl border border-ink-100 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-parchment border-b border-ink-100">
+              <th className="w-5 px-2" />
+              <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-28">Time</th>
+              <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300">What&apos;s Happening</th>
+              <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-40">Her Role / Notes</th>
+              <th className="w-8 px-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className={`border-b border-ink-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-parchment/20'} group`}>
+                <td className="px-2 text-ink-200"><GripVertical size={12} /></td>
+                <td className="px-2 py-1.5">
+                  <input value={row.time} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { time: ev.target.value })}
+                    placeholder="Time"
+                    className="w-full text-xs text-ink bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5" />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input value={row.what} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { what: ev.target.value })}
+                    placeholder="What's happening"
+                    className="w-full text-xs text-ink bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5" />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input value={row.notes || ''} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { notes: ev.target.value })}
+                    placeholder="Her role or notes"
+                    className="w-full text-xs text-ink-400 bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5" />
+                </td>
+                <td className="px-2">
+                  <button onClick={() => removeRow(i)} className="text-ink-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                    <X size={11} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-center text-xs text-ink-200 italic py-4">No schedule yet — add a row below</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+        <div className="border-t border-ink-100 px-4 py-2">
+          <button onClick={addRow}
+            className="flex items-center gap-1.5 text-xs text-ink-300 hover:text-gold transition-colors font-medium">
+            <Plus size={11} /> Add row
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Section: Prep Notes ──────────────────────────────────────────────────────
+
+function SectionPrepNotes({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  return (
+    <div className="space-y-4">
+      <BDivider />
+      <BSectionHeader>Prep Notes</BSectionHeader>
+      <EditableField label="Topics / Questions" value={e.topic}
+        placeholder="What will she be discussing or asked about?"
+        multiline
+        onSave={v => save({ topic: v })} />
+      <EditableField label="Moderator" value={(e as any).moderator_info}
+        placeholder="Moderator name and research link"
+        onSave={v => save({ moderator_info: v } as any)} />
+      <EditableField label="Co-Panelists" value={(e as any).panelist_info}
+        placeholder="Panelist names and research"
+        multiline
+        onSave={v => save({ panelist_info: v } as any)} />
+      <EditableField label="VIPs" value={(e as any).vip_info}
+        placeholder="VIPs or key attendees"
+        onSave={v => save({ vip_info: v } as any)} />
+      <EditableField label="Dress Code / Vibe" value={(e as any).dress_code}
+        placeholder="Dress code or vibe"
+        onSave={v => save({ dress_code: v } as any)} />
+      <EditableField label="Post-Event" value={(e as any).post_event_notes}
+        placeholder="Post-event plans"
+        onSave={v => save({ post_event_notes: v } as any)} />
+      {e.notes && (
+        <EditableField label="Additional Notes" value={e.notes}
+          multiline
+          onSave={v => save({ notes: v })} />
+      )}
+    </div>
+  )
+}
+
+// ─── Add Section panel ────────────────────────────────────────────────────────
+
+function AddSectionMenu({
+  available, onAdd
+}: {
+  available: { key: SectionKey; label: string }[]
+  onAdd: (k: SectionKey) => void
+}) {
+  const [open, setOpen] = useState(false)
+  if (available.length === 0) return null
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o: boolean) => !o)}
+        className="flex items-center gap-1.5 text-xs text-ink-300 hover:text-gold transition-colors font-medium border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2 w-full justify-center"
+      >
+        <Plus size={12} /> Add section
+        <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full mb-1 left-0 right-0 bg-white border border-ink-100 rounded-xl shadow-lg overflow-hidden z-10">
+          {available.map(s => (
+            <button key={s.key} onClick={() => { onAdd(s.key); setOpen(false) }}
+              className="w-full text-left px-4 py-2.5 text-sm text-ink hover:bg-parchment transition-colors">
+              + {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Full Briefing Document ───────────────────────────────────────────────────
+
+function BriefingDocument({ e }: { e: Engagement }) {
+  const { updateEngagement } = useStore()
+  const [sections, setSections] = useState<SectionKey[]>(() => getDefaultSections(e))
+  const [downloading, setDownloading] = useState(false)
+
+  const save = useCallback((patch: Partial<Engagement>): void => {
+    updateEngagement(e.id, patch)
+  }, [e.id, updateEngagement]) as (p: Partial<Engagement>) => void
+
+  function removeSection(k: SectionKey) {
+    setSections((s: SectionKey[]) => s.filter((x: SectionKey) => x !== k))
+  }
+  function addSection(k: SectionKey) {
+    // insert before prepnotes if possible
+    setSections((s: SectionKey[]) => {
+      const prepIdx = s.indexOf('prepnotes')
+      const next = [...s]
+      if (prepIdx >= 0) next.splice(prepIdx, 0, k)
+      else next.push(k)
+      return next
+    })
+  }
+
+  const optionalSections = ALL_SECTIONS.filter(s => !s.always)
+  const available = optionalSections.filter(s => !sections.includes(s.key))
+
+  async function handleDownload() {
+    setDownloading(true)
+    try {
+      const { generateBriefingDoc } = await import('@/lib/documents')
+      const blob = generateBriefingDoc(e)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `briefing-${e.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  return (
+    <div id="briefing" className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
+        <div className="flex items-center gap-2">
+          <FileText size={15} className="text-gold" />
+          <span className="text-sm font-semibold text-ink">Briefing Document</span>
+          <span className="text-[10px] text-ink-300 font-medium ml-1">— click any field to edit</span>
+        </div>
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50"
+        >
+          <Download size={12} />
+          {downloading ? 'Generating…' : 'Download PDF'}
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="px-6 py-5 space-y-0">
+        {sections.map((key: SectionKey) => {
+          if (key === 'header')    return <React.Fragment key="header"><SectionHeader e={e} save={save} /></React.Fragment>
+          if (key === 'contact')   return <React.Fragment key="contact"><SectionContact e={e} save={save} /></React.Fragment>
+          if (key === 'details')   return <React.Fragment key="details"><BDivider /><SectionDetails e={e} save={save} /></React.Fragment>
+          if (key === 'venue')     return <React.Fragment key="venue"><SectionVenue e={e} save={save} onRemove={() => removeSection('venue')} /></React.Fragment>
+          if (key === 'travel')    return <React.Fragment key="travel"><SectionTravel e={e} save={save} onRemove={() => removeSection('travel')} /></React.Fragment>
+          if (key === 'runofshow') return <React.Fragment key="runofshow"><SectionRunOfShow e={e} save={save} onRemove={() => removeSection('runofshow')} /></React.Fragment>
+          if (key === 'prepnotes') return <React.Fragment key="prepnotes"><SectionPrepNotes e={e} save={save} /></React.Fragment>
+          return null
+        })}
+
+        {/* Add section */}
+        <div className="mt-6">
+          <AddSectionMenu available={available} onAdd={addSection} />
+        </div>
+      </div>
     </div>
   )
 }
@@ -238,30 +618,11 @@ function BriefingDocPanel({ e }: { e: Engagement }) {
 export default function EngagementDetailPage() {
   const { id } = useParams()
   const { engagements: allEngagements, toggleEngagementFlag, toggleMediaFlag } = useStore()
-  const [sheetOpen, setSheetOpen] = useState(true)
-  const [downloading, setDownloading] = useState(false)
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
   const eventType = (e as any).event_type || 'speaking'
   const isMedia = MEDIA_TYPES.includes(eventType)
-  const contact = primaryContact(e)
   const flags = isMedia ? MEDIA_FLAGS : ENGAGEMENT_FLAGS
-
-  async function handleDownload() {
-    setDownloading(true)
-    try {
-      const { generateBriefingDoc } = await import('@/lib/documents')
-      const blob = generateBriefingDoc(e!)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `briefing-${e!.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-    } finally {
-      setDownloading(false)
-    }
-  }
 
   return (
     <div className="p-8 max-w-4xl mx-auto animate-fade-in">
@@ -288,14 +649,16 @@ export default function EngagementDetailPage() {
       {e.alerts.length > 0 && (
         <div className="mb-6 space-y-2">
           {e.alerts.map((alert, i) => (
-            <div key={i} className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium ${alert.severity === 'high' ? 'text-red-500 bg-red-50 border-red-100' : 'text-gold bg-gold/8 border-gold/20'}`}>
+            <div key={i} className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium ${
+              alert.severity === 'high' ? 'text-red-500 bg-red-50 border-red-100' : 'text-gold bg-gold/8 border-gold/20'
+            }`}>
               <AlertTriangle size={14} />{alert.label}
             </div>
           ))}
         </div>
       )}
 
-      {/* Checklist flags */}
+      {/* Progress flags */}
       <div className="bg-white border border-ink-100 rounded-xl p-5 mb-6">
         <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Progress</p>
         <div className="grid grid-cols-2 gap-3">
@@ -345,7 +708,7 @@ export default function EngagementDetailPage() {
             )}
             {e.session_length && (
               <div className="flex items-center gap-2 text-sm">
-                <Clock size={14} className="text-ink-300" />{e.session_length} minutes
+                <Clock size={14} className="text-ink-300" />{e.session_length} min
               </div>
             )}
             {e.audience_size && (
@@ -358,12 +721,7 @@ export default function EngagementDetailPage() {
                 <Wifi size={14} className="text-ink-300" />Virtual
               </div>
             )}
-            {e.topic && <div className="text-sm text-ink-600 mt-2 pt-2 border-t border-ink-50">{e.topic}</div>}
-            {e.fee && (
-              <div className="text-sm text-ink-500 mt-2 pt-2 border-t border-ink-50">
-                Fee: <span className="font-medium text-ink">{formatCurrency(e.fee)}</span>
-              </div>
-            )}
+
             {e.travel_covered !== undefined && (
               <div className="flex items-center gap-2 text-xs text-ink-400 pt-1">
                 <Plane size={11} />{e.travel_covered ? 'Travel covered' : 'Self-travel'}
@@ -397,35 +755,8 @@ export default function EngagementDetailPage() {
         </div>
       </div>
 
-      {/* ── Briefing Document ── */}
-      <div className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
-        {/* Header row */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
-          <button
-            onClick={() => setSheetOpen((o: boolean) => !o)}
-            className="flex items-center gap-2 text-sm font-semibold text-ink hover:text-gold transition-colors"
-          >
-            <FileText size={15} className="text-gold" />
-            {isMedia ? 'Briefing Document' : 'Briefing Document'}
-            {sheetOpen ? <ChevronUp size={14} className="text-ink-300 ml-1" /> : <ChevronDown size={14} className="text-ink-300 ml-1" />}
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50"
-          >
-            <Download size={12} />
-            {downloading ? 'Generating…' : 'Download PDF'}
-          </button>
-        </div>
-
-        {/* Sheet body */}
-        {sheetOpen && (
-          <div className="px-6 py-5">
-            <BriefingDocPanel e={e} />
-          </div>
-        )}
-      </div>
+      {/* Briefing Document */}
+      <BriefingDocument e={e} />
 
       {/* Comms timeline */}
       <div className="bg-white border border-ink-100 rounded-xl p-5">
