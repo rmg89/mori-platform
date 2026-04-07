@@ -150,6 +150,36 @@ export interface ReviewItem {
   confirmed_at?: string
 }
 
+
+// ─── Engagement Progress (new model) ─────────────────────────────────────────
+
+export interface OutgoingMaterial {
+  id: string
+  label: string
+  done: boolean
+  custom?: boolean   // true for user-added items
+}
+
+export interface IncomingMaterial {
+  id: string
+  label: string
+  received: boolean
+  requested_at?: string        // ISO date when this was requested from client
+  pinned_to_briefing?: boolean
+  notes?: string
+}
+
+export const DEFAULT_OUTGOING_MATERIALS: Omit<OutgoingMaterial, 'done'>[] = [
+  { id: 'bio',          label: 'Bio' },
+  { id: 'headshot',     label: 'Headshot' },
+  { id: 'book_info',    label: 'Book Info & Order Link' },
+  { id: 'question_prompts', label: 'Question Prompts' },
+  { id: 'speaker_intro',    label: 'Speaker Intro' },
+  { id: 'talk_title',       label: 'Talk Title & Description' },
+  { id: 'social_handles',   label: 'Social Media Handles' },
+  { id: 'av_requirements',  label: 'A/V Requirements' },
+]
+
 // ─── Engagement ───────────────────────────────────────────────────────────────
 
 export interface Engagement {
@@ -164,6 +194,14 @@ export interface Engagement {
   engagement_flags: EngagementFlag[]
   media_flags?: MediaFlag[]       // used instead of engagement_flags for non-speaking types
   post_event_flags: PostEventFlag[]
+  invoice_sent_at?: string        // ISO date when invoice was sent
+
+  // ── Engagement progress (replaces flat engagement_flags for speaking) ──────
+  contract_required?: boolean          // undefined = not yet set; true = required; false = N/A
+  outgoing_materials?: OutgoingMaterial[]
+  incoming_materials?: IncomingMaterial[]
+  briefing_complete?: boolean
+  briefing_complete_at?: string
 
   // AI confirmation status (for auto-sorted items)
   ai_created?: boolean
