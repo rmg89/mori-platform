@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useStore } from '@/lib/store'
 import {
-  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, OutgoingMaterial, IncomingMaterial
+  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact
 } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import {
@@ -12,7 +12,7 @@ import {
   Download, FileText, Mic, Radio, Newspaper,
   Clock, Wifi, Hotel, Plane, ExternalLink,
   Pencil, Check, X, Plus, Trash2, GripVertical, ChevronDown,
-  FileCheck, Upload, Pin, PinOff, ArrowDown
+  FileCheck, Upload, Pin, PinOff, ArrowDown, Paperclip, Building2
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -58,7 +58,7 @@ function EditableField({
 
   return (
     <div className="group flex flex-col gap-1.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">{label}</p>
+      {label && <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">{label}</p>}
       {editing ? (
         <div className="flex items-start gap-2">
           {multiline ? (
@@ -96,6 +96,20 @@ function EditableField({
   )
 }
 
+function hoursElapsed(isoDate?: string): number | null {
+  if (!isoDate) return null
+  return (Date.now() - new Date(isoDate).getTime()) / 36e5
+}
+
+function formatElapsed(isoDate?: string): string {
+  const h = hoursElapsed(isoDate)
+  if (h === null) return ''
+  if (h < 1) return 'just now'
+  if (h < 24) return `${Math.floor(h)}h ago`
+  const d = Math.floor(h / 24)
+  return `${d}d ago`
+}
+
 function BDivider() { return <div className="border-t border-ink-100 my-5" /> }
 
 function BSectionHeader({ children, onRemove }: { children: React.ReactNode; onRemove?: () => void }) {
@@ -118,8 +132,7 @@ function BTwoCol({ children }: { children: React.ReactNode }) {
 // ─── Progress helpers ──────────────────────────────────────────────────────────
 
 function getDefaultOutgoing(existing?: OutgoingMaterial[]): OutgoingMaterial[] {
-  if (existing && existing.length > 0) return existing
-  return DEFAULT_OUTGOING_MATERIALS.map(m => ({ ...m, done: false }))
+  return existing ?? []
 }
 
 function useProgressState(e: Engagement, save: (p: Partial<Engagement>) => void) {
@@ -132,24 +145,34 @@ function useProgressState(e: Engagement, save: (p: Partial<Engagement>) => void)
   const incomingDone = incoming.filter(m => m.received).length
 
   const contractComplete = contractRequired === false || (contractRequired === true && contractSent && contractSigned)
-  const outgoingComplete = outgoingDone === outgoing.length
-  const incomingComplete = incoming.length > 0 && incomingDone === incoming.length
+  const outgoingComplete = !!e.outgoing_not_needed || (outgoing.length > 0 && outgoingDone === outgoing.length)
+  const incomingComplete = !!e.incoming_not_needed || (incoming.length > 0 && incomingDone === incoming.length)
   const briefingComplete = !!e.briefing_complete
 
   function toggleOutgoing(id: string) {
-    save({ outgoing_materials: outgoing.map(m => m.id === id ? { ...m, done: !m.done } : m) })
+    const now = new Date().toISOString()
+    save({ outgoing_materials: outgoing.map(m => m.id === id ? { ...m, done: !m.done, sent_at: !m.done ? now : undefined } : m) })
   }
-  function removeCustomOutgoing(id: string) {
+  function removeOutgoing(id: string) {
     save({ outgoing_materials: outgoing.filter(m => m.id !== id) })
   }
   function addCustomOutgoing(label: string) {
-    save({ outgoing_materials: [...outgoing, { id: `custom_${Date.now()}`, label, done: false, custom: true }] })
+    save({ outgoing_materials: [...outgoing, { id: `custom_${Date.now()}`, label, done: false, custom: true, added_at: new Date().toISOString() }] })
   }
   function addIncoming(label: string, requested_at?: string) {
-    save({ incoming_materials: [...incoming, { id: `in_${Date.now()}`, label, received: false, requested_at }] })
+    save({ incoming_materials: [...incoming, { id: `in_${Date.now()}`, label, received: false, added_at: new Date().toISOString(), requested_at }] })
   }
   function toggleIncoming(id: string) {
-    save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, received: !m.received } : m) })
+    const now = new Date().toISOString()
+    save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, received: !m.received, received_at: !m.received ? now : undefined } : m) })
+  }
+  function captureNote(id: string, note: string) {
+    const now = new Date().toISOString()
+    save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, note, received: true, received_at: m.received_at ?? now } : m) })
+  }
+  function captureLink(id: string, link: string) {
+    const now = new Date().toISOString()
+    save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, link, received: true, received_at: m.received_at ?? now } : m) })
   }
   function toggleIncomingPin(id: string) {
     save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, pinned_to_briefing: !m.pinned_to_briefing } : m) })
@@ -159,117 +182,712 @@ function useProgressState(e: Engagement, save: (p: Partial<Engagement>) => void)
   }
   function toggleContractFlag(flag: 'contract_sent' | 'contract_signed') {
     const current = e.engagement_flags ?? []
-    save({ engagement_flags: (current.includes(flag) ? current.filter(f => f !== flag) : [...current, flag]) as any })
+    const isAdding = !current.includes(flag)
+    const now = new Date().toISOString()
+    const patch: Partial<Engagement> = {
+      engagement_flags: (isAdding ? [...current, flag] : current.filter(f => f !== flag)) as any,
+    }
+    if (flag === 'contract_sent') patch.contract_sent_at = isAdding ? now : undefined
+    if (flag === 'contract_signed') patch.contract_signed_at = isAdding ? now : undefined
+    save(patch)
+  }
+
+  function attachFile(id: string, file_url: string, file_name: string) {
+    save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, file_url, file_name, file_uploaded_by: 'user', received: true, received_at: m.received_at ?? new Date().toISOString() } : m) })
+  }
+  function removeFile(id: string) {
+    save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, file_url: undefined, file_name: undefined, file_uploaded_by: undefined } : m) })
   }
 
   return {
     outgoing, incoming, contractRequired, contractSent, contractSigned,
     outgoingDone, incomingDone,
     contractComplete, outgoingComplete, incomingComplete, briefingComplete,
-    toggleOutgoing, removeCustomOutgoing, addCustomOutgoing,
+    toggleOutgoing, removeOutgoing, addCustomOutgoing,
     addIncoming, toggleIncoming, toggleIncomingPin, removeIncoming, toggleContractFlag,
+    attachFile, removeFile, captureNote, captureLink,
   }
 }
 
-// ─── Progress Bar (compact summary) ───────────────────────────────────────────
+// ─── Incoming Item ────────────────────────────────────────────────────────────
 
-function ProgressBar({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
-  const { contractComplete, outgoingComplete, incomingComplete, briefingComplete, outgoing, outgoingDone, contractSent, contractSigned, contractRequired } = useProgressState(e, save)
-  const incoming = e.incoming_materials ?? []
-  const incomingCount = incoming.filter(m => m.received).length
-
-  // Contract renders as 1 or 2 pills depending on state
-  const contractNA = contractRequired === false
-
-  const pill = (done: boolean, label: string, sub?: string) => (
-    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium flex-shrink-0 ${done ? 'bg-sage/8 border-sage/20 text-sage' : 'bg-parchment border-ink-100 text-ink-400'}`}>
-      {done ? <CheckCircle2 size={13} className="flex-shrink-0" /> : <Circle size={13} className="text-ink-200 flex-shrink-0" />}
-      {label}
-      {sub && <span className="text-[11px] text-ink-300 ml-0.5">{sub}</span>}
-    </div>
-  )
-
-  const dot = <span className="text-ink-200 text-sm flex-shrink-0">·</span>
+function IncomingItem({ item, overdue, captured, onUndo, onRemove, onPin, onCaptureNote, onCaptureLink, onAttachFile, onRemoveFile }: {
+  item: IncomingMaterial
+  overdue: boolean
+  captured: boolean
+  onUndo: () => void
+  onRemove: () => void
+  onPin: () => void
+  onCaptureNote: (note: string) => void
+  onCaptureLink: (link: string) => void
+  onAttachFile: (url: string, name: string) => void
+  onRemoveFile: () => void
+  key?: string
+}) {
+  const [noteInput, setNoteInput] = useState(item.note ?? '')
+  const [linkInput, setLinkInput] = useState(item.link ?? '')
+  const [editingNote, setEditingNote] = useState(false)
+  const [editingLink, setEditingLink] = useState(false)
 
   return (
-    <div className="bg-white border border-ink-100 rounded-xl p-5 mb-6">
-      <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Progress</p>
+    <div className="group/in rounded-lg border bg-white overflow-hidden transition-all">
 
-      {/* Contract decision prompt — only when unresolved */}
-      {contractRequired === undefined && (
-        <div className="flex items-center justify-between mb-3 pb-3 border-b border-ink-50">
-          <span className="text-xs text-ink-400">Contract status not yet set</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => save({ contract_required: true, engagement_flags: [...(e.engagement_flags ?? []).filter(f => f !== 'contract_sent' && f !== 'contract_signed'), 'contract_sent'] as any })}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-ink-200 bg-parchment text-ink-500 hover:border-gold/50 hover:text-ink transition-all">
-              Required
+      {/* Header row */}
+      <div className={`flex items-center gap-2 px-3 py-2.5 ${
+        captured ? 'bg-sage/8 border-b border-sage/10' : overdue ? 'bg-red-50' : 'bg-white'
+      }`}>
+        {captured
+          ? <CheckCircle2 size={13} className="text-sage flex-shrink-0" />
+          : <Circle size={13} className={`flex-shrink-0 ${overdue ? 'text-red-400' : 'text-ink-200'}`} />
+        }
+        <span className={`flex-1 text-sm font-medium truncate ${captured ? 'text-sage' : overdue ? 'text-red-600' : 'text-ink-400'}`}>
+          {item.label}
+        </span>
+        {captured && item.received_at && (
+          <span className="text-[10px] text-sage/70 flex-shrink-0">{formatElapsed(item.received_at)}</span>
+        )}
+        {overdue && !captured && (
+          <span className="text-[10px] text-red-400 flex-shrink-0">{formatElapsed(item.added_at)} — overdue</span>
+        )}
+        {item.pinned_to_briefing && (
+          <span className="text-[10px] text-gold bg-gold/10 px-1.5 py-0.5 rounded font-medium flex-shrink-0">Briefing</span>
+        )}
+        {/* Hover actions */}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover/in:opacity-100 transition-all flex-shrink-0 ml-1">
+          <button onClick={onPin}
+            className={`p-1.5 rounded transition-colors ${item.pinned_to_briefing ? 'text-gold' : 'text-ink-300 hover:text-gold'}`}>
+            <Pin size={12} />
+          </button>
+          {captured && (
+            <button onClick={onUndo} className="p-1.5 rounded text-ink-300 hover:text-ink-500 transition-colors text-[10px] font-medium">
+              undo
             </button>
-            <button
-              onClick={() => save({ contract_required: false })}
-              className="text-xs px-3 py-1.5 rounded-lg border border-ink-100 bg-parchment text-ink-400 hover:border-ink-300 hover:text-ink transition-all">
-              Not Required
+          )}
+          <button onClick={onRemove}
+            className="p-1.5 rounded text-ink-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+            <X size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* Capture area */}
+      <div className={`divide-y divide-ink-50 border-t ${captured ? 'border-sage/10' : 'border-ink-100'}`}>
+
+        {/* Note */}
+        <div className="px-3 py-2 flex items-start gap-2">
+          <FileText size={11} className="text-ink-300 flex-shrink-0 mt-0.5" />
+          {item.note && !editingNote ? (
+            <button onClick={() => setEditingNote(true)} className="flex-1 text-left text-xs text-ink leading-snug hover:underline decoration-dashed decoration-ink-200 underline-offset-2 line-clamp-2">
+              {item.note}
             </button>
-          </div>
+          ) : editingNote ? (
+            <div className="flex-1 flex gap-1.5">
+              <textarea autoFocus value={noteInput}
+                onChange={(ev: React.ChangeEvent<HTMLTextAreaElement>) => setNoteInput(ev.target.value)}
+                onKeyDown={(ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                  if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); onCaptureNote(noteInput); setEditingNote(false) }
+                  if (ev.key === 'Escape') { setNoteInput(item.note ?? ''); setEditingNote(false) }
+                }}
+                rows={2} placeholder="Paste email text, run of show, notes…"
+                className="flex-1 text-xs text-ink bg-parchment/60 border border-gold/30 rounded px-2 py-1.5 focus:outline-none focus:border-gold resize-none" />
+              <div className="flex flex-col gap-1">
+                <button onClick={() => { onCaptureNote(noteInput); setEditingNote(false) }} className="p-1 text-sage hover:text-sage-dark"><Check size={11} /></button>
+                <button onClick={() => { setNoteInput(item.note ?? ''); setEditingNote(false) }} className="p-1 text-ink-300 hover:text-ink"><X size={11} /></button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setEditingNote(true)} className="text-xs text-ink-300 hover:text-ink-500 transition-colors">
+              Add note or paste text…
+            </button>
+          )}
+        </div>
+
+        {/* Link */}
+        <div className="px-3 py-2 flex items-center gap-2">
+          <ExternalLink size={11} className="text-ink-300 flex-shrink-0" />
+          {item.link && !editingLink ? (
+            <div className="flex-1 flex items-center gap-1.5 min-w-0">
+              <a href={item.link} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-gold hover:underline truncate flex-1">{item.link}</a>
+              <button onClick={() => setEditingLink(true)} className="text-ink-200 hover:text-ink-400 flex-shrink-0"><Pencil size={9} /></button>
+            </div>
+          ) : editingLink ? (
+            <div className="flex-1 flex gap-1.5">
+              <input autoFocus value={linkInput}
+                onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setLinkInput(ev.target.value)}
+                onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => {
+                  if (ev.key === 'Enter') { onCaptureLink(linkInput); setEditingLink(false) }
+                  if (ev.key === 'Escape') { setLinkInput(item.link ?? ''); setEditingLink(false) }
+                }}
+                placeholder="https://…"
+                className="flex-1 text-xs text-ink bg-parchment/60 border border-gold/30 rounded px-2 py-1 focus:outline-none focus:border-gold" />
+              <button onClick={() => { onCaptureLink(linkInput); setEditingLink(false) }} className="p-1 text-sage hover:text-sage-dark"><Check size={11} /></button>
+              <button onClick={() => { setLinkInput(item.link ?? ''); setEditingLink(false) }} className="p-1 text-ink-300 hover:text-ink"><X size={11} /></button>
+            </div>
+          ) : (
+            <button onClick={() => setEditingLink(true)} className="text-xs text-ink-300 hover:text-ink-500 transition-colors">
+              Add link…
+            </button>
+          )}
+        </div>
+
+        {/* File */}
+        <div className="px-3 py-2 flex items-center gap-2">
+          <Paperclip size={11} className="text-ink-300 flex-shrink-0" />
+          {item.file_url ? (
+            <div className="flex-1 flex items-center gap-1.5 min-w-0 group/file">
+              <a href={item.file_url} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-gold hover:underline truncate flex-1">
+                {item.file_name ?? 'Attached file'}
+              </a>
+              {item.file_uploaded_by === 'ai' && <span className="text-[9px] text-ink-200 flex-shrink-0">AI</span>}
+              <button onClick={onRemoveFile}
+                className="text-ink-200 hover:text-red-400 opacity-0 group-hover/file:opacity-100 transition-all flex-shrink-0">
+                <X size={9} />
+              </button>
+            </div>
+          ) : (
+            <label className="text-xs text-ink-300 hover:text-ink-500 cursor-pointer transition-colors">
+              Upload file…
+              <input type="file" className="hidden"
+                onChange={(ev: React.ChangeEvent<HTMLInputElement>) => {
+                  const file = ev.target.files?.[0]
+                  if (!file) return
+                  // TODO: upload to Supabase storage, get URL back
+                  const url = URL.createObjectURL(file)
+                  onAttachFile(url, file.name)
+                }} />
+            </label>
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+// ─── Briefing Zone ────────────────────────────────────────────────────────────
+
+function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: Partial<Engagement>) => void; briefingComplete: boolean }) {
+  const [draft, setDraft] = useState('')
+  const notes: BriefingNote[] = e.briefing_notes ?? []
+
+  function addNote() {
+    if (!draft.trim()) return
+    const note: BriefingNote = { id: `bn_${Date.now()}`, body: draft.trim(), created_at: new Date().toISOString() }
+    save({ briefing_notes: [...notes, note] } as any)
+    setDraft('')
+  }
+
+  function removeNote(id: string) {
+    save({ briefing_notes: notes.filter(n => n.id !== id) } as any)
+  }
+
+  function resolveNote(id: string) {
+    save({ briefing_notes: notes.map(n => n.id === id ? { ...n, resolved: true } : n) } as any)
+  }
+
+  return (
+    <div className="border-t border-ink-100 px-5 py-4 bg-parchment/30">
+
+      {/* Header — label + jump link + mark complete */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">Briefing Document</p>
+        <div className="flex items-center gap-3">
+          <a href="#briefing" className="flex items-center gap-1.5 text-xs font-medium text-ink-300 hover:text-gold transition-colors">
+            <ArrowDown size={11} /> Jump to briefing
+          </a>
+          {briefingComplete ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-sage font-medium flex items-center gap-1.5">
+                <CheckCircle2 size={12} /> Ready{e.briefing_complete_at ? ` · ${formatElapsed(e.briefing_complete_at)}` : ''}
+              </span>
+              <button onClick={() => save({ briefing_complete: false, briefing_complete_at: undefined } as any)}
+                className="text-xs text-ink-200 hover:text-ink-400 transition-colors">
+                undo
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => save({ briefing_complete: true, briefing_complete_at: new Date().toISOString() } as any)}
+              className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-2.5 py-1.5 transition-all">
+              <Check size={11} /> Mark complete
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Notes log */}
+      {notes.length > 0 && (
+        <div className="space-y-1.5 mb-3">
+          {notes.map(note => {
+            const resolved = note.resolved
+            return (
+              <div key={note.id} className={`group/note flex items-start gap-2 ${resolved ? 'opacity-40' : ''}`}>
+                <div className={`flex-1 bg-white border rounded-lg px-3 py-2 ${resolved ? 'border-ink-100' : 'border-ink-100'}`}>
+                  <p className={`text-xs leading-snug ${resolved ? 'line-through text-ink-300' : 'text-ink'}`}>{note.body}</p>
+                  <p className="text-[10px] text-ink-300 mt-0.5">{formatElapsed(note.created_at)}</p>
+                </div>
+                <div className="flex flex-col gap-1 opacity-0 group-hover/note:opacity-100 transition-all flex-shrink-0 mt-1.5">
+                  {!resolved && (
+                    <button onClick={() => resolveNote(note.id)}
+                      className="text-ink-200 hover:text-sage transition-colors" title="Mark resolved">
+                      <Check size={11} />
+                    </button>
+                  )}
+                  <button onClick={() => removeNote(note.id)}
+                    className="text-ink-200 hover:text-red-400 transition-colors" title="Delete">
+                    <X size={11} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
-      {/* Pill row — centered */}
-      <div className="flex items-center justify-center gap-3 flex-wrap">
-
-        {/* Contract N/A */}
-        {contractRequired === false && (
-          <>
-            <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-ink-100 bg-parchment text-sm font-medium text-ink-300 flex-shrink-0">
-              <CheckCircle2 size={13} className="text-ink-200 flex-shrink-0" />
-              No Contract
-              <button onClick={() => save({ contract_required: undefined })} className="text-ink-200 hover:text-ink-400 ml-1 transition-colors"><X size={9} /></button>
-            </div>
-            {dot}
-          </>
-        )}
-
-        {/* Contract Sent + Signed */}
-        {contractRequired === true && (
-          <>
-            {pill(contractSent, 'Contract Sent')}
-            <span className="text-ink-300 text-xs flex-shrink-0">→</span>
-            {pill(contractSigned, 'Contract Signed')}
-            {dot}
-          </>
-        )}
-
-        {pill(outgoingComplete, 'Prep Materials Sent', outgoingComplete ? undefined : `${outgoingDone}/${outgoing.length}`)}
-        {dot}
-        {pill(incomingComplete, 'Awaiting Client Materials', incoming.length > 0 && !incomingComplete ? `${incomingCount}/${incoming.length}` : undefined)}
-
-      </div>
-
-      {/* Briefing — terminal */}
-      <div className="border-t border-ink-100 mt-4 pt-3 flex justify-center">
-        <div className={`flex items-center gap-2 px-5 py-2.5 rounded-lg border text-sm font-semibold ${briefingComplete ? 'bg-sage/8 border-sage/20 text-sage' : 'bg-parchment border-ink-100 text-ink-400'}`}>
-          {briefingComplete ? <CheckCircle2 size={13} className="flex-shrink-0" /> : <Circle size={13} className="text-ink-200 flex-shrink-0" />}
-          Briefing Document Complete
-        </div>
+      {/* Add note input */}
+      <div className="flex items-start gap-2">
+        <textarea
+          value={draft}
+          onChange={(ev: React.ChangeEvent<HTMLTextAreaElement>) => setDraft(ev.target.value)}
+          onKeyDown={(ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+            if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); addNote() }
+          }}
+          placeholder="Log a note about what's outstanding or blocking this…"
+          rows={2}
+          className="flex-1 text-sm text-ink bg-white border border-ink-100 rounded-lg px-3 py-2 focus:outline-none focus:border-gold/50 placeholder:text-ink-200 resize-none"
+        />
+        <button onClick={addNote}
+          className="text-xs font-medium text-ink-300 hover:text-gold border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2 transition-colors flex-shrink-0 mt-0.5">
+          Add
+        </button>
       </div>
 
     </div>
   )
 }
 
-// ─── Progress Detail// ─── Progress Detail (full working area, below event details) ─────────────────
+// ─── Event Details Card ───────────────────────────────────────────────────────
 
-function ProgressDetail({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const { companies, updateCompany } = useStore()
+  const [addingTeam, setAddingTeam] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
+
+  const linkedCompany = companies.find(c => c.id === e.company_id)
+    ?? companies.find(c => c.name.toLowerCase() === e.organization.toLowerCase())
+  const linkedTeam = linkedCompany?.teams.find(t => t.id === e.team_id)
+
+  function handleAddTeam() {
+    if (!newTeamName.trim() || !linkedCompany) return
+    const newTeam = { id: `t_${Date.now()}`, name: newTeamName.trim() }
+    updateCompany(linkedCompany.id, { teams: [...linkedCompany.teams, newTeam] })
+    save({ team_id: newTeam.id })
+    setNewTeamName('')
+    setAddingTeam(false)
+  }
+
+  return (
+    <div className="bg-white border border-ink-100 rounded-xl p-5">
+      <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Event Details</p>
+      <div className="space-y-3">
+
+        {/* Company */}
+        <div className="flex items-start gap-2.5">
+          <Building2 size={14} className="text-ink-300 mt-1 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            {linkedCompany ? (
+              <div className="flex items-center gap-1.5 group/co">
+                <span className="text-sm text-ink">{linkedCompany.name}</span>
+                <button
+                  onClick={() => save({ company_id: undefined, team_id: undefined })}
+                  className="p-0.5 rounded text-ink-200 hover:text-red-400 hover:bg-red-50 opacity-0 group-hover/co:opacity-100 transition-all flex-shrink-0">
+                  <X size={11} />
+                </button>
+              </div>
+            ) : (
+              <select value=""
+                onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => {
+                  const id = ev.target.value
+                  if (!id) return
+                  const co = companies.find(c => c.id === id)
+                  save({ company_id: id, team_id: undefined, organization: co?.name ?? e.organization })
+                }}
+                className="text-sm text-ink-400 bg-transparent border-none focus:outline-none cursor-pointer hover:text-ink transition-colors w-full appearance-none">
+                <option value="">Link a company…</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* Team — only when company is linked */}
+        {linkedCompany && (
+          <div className="flex items-start gap-2.5 pl-5">
+            <div className="flex-1 min-w-0">
+              {linkedTeam ? (
+                <div className="flex items-center gap-1.5 group/team">
+                  <span className="text-sm text-ink-400">{linkedTeam.name}</span>
+                  <button onClick={() => save({ team_id: undefined })}
+                    className="p-0.5 rounded text-ink-200 hover:text-red-400 hover:bg-red-50 opacity-0 group-hover/team:opacity-100 transition-all flex-shrink-0">
+                    <X size={11} />
+                  </button>
+                </div>
+              ) : addingTeam ? (
+                <div className="flex items-center gap-1.5">
+                  <input autoFocus value={newTeamName}
+                    onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setNewTeamName(ev.target.value)}
+                    onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (ev.key === 'Enter') handleAddTeam()
+                      if (ev.key === 'Escape') { setAddingTeam(false); setNewTeamName('') }
+                    }}
+                    placeholder="New team name…"
+                    className="flex-1 text-sm text-ink bg-parchment border border-gold/40 rounded px-2 py-1 focus:outline-none focus:border-gold" />
+                  <button onClick={handleAddTeam} className="p-1 text-sage hover:text-sage-dark"><Check size={11} /></button>
+                  <button onClick={() => { setAddingTeam(false); setNewTeamName('') }} className="p-1 text-ink-300 hover:text-ink"><X size={11} /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {linkedCompany.teams.length > 0 && (
+                    <select value=""
+                      onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => save({ team_id: ev.target.value || undefined })}
+                      className="text-sm text-ink-400 bg-transparent border-none focus:outline-none cursor-pointer hover:text-ink transition-colors appearance-none">
+                      <option value="">Link a team…</option>
+                      {linkedCompany.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  )}
+                  <button onClick={() => setAddingTeam(true)}
+                    className="text-xs text-ink-300 hover:text-gold transition-colors flex items-center gap-1">
+                    <Plus size={10} /> {linkedCompany.teams.length === 0 ? 'Add team' : 'New'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-ink-50 pt-2 space-y-3">
+          <div className="flex items-start gap-2.5">
+            <Calendar size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
+            <EditableField label="" value={e.event_date ? formatDate(e.event_date) : undefined}
+              placeholder="Date" onSave={v => save({ event_date: v })} />
+          </div>
+          <div className="flex items-start gap-2.5">
+            <Clock size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
+            <EditableField label="" value={(e as any).event_time}
+              placeholder="Time" onSave={v => save({ event_time: v } as any)} />
+          </div>
+          <div className="flex items-start gap-2.5">
+            <MapPin size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
+            <EditableField label="" value={e.event_city}
+              placeholder="Location" onSave={v => save({ event_city: v })} />
+          </div>
+          <div className="flex items-start gap-2.5">
+            <Clock size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
+            <EditableField label="" value={e.session_length ? `${e.session_length} min` : undefined}
+              placeholder="Duration" onSave={v => save({ session_length: parseInt(v) || undefined })} />
+          </div>
+          <div className="flex items-start gap-2.5">
+            <Users size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
+            <EditableField label="" value={e.audience_size ? `${e.audience_size.toLocaleString()} attendees` : undefined}
+              placeholder="Audience size" onSave={v => save({ audience_size: parseInt(v.replace(/\D/g, '')) || undefined })} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Contacts Card ────────────────────────────────────────────────────────────
+
+type ContactDraft = { first_name: string; last_name: string; title: string; email: string; company_id: string; team_id: string }
+const emptyDraft = (): ContactDraft => ({ first_name: '', last_name: '', title: '', email: '', company_id: '', team_id: '' })
+const contactToDraft = (c: EngagementContact): ContactDraft => ({
+  first_name: c.first_name, last_name: c.last_name, title: c.title ?? '',
+  email: c.email, company_id: c.company_id ?? '', team_id: c.team_id ?? '',
+})
+
+function ContactForm({ initial, onSave, onCancel, originalEmail }: {
+  initial: ContactDraft
+  onSave: (d: ContactDraft) => void
+  onCancel: () => void
+  originalEmail?: string
+}) {
+  const { companies } = useStore()
+  const [d, setD] = useState(initial)
+  const set = (k: keyof ContactDraft) => (ev: React.ChangeEvent<HTMLInputElement>) => setD((prev: ContactDraft) => ({ ...prev, [k]: ev.target.value }))
+  const linkedCompany = companies.find(c => c.id === d.company_id)
+
+  return (
+    <div className="space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
+      <div className="grid grid-cols-2 gap-2">
+        <input value={d.first_name} onChange={set('first_name')} placeholder="First name"
+          className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
+        <input value={d.last_name} onChange={set('last_name')} placeholder="Last name"
+          className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
+      </div>
+      <input value={d.title} onChange={set('title')} placeholder="Title"
+        className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
+      <input value={d.email} onChange={set('email')} placeholder="Email" type="email"
+        className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
+      {/* Company */}
+      <select value={d.company_id}
+        onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => setD((prev: ContactDraft) => ({ ...prev, company_id: ev.target.value, team_id: '' }))}
+        className="w-full text-sm text-ink-400 bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 appearance-none cursor-pointer">
+        <option value="">Company (optional)…</option>
+        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      {/* Team — only if company has teams */}
+      {linkedCompany && linkedCompany.teams.length > 0 && (
+        <select value={d.team_id}
+          onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => setD((prev: ContactDraft) => ({ ...prev, team_id: ev.target.value }))}
+          className="w-full text-sm text-ink-400 bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 appearance-none cursor-pointer">
+          <option value="">Team (optional)…</option>
+          {linkedCompany.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      )}
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button onClick={onCancel} className="text-xs text-ink-300 hover:text-ink transition-colors">Cancel</button>
+        <button onClick={() => onSave(d)}
+          className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all">
+          Save
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ContactsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const { engagements, updateContact } = useStore()
+  const [mode, setMode] = useState<'idle' | 'search' | 'add'>('idle')
+  const [query, setQuery] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const linkedEmails = new Set(e.contacts.map(c => c.email.toLowerCase()))
+  const pool: EngagementContact[] = []
+  const seen = new Set<string>()
+  const otherPool: EngagementContact[] = []
+  const otherSeen = new Set<string>()
+
+  for (const eng of engagements) {
+    const sameOrg = eng.organization.toLowerCase() === e.organization.toLowerCase()
+    for (const c of eng.contacts) {
+      const key = c.email.toLowerCase()
+      if (linkedEmails.has(key)) continue
+      if (sameOrg && !seen.has(key)) { seen.add(key); pool.push(c) }
+      else if (!sameOrg && !otherSeen.has(key) && !seen.has(key)) { otherSeen.add(key); otherPool.push(c) }
+    }
+  }
+
+  const trimmed = query.trim().toLowerCase()
+  const filter = (c: EngagementContact) =>
+    `${c.first_name} ${c.last_name}`.toLowerCase().includes(trimmed)
+    || c.email.toLowerCase().includes(trimmed)
+    || (c.title ?? '').toLowerCase().includes(trimmed)
+  const orgResults = trimmed ? pool.filter(filter) : pool.slice(0, 6)
+  const otherResults = trimmed ? otherPool.filter(filter) : []
+
+  function linkContact(c: EngagementContact) {
+    save({ contacts: [...e.contacts, { ...c, id: `lnk_${Date.now()}`, is_current_point_of_contact: e.contacts.length === 0 }] })
+    setQuery(''); setMode('idle')
+  }
+
+  function addNewContact(d: ContactDraft) {
+    if (!d.first_name.trim() || !d.email.trim()) return
+    const c: EngagementContact = {
+      id: `new_${Date.now()}`, first_name: d.first_name.trim(), last_name: d.last_name.trim(),
+      email: d.email.trim(), title: d.title.trim() || undefined, role: 'primary',
+      is_current_point_of_contact: e.contacts.length === 0,
+      company_id: d.company_id || undefined, team_id: d.team_id || undefined,
+    }
+    save({ contacts: [...e.contacts, c] })
+    setMode('idle')
+  }
+
+  function editContact(originalEmail: string, d: ContactDraft) {
+    // Write globally — updates this contact across all engagements
+    updateContact(originalEmail, {
+      first_name: d.first_name.trim(), last_name: d.last_name.trim(),
+      title: d.title.trim() || undefined, email: d.email.trim(),
+      company_id: d.company_id || undefined, team_id: d.team_id || undefined,
+    })
+    setEditingId(null)
+  }
+
+  function removeContact(id: string) {
+    save({ contacts: e.contacts.filter(c => c.id !== id) })
+  }
+
+  function togglePOC(id: string) {
+    save({ contacts: e.contacts.map(c => ({ ...c, is_current_point_of_contact: c.id === id })) })
+  }
+
+  return (
+    <div className="bg-white border border-ink-100 rounded-xl p-5">
+      <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Contacts</p>
+
+      <div className="space-y-3 mb-3">
+        {e.contacts.map(c => (
+          <div key={c.id}>
+            {editingId === c.id ? (
+              <ContactForm
+                initial={contactToDraft(c)}
+                originalEmail={c.email}
+                onSave={d => editContact(c.email, d)}
+                onCancel={() => setEditingId(null)}
+              />
+            ) : (
+              <div className="flex items-center gap-3 group/contact">
+                <div className="w-8 h-8 rounded-full bg-ink-800 flex items-center justify-center text-xs font-bold text-gold flex-shrink-0">
+                  {getInitials(c.first_name, c.last_name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink">{c.first_name} {c.last_name}</p>
+                  {c.title && <p className="text-xs text-ink-400">{c.title}</p>}
+                  <p className="text-xs text-ink-300 truncate">{c.email}</p>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/contact:opacity-100 transition-all">
+                  {c.is_current_point_of_contact
+                    ? <span className="text-[10px] text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/20">POC</span>
+                    : <button onClick={() => togglePOC(c.id)}
+                        className="text-[10px] text-ink-300 hover:text-gold px-2 py-0.5 rounded-full border border-transparent hover:border-gold/20 transition-all">
+                        Set POC
+                      </button>
+                  }
+                  <button onClick={() => setEditingId(c.id)}
+                    className="p-1.5 rounded text-ink-300 hover:text-ink hover:bg-parchment transition-colors">
+                    <Pencil size={11} />
+                  </button>
+                  <button onClick={() => removeContact(c.id)}
+                    className="p-1.5 rounded text-ink-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add / search area */}
+      {mode === 'add' ? (
+        <div className="border-t border-ink-100 pt-3">
+          <ContactForm initial={emptyDraft()} onSave={addNewContact} onCancel={() => setMode('idle')} />
+        </div>
+      ) : mode === 'search' ? (
+        <div className="border-t border-ink-100 pt-3">
+          <div className="flex items-center gap-2 mb-2">
+            <input autoFocus value={query}
+              onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setQuery(ev.target.value)}
+              placeholder="Search by name, title, or email…"
+              className="flex-1 text-sm text-ink bg-parchment border border-ink-100 rounded-lg px-3 py-2 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
+            <button onClick={() => { setMode('idle'); setQuery('') }}
+              className="p-2 text-ink-300 hover:text-ink transition-colors">
+              <X size={13} />
+            </button>
+          </div>
+          {(orgResults.length > 0 || otherResults.length > 0) ? (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {orgResults.map(c => (
+                <button key={c.id} onClick={() => linkContact(c)}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-parchment transition-colors text-left">
+                  <div className="w-7 h-7 rounded-full bg-ink-800 flex items-center justify-center text-[11px] font-bold text-gold flex-shrink-0">
+                    {getInitials(c.first_name, c.last_name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink">{c.first_name} {c.last_name}</p>
+                    {c.title && <p className="text-[11px] text-ink-400 truncate">{c.title}</p>}
+                  </div>
+                </button>
+              ))}
+              {otherResults.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 py-1 px-1">
+                    <div className="h-px flex-1 bg-ink-100" />
+                    <span className="text-[10px] text-ink-300 uppercase tracking-widest">Other clients</span>
+                    <div className="h-px flex-1 bg-ink-100" />
+                  </div>
+                  {otherResults.map(c => (
+                    <button key={c.id} onClick={() => linkContact(c)}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-parchment transition-colors text-left">
+                      <div className="w-7 h-7 rounded-full bg-ink-800 flex items-center justify-center text-[11px] font-bold text-gold flex-shrink-0">
+                        {getInitials(c.first_name, c.last_name)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink">{c.first_name} {c.last_name}</p>
+                        {c.title && <p className="text-[11px] text-ink-400 truncate">{c.title}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-ink-300 italic px-1">No matching contacts found.</p>
+              <button onClick={() => setMode('add')}
+                className="text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 px-1">
+                <Plus size={11} /> Add new contact
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="border-t border-ink-100 pt-3 flex items-center gap-2">
+          <button onClick={() => setMode('search')}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs text-ink-300 hover:text-gold transition-colors font-medium border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2">
+            <Plus size={11} /> Link a contact
+          </button>
+          <button onClick={() => setMode('add')}
+            className="flex items-center justify-center gap-1.5 text-xs text-ink-300 hover:text-gold transition-colors font-medium border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2">
+            <Plus size={11} /> New
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Progress Track ────────────────────────────────────────────────────────────
+
+type ZoneKey = 'contract' | 'outgoing' | 'incoming' | 'briefing'
+
+function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const [openZones, setOpenZones] = useState<Set<ZoneKey>>(() => {
+    // Auto-open first incomplete zone on mount
+    const initial = new Set<ZoneKey>()
+    const cr = e.contract_required
+    const contractDone = cr === false || (cr === true && (e.engagement_flags?.includes('contract_sent') ?? false) && (e.engagement_flags?.includes('contract_signed') ?? false))
+    const outgoing = getDefaultOutgoing(e.outgoing_materials)
+    const outgoingDone = outgoing.filter(m => m.done).length === outgoing.length
+    const incoming = e.incoming_materials ?? []
+    const incomingDone = incoming.length > 0 && incoming.filter(m => m.received).length === incoming.length
+
+    if (cr === undefined) { initial.add('contract'); return initial }
+    if (!contractDone) { initial.add('contract'); return initial }
+    if (!outgoingDone) { initial.add('outgoing'); return initial }
+    if (!incomingDone) { initial.add('incoming'); return initial }
+    if (!e.briefing_complete) { initial.add('briefing'); return initial }
+    return initial
+  })
+
   const [newIncomingLabel, setNewIncomingLabel] = useState('')
-  const [addingCustom, setAddingCustom] = useState(false)
   const [customLabel, setCustomLabel] = useState('')
 
   const {
     outgoing, incoming, contractRequired, contractSent, contractSigned,
-    outgoingDone, incomingDone,
-    toggleOutgoing, removeCustomOutgoing, addCustomOutgoing,
+    outgoingDone, incomingDone, contractComplete, outgoingComplete, incomingComplete, briefingComplete,
+    toggleOutgoing, removeOutgoing, addCustomOutgoing,
     addIncoming, toggleIncoming, toggleIncomingPin, removeIncoming, toggleContractFlag,
+    attachFile, removeFile, captureNote, captureLink,
   } = useProgressState(e, save)
+
+  function toggleZone(z: ZoneKey) {
+    setOpenZones((prev: Set<ZoneKey>) => {
+      if (prev.has(z)) return new Set<ZoneKey>()
+      return new Set<ZoneKey>([z])
+    })
+  }
 
   function handleAddIncoming() {
     if (!newIncomingLabel.trim()) return
@@ -281,183 +899,306 @@ function ProgressDetail({ e, save }: { e: Engagement; save: (p: Partial<Engageme
     if (!customLabel.trim()) return
     addCustomOutgoing(customLabel.trim())
     setCustomLabel('')
-    setAddingCustom(false)
   }
 
+  // Pill column
+  function PillCol({ zoneKey, complete, label, sub }: { zoneKey: ZoneKey; complete: boolean; label: string; sub?: string }) {
+    const open = openZones.has(zoneKey)
+    return (
+      <button
+        onClick={() => toggleZone(zoneKey)}
+        className={`flex-1 flex flex-col gap-1.5 px-4 py-3.5 text-left border-r border-ink-100 last:border-r-0 transition-colors hover:bg-parchment/60 ${open ? 'bg-parchment/60' : ''}`}
+      >
+        <span className={`text-[10px] font-bold uppercase tracking-[0.14em] ${complete ? 'text-ink-200' : 'text-ink-400'}`}>{label}</span>
+        <div className="flex items-center gap-1.5">
+          {complete
+            ? <CheckCircle2 size={12} className="text-sage/60 flex-shrink-0" />
+            : <Circle size={12} className="text-ink-200 flex-shrink-0" />
+          }
+          <span className={`text-sm font-medium ${complete ? 'text-ink-300' : 'text-ink'}`}>{sub}</span>
+        </div>
+        <div className={`mt-0.5 h-px w-4 transition-all ${open ? 'bg-gold/50 w-full' : 'bg-transparent'}`} />
+      </button>
+    )
+  }
+
+  // Contract pill sub-label
+  const contractSub = contractRequired === undefined ? 'Not set'
+    : contractRequired === false ? 'Not required'
+    : contractSigned ? 'Signed'
+    : contractSent ? 'Sent — awaiting signature'
+    : 'Pending'
+
+  const outgoingSub = e.outgoing_not_needed ? 'Not needed' : outgoingComplete ? 'All sent' : outgoing.length === 0 ? '0 of 0 sent' : `${outgoingDone} of ${outgoing.length} sent`
+  const incomingSub = e.incoming_not_needed ? 'Not needed' : incomingComplete ? 'All received' : `${incomingDone} of ${incoming.length} received`
+  const briefingSub = briefingComplete ? 'Complete' : 'Incomplete'
+
   return (
-    <div className="space-y-4 mb-6">
+    <div className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
 
-      {/* ── Contract ── */}
-      <div className="bg-white border border-ink-100 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium">Contract</p>
-          {contractRequired === true && (
-            <button onClick={() => save({ contract_required: undefined, engagement_flags: (e.engagement_flags ?? []).filter(f => f !== 'contract_sent' && f !== 'contract_signed') as any })}
-              className="text-[11px] text-ink-200 hover:text-ink-400">reset</button>
-          )}
-          {contractRequired === false && (
-            <button onClick={() => save({ contract_required: undefined })} className="text-ink-200 hover:text-ink-400"><X size={11} /></button>
-          )}
-        </div>
-
-        {contractRequired === undefined && (
-          <div className="flex gap-3 mt-3">
-            <button onClick={() => save({ contract_required: true, engagement_flags: [...(e.engagement_flags ?? []).filter(f => f !== 'contract_sent' && f !== 'contract_signed'), 'contract_sent'] as any })}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-ink-100 bg-parchment text-sm font-medium text-ink-400 hover:border-ink-300 transition-all">
-              <Circle size={14} className="flex-shrink-0" /> Contract Sent
-            </button>
-            <button onClick={() => save({ contract_required: false })}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-ink-100 bg-parchment text-sm font-medium text-ink-300 hover:border-ink-300 transition-all italic">
-              No Contract Needed
-            </button>
-          </div>
-        )}
-
-        {contractRequired === false && (
-          <p className="text-xs text-ink-300 italic mt-2">No contract needed for this engagement.</p>
-        )}
-
-        {contractRequired === true && (
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            {[{ flag: 'contract_sent' as const, label: 'Contract Sent' }, { flag: 'contract_signed' as const, label: 'Contract Signed' }].map(({ flag, label }) => {
-              const done = e.engagement_flags?.includes(flag) ?? false
-              const isSignedAndSentNotDone = flag === 'contract_signed' && !(e.engagement_flags?.includes('contract_sent'))
-              return (
-                <button key={flag} onClick={() => !isSignedAndSentNotDone && toggleContractFlag(flag)}
-                  disabled={isSignedAndSentNotDone}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium text-left transition-all ${
-                    done ? 'bg-sage/8 border-sage/20 text-sage'
-                    : isSignedAndSentNotDone ? 'bg-parchment border-ink-100 text-ink-200 cursor-not-allowed opacity-50'
-                    : 'bg-parchment border-ink-100 text-ink-400 hover:border-ink-300 hover:opacity-80 active:scale-95'
-                  }`}>
-                  {done ? <CheckCircle2 size={14} className="flex-shrink-0" /> : <Circle size={14} className="flex-shrink-0" />}
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-        )}
+      {/* ── Track row ── */}
+      <div className="flex divide-x divide-ink-100">
+        <PillCol zoneKey="contract"  complete={contractComplete}  label="Contract"         sub={contractSub} />
+        <PillCol zoneKey="outgoing"  complete={outgoingComplete}  label="Materials Sent"     sub={outgoingSub} />
+        <PillCol zoneKey="incoming"  complete={incomingComplete}  label="Materials Received" sub={incomingSub} />
+        <PillCol zoneKey="briefing"  complete={briefingComplete}  label="Briefing doc"     sub={briefingSub} />
       </div>
 
-      {/* ── Outgoing Materials ── */}
-      <div className="bg-white border border-ink-100 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium">Outgoing Materials</p>
-          <span className="text-xs text-ink-300">{outgoingDone} / {outgoing.length}</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {outgoing.map(item => (
-            <div key={item.id} className="flex items-center gap-1.5 group/item">
-              <button onClick={() => toggleOutgoing(item.id)}
-                className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium text-left transition-all hover:opacity-80 active:scale-95 ${
-                  item.done ? 'bg-sage/8 border-sage/20 text-sage' : 'bg-parchment border-ink-100 text-ink-400 hover:border-ink-300'
-                }`}>
-                {item.done ? <CheckCircle2 size={13} className="flex-shrink-0" /> : <Circle size={13} className="flex-shrink-0" />}
-                <span className="truncate">{item.label}</span>
+      {/* ── Contract zone ── */}
+      {openZones.has('contract') && (
+        <div className="border-t border-ink-100 px-5 py-4 bg-parchment/30">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">Contract</p>
+            {contractRequired !== undefined && (
+              <button
+                onClick={() => save({ contract_required: undefined, engagement_flags: (e.engagement_flags ?? []).filter(f => f !== 'contract_sent' && f !== 'contract_signed') as any })}
+                className="text-[11px] text-ink-200 hover:text-ink-400 transition-colors">
+                reset
               </button>
-              {item.custom && (
-                <button onClick={() => removeCustomOutgoing(item.id)}
-                  className="text-ink-200 hover:text-red-400 opacity-0 group-hover/item:opacity-100 transition-all flex-shrink-0">
-                  <X size={11} />
-                </button>
-              )}
+            )}
+          </div>
+
+          {contractRequired === undefined && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => save({ contract_required: true, engagement_flags: (e.engagement_flags ?? []).filter(f => f !== 'contract_sent' && f !== 'contract_signed') as any })}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-200 bg-white text-sm font-medium text-ink-500 hover:border-gold/50 hover:text-ink transition-all">
+                <Circle size={13} className="flex-shrink-0" /> Required
+              </button>
+              <button
+                onClick={() => save({ contract_required: false })}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-100 bg-white text-sm font-medium text-ink-300 hover:border-ink-300 hover:text-ink-500 transition-all">
+                Not required
+              </button>
             </div>
-          ))}
-          {addingCustom ? (
-            <div className="flex items-center gap-1.5 col-span-2">
-              <input autoFocus value={customLabel}
-                onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setCustomLabel(ev.target.value)}
-                onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => { if (ev.key === 'Enter') handleAddCustom(); if (ev.key === 'Escape') { setAddingCustom(false); setCustomLabel('') } }}
-                placeholder="Item label…"
-                className="flex-1 text-sm text-ink bg-parchment border border-gold/40 rounded-lg px-3 py-2 focus:outline-none focus:border-gold" />
-              <button onClick={handleAddCustom} className="p-1.5 text-sage hover:text-sage-dark"><Check size={13} /></button>
-              <button onClick={() => { setAddingCustom(false); setCustomLabel('') }} className="p-1.5 text-ink-300 hover:text-ink"><X size={13} /></button>
+          )}
+
+          {contractRequired === false && (
+            <p className="text-xs text-ink-300 italic">No contract needed for this engagement.</p>
+          )}
+
+          {contractRequired === true && (
+            <div className="flex gap-2">
+              {([{ flag: 'contract_sent' as const, label: 'Contract Sent', ts: e.contract_sent_at }, { flag: 'contract_signed' as const, label: 'Contract Signed', ts: e.contract_signed_at }]).map(({ flag, label, ts }) => {
+                const done = e.engagement_flags?.includes(flag) ?? false
+                const locked = flag === 'contract_signed' && !contractSent
+                return (
+                  <button key={flag}
+                    onClick={() => !locked && toggleContractFlag(flag)}
+                    disabled={locked}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                      done ? 'bg-sage/8 border-sage/20 text-sage'
+                      : locked ? 'bg-parchment border-ink-100 text-ink-200 cursor-not-allowed opacity-50'
+                      : 'bg-white border-ink-200 text-ink-400 hover:border-ink-300 hover:text-ink active:scale-95'
+                    }`}>
+                    {done ? <CheckCircle2 size={13} className="flex-shrink-0" /> : <Circle size={13} className="flex-shrink-0" />}
+                    <span>{label}</span>
+                    {done && ts && <span className="text-[10px] opacity-60 font-normal">{formatElapsed(ts)}</span>}
+                  </button>
+                )
+              })}
             </div>
-          ) : (
-            <button onClick={() => setAddingCustom(true)}
-              className="flex items-center gap-1.5 text-xs text-ink-300 hover:text-gold transition-colors border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2 font-medium">
-              <Plus size={11} /> Add item
-            </button>
           )}
         </div>
-      </div>
+      )}
 
-      {/* ── Awaiting Client Materials ── */}
-      <div className="bg-white border border-ink-100 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium">Awaiting Client Materials</p>
-          {incoming.length > 0 && <span className="text-xs text-ink-300">{incomingDone} / {incoming.length} received</span>}
-        </div>
-        {incoming.length === 0 && (
-          <p className="text-xs text-ink-300 italic mb-3">Nothing requested yet — log anything you're waiting on from the client.</p>
-        )}
-        {incoming.length > 0 && (
-          <div className="space-y-2 mb-3">
-            {incoming.map(item => (
-              <div key={item.id} className="flex items-start gap-2 group/in">
-                <button onClick={() => toggleIncoming(item.id)}
-                  className={`flex-1 flex items-start gap-2 px-3 py-2 rounded-lg border text-sm font-medium text-left transition-all ${
-                    item.received ? 'bg-sage/8 border-sage/20 text-sage' : 'bg-parchment border-ink-100 text-ink-400 hover:border-ink-300'
-                  }`}>
-                  {item.received ? <CheckCircle2 size={13} className="flex-shrink-0 mt-0.5" /> : <Circle size={13} className="flex-shrink-0 mt-0.5" />}
-                  <div className="min-w-0">
-                    <span className="truncate block">{item.label}</span>
-                    {item.requested_at && (
-                      <span className="text-[10px] opacity-60 font-normal">Requested {formatDate(item.requested_at)}</span>
-                    )}
+      {/* ── Outgoing zone ── */}
+      {openZones.has('outgoing') && (
+        <div className="border-t border-ink-100 px-5 py-4 bg-parchment/30">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">Materials Sent</p>
+            {outgoing.length > 0 && <span className="text-xs text-ink-300">{outgoingDone} / {outgoing.length} sent</span>}
+          </div>
+
+          {outgoing.length === 0 && (
+            <p className="text-xs text-ink-300 italic mb-3">Nothing added yet — add what we need to send to the client.</p>
+          )}
+
+          {outgoing.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {outgoing.map(item => {
+                const hours = !item.done ? hoursElapsed(item.added_at) : null
+                const overdue = hours !== null && hours > 48
+                return (
+                  <div key={item.id} className="flex items-start gap-2 group/item">
+                    <button onClick={() => toggleOutgoing(item.id)}
+                      className={`flex-1 flex items-start gap-2 px-3 py-2 rounded-lg border text-sm font-medium text-left transition-all ${
+                        item.done ? 'bg-sage/8 border-sage/20 text-sage'
+                        : overdue ? 'bg-red-50 border-red-100 text-red-600'
+                        : 'bg-white border-ink-100 text-ink-400 hover:border-ink-300'
+                      }`}>
+                      {item.done ? <CheckCircle2 size={13} className="flex-shrink-0 mt-0.5" /> : <Circle size={13} className="flex-shrink-0 mt-0.5" />}
+                      <div className="min-w-0 flex-1">
+                        <span className="truncate block">{item.label}</span>
+                        {item.done && item.sent_at && (
+                          <span className="text-[10px] opacity-60 font-normal">Sent {formatElapsed(item.sent_at)}</span>
+                        )}
+                        {overdue && (
+                          <span className="text-[10px] font-normal text-red-400">{formatElapsed(item.added_at)} — overdue</span>
+                        )}
+                      </div>
+                    </button>
+                    <button onClick={() => removeOutgoing(item.id)}
+                      className="p-1.5 rounded text-ink-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover/item:opacity-100 transition-all flex-shrink-0 mt-0.5">
+                      <X size={13} />
+                    </button>
                   </div>
-                  {item.pinned_to_briefing && (
-                    <span className="text-[10px] text-gold bg-gold/10 px-1.5 py-0.5 rounded font-medium flex-shrink-0 ml-auto">Briefing</span>
-                  )}
-                </button>
-                <button onClick={() => toggleIncomingPin(item.id)}
-                  className={`transition-colors flex-shrink-0 mt-2 ${item.pinned_to_briefing ? 'text-gold' : 'text-ink-200 hover:text-gold opacity-0 group-hover/in:opacity-100'}`}>
-                  <Pin size={12} />
-                </button>
-                <button onClick={() => removeIncoming(item.id)}
-                  className="text-ink-200 hover:text-red-400 opacity-0 group-hover/in:opacity-100 transition-all flex-shrink-0 mt-2">
-                  <X size={11} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <input value={newIncomingLabel}
-            onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setNewIncomingLabel(ev.target.value)}
-            onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => { if (ev.key === 'Enter') handleAddIncoming() }}
-            placeholder="What are you waiting on from them?"
-            className="flex-1 text-sm text-ink bg-parchment border border-ink-100 rounded-lg px-3 py-2 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
-          <button onClick={handleAddIncoming}
-            className="text-xs font-medium text-ink-300 hover:text-gold border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2 transition-colors flex-shrink-0">
-            Add
-          </button>
-        </div>
-      </div>
-
-      {/* ── Briefing Document ── */}
-      <div className="bg-white border border-ink-100 rounded-xl p-5">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium">Briefing Document</p>
-          <a href="#briefing" className="flex items-center gap-1.5 text-xs font-medium text-ink-300 hover:text-gold transition-colors">
-            <ArrowDown size={11} /> Jump to briefing
-          </a>
-        </div>
-        {e.briefing_complete ? (
-          <div className="flex items-center justify-between mt-2">
-            <div className="flex items-center gap-2 text-sm text-sage font-medium">
-              <CheckCircle2 size={14} />
-              Ready{e.briefing_complete_at ? ` · ${formatDate(e.briefing_complete_at)}` : ''}
+                )
+              })}
             </div>
-            <button onClick={() => save({ briefing_complete: false, briefing_complete_at: undefined } as any)}
-              className="text-xs text-ink-200 hover:text-ink-400 transition-colors">
-              Mark incomplete
-            </button>
+          )}
+
+          {/* Add row */}
+          <div className="border-t border-ink-100 pt-3 space-y-2">
+            {(() => {
+              const existingLabels = outgoing.map(m => m.label)
+              const available = DEFAULT_OUTGOING_MATERIALS.filter(m => !existingLabels.includes(m.label))
+              if (available.length === 0) return null
+              return (
+                <select
+                  value=""
+                  onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => {
+                    const label = ev.target.value
+                    if (!label) return
+                    const preset = DEFAULT_OUTGOING_MATERIALS.find(m => m.label === label)
+                    if (preset) save({ outgoing_materials: [...outgoing, { ...preset, done: false, added_at: new Date().toISOString() }] })
+                  }}
+                  className="w-full text-sm text-ink-400 bg-white border border-ink-100 rounded-lg px-3 py-2 focus:outline-none focus:border-gold/50 appearance-none cursor-pointer hover:border-ink-300 transition-colors">
+                  <option value="">+ Quick add…</option>
+                  {available.map(m => <option key={m.id} value={m.label}>{m.label}</option>)}
+                </select>
+              )
+            })()}
+            <div className="flex items-center gap-2">
+              <input value={customLabel}
+                onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setCustomLabel(ev.target.value)}
+                onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => { if (ev.key === 'Enter') handleAddCustom() }}
+                placeholder="Add a custom item…"
+                className="flex-1 text-sm text-ink bg-white border border-ink-100 rounded-lg px-3 py-2 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
+              <button onClick={handleAddCustom}
+                className="text-xs font-medium text-ink-300 hover:text-gold border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2 transition-colors flex-shrink-0">
+                Add
+              </button>
+            </div>
+            {/* No items needed — only when list is empty */}
+            {outgoing.length === 0 && (
+              e.outgoing_not_needed ? (
+                <div className="mt-2 flex items-center justify-between px-3 py-2.5 rounded-lg border border-sage/20 bg-sage/8">
+                  <span className="text-xs text-sage font-medium flex items-center gap-1.5">
+                    <CheckCircle2 size={12} /> No materials to send for this engagement
+                  </span>
+                  <button onClick={() => save({ outgoing_not_needed: false } as any)}
+                    className="text-[11px] text-sage/60 hover:text-sage transition-colors ml-3 flex-shrink-0">
+                    undo
+                  </button>
+                </div>
+              ) : (
+                <div className="pt-1 border-t border-ink-100">
+                  <button onClick={() => save({ outgoing_not_needed: true } as any)}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-ink-200 text-xs text-ink-300 hover:border-ink-400 hover:text-ink-500 transition-all">
+                    <Check size={11} /> Mark step complete — no materials needed
+                  </button>
+                </div>
+              )
+            )}
           </div>
-        ) : (
-          <p className="text-xs text-ink-300 italic mt-2">Fill in the briefing document below, then mark it ready.</p>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ── Incoming zone ── */}
+      {openZones.has('incoming') && (
+        <div className="border-t border-ink-100 px-5 py-4 bg-parchment/30">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">Materials Received</p>
+            {incoming.length > 0 && <span className="text-xs text-ink-300">{incomingDone} / {incoming.length} received</span>}
+          </div>
+
+          {incoming.length === 0 && (
+            <p className="text-xs text-ink-300 italic mb-3">Nothing added yet — add what we're expecting from the client.</p>
+          )}
+
+          {incoming.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {incoming.map(item => {
+                const hours = !item.received ? hoursElapsed(item.added_at) : null
+                const overdue = hours !== null && hours > 72
+                const captured = item.received
+                return (
+                  <IncomingItem key={item.id} item={item} overdue={overdue} captured={captured}
+                    onUndo={() => toggleIncoming(item.id)}
+                    onRemove={() => removeIncoming(item.id)}
+                    onPin={() => toggleIncomingPin(item.id)}
+                    onCaptureNote={(note) => captureNote(item.id, note)}
+                    onCaptureLink={(link) => captureLink(item.id, link)}
+                    onAttachFile={(url, name) => attachFile(item.id, url, name)}
+                    onRemoveFile={() => removeFile(item.id)}
+                  />
+                )
+              })}
+            </div>
+          )}
+
+          {/* Add row */}
+          <div className="border-t border-ink-100 pt-3 space-y-2">
+            {(() => {
+              const existingLabels = incoming.map(m => m.label)
+              const available = DEFAULT_INCOMING_MATERIALS.filter(m => !existingLabels.includes(m.label))
+              if (available.length === 0) return null
+              return (
+                <select
+                  value=""
+                  onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => {
+                    const label = ev.target.value
+                    if (!label) return
+                    const preset = DEFAULT_INCOMING_MATERIALS.find(m => m.label === label)
+                    if (preset) addIncoming(preset.label)
+                  }}
+                  className="w-full text-sm text-ink-400 bg-white border border-ink-100 rounded-lg px-3 py-2 focus:outline-none focus:border-gold/50 appearance-none cursor-pointer hover:border-ink-300 transition-colors">
+                  <option value="">+ Quick add…</option>
+                  {available.map(m => <option key={m.id} value={m.label}>{m.label}</option>)}
+                </select>
+              )
+            })()}
+            <div className="flex items-center gap-2">
+              <input value={newIncomingLabel}
+                onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setNewIncomingLabel(ev.target.value)}
+                onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => { if (ev.key === 'Enter') handleAddIncoming() }}
+                placeholder="Add a custom item…"
+                className="flex-1 text-sm text-ink bg-white border border-ink-100 rounded-lg px-3 py-2 focus:outline-none focus:border-gold/50 placeholder:text-ink-200" />
+              <button onClick={handleAddIncoming}
+                className="text-xs font-medium text-ink-300 hover:text-gold border border-dashed border-ink-200 hover:border-gold/40 rounded-lg px-3 py-2 transition-colors flex-shrink-0">
+                Add
+              </button>
+            </div>
+            {/* No items needed — only when list is empty, styled as a deliberate action */}
+            {incoming.length === 0 && (
+              e.incoming_not_needed ? (
+                <div className="mt-2 flex items-center justify-between px-3 py-2.5 rounded-lg border border-sage/20 bg-sage/8">
+                  <span className="text-xs text-sage font-medium flex items-center gap-1.5">
+                    <CheckCircle2 size={12} /> No materials to receive for this engagement
+                  </span>
+                  <button onClick={() => save({ incoming_not_needed: false } as any)}
+                    className="text-[11px] text-sage/60 hover:text-sage transition-colors ml-3 flex-shrink-0">
+                    undo
+                  </button>
+                </div>
+              ) : (
+                <div className="pt-1 border-t border-ink-100">
+                  <button onClick={() => save({ incoming_not_needed: true } as any)}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-ink-200 text-xs text-ink-300 hover:border-ink-400 hover:text-ink-500 transition-all">
+                    <Check size={11} /> Mark step complete — no materials needed
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Briefing zone ── */}
+      {openZones.has('briefing') && (
+        <BriefingZone e={e} save={save} briefingComplete={briefingComplete} />
+      )}
 
     </div>
   )
@@ -899,55 +1640,15 @@ export default function EngagementDetailPage() {
         </div>
       )}
 
-      {/* Progress bar */}
-      <ProgressBar e={e} save={save} />
+      {/* Progress track */}
+      <ProgressTrack e={e} save={save} />
 
       {/* Event details + contacts */}
       <div className="grid grid-cols-2 gap-6 mb-6">
-        <div className="bg-white border border-ink-100 rounded-xl p-5">
-          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Event Details</p>
-          <div className="space-y-3">
-            {e.event_date && <div className="flex items-center gap-2 text-sm"><Calendar size={14} className="text-ink-300" />{formatDate(e.event_date)}</div>}
-            {(e as any).event_time && <div className="flex items-center gap-2 text-sm"><Clock size={14} className="text-ink-300" />{(e as any).event_time}</div>}
-            {e.event_city && <div className="flex items-center gap-2 text-sm"><MapPin size={14} className="text-ink-300" />{e.event_city}</div>}
-            {e.session_length && <div className="flex items-center gap-2 text-sm"><Clock size={14} className="text-ink-300" />{e.session_length} min</div>}
-            {e.audience_size && <div className="flex items-center gap-2 text-sm"><Users size={14} className="text-ink-300" />{e.audience_size.toLocaleString()} attendees</div>}
-            {e.event_format === 'virtual' && <div className="flex items-center gap-2 text-sm"><Wifi size={14} className="text-ink-300" />Virtual</div>}
-            {e.travel_covered !== undefined && (
-              <div className="flex items-center gap-2 text-xs text-ink-400 pt-1">
-                <Plane size={11} />{e.travel_covered ? 'Travel covered' : 'Self-travel'}
-                {e.hotel_covered !== undefined && (
-                  <><span className="mx-1">·</span><Hotel size={11} />{e.hotel_covered ? 'Hotel covered' : 'Self-hotel'}</>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <EventDetailsCard e={e} save={save} />
 
-        <div className="bg-white border border-ink-100 rounded-xl p-5">
-          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Contacts</p>
-          <div className="space-y-3">
-            {e.contacts.map(c => (
-              <div key={c.id} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-ink-800 flex items-center justify-center text-xs font-bold text-gold flex-shrink-0">
-                  {getInitials(c.first_name, c.last_name)}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">{c.first_name} {c.last_name}</p>
-                  <p className="text-xs text-ink-400">{c.title}</p>
-                  <p className="text-xs text-ink-300 truncate">{c.email}</p>
-                </div>
-                {c.is_current_point_of_contact && (
-                  <span className="ml-auto text-[10px] text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/20 flex-shrink-0">POC</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <ContactsCard e={e} save={save} />
       </div>
-
-      {/* Progress detail — full working area */}
-      <ProgressDetail e={e} save={save} />
 
       {/* Briefing Document */}
       <BriefingDocument e={e} />

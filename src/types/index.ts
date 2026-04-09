@@ -95,6 +95,8 @@ export interface EngagementContact {
   notes?: string
   status?: ContactStatus
   watching?: boolean
+  company_id?: string
+  team_id?: string
 }
 
 // ─── Communication ────────────────────────────────────────────────────────────
@@ -157,16 +159,25 @@ export interface OutgoingMaterial {
   id: string
   label: string
   done: boolean
-  custom?: boolean   // true for user-added items
+  custom?: boolean
+  added_at?: string    // ISO — when item was added to the list
+  sent_at?: string     // ISO — when item was marked done (clock stops)
 }
 
 export interface IncomingMaterial {
   id: string
   label: string
   received: boolean
-  requested_at?: string        // ISO date when this was requested from client
+  added_at?: string
+  received_at?: string
+  requested_at?: string
   pinned_to_briefing?: boolean
   notes?: string
+  note?: string                // captured note text
+  link?: string                // captured URL
+  file_url?: string
+  file_name?: string
+  file_uploaded_by?: string    // 'ai' | 'user'
 }
 
 export const DEFAULT_OUTGOING_MATERIALS: Omit<OutgoingMaterial, 'done'>[] = [
@@ -178,6 +189,23 @@ export const DEFAULT_OUTGOING_MATERIALS: Omit<OutgoingMaterial, 'done'>[] = [
   { id: 'talk_title',       label: 'Talk Title & Description' },
   { id: 'social_handles',   label: 'Social Media Handles' },
   { id: 'av_requirements',  label: 'A/V Requirements' },
+]
+
+export interface BriefingNote {
+  id: string
+  body: string
+  created_at: string
+  resolved?: boolean
+}
+
+export const DEFAULT_INCOMING_MATERIALS: Omit<IncomingMaterial, 'received'>[] = [
+  { id: 'in_agenda',       label: 'Agenda / Run of Show' },
+  { id: 'in_attendee_list', label: 'Attendee List' },
+  { id: 'in_av_contact',   label: 'A/V Contact Info' },
+  { id: 'in_room_setup',   label: 'Room Setup Details' },
+  { id: 'in_parking',      label: 'Parking / Arrival Instructions' },
+  { id: 'in_intro_script', label: 'Introduction Script' },
+  { id: 'in_logo',         label: 'Company Logo' },
 ]
 
 // ─── Engagement ───────────────────────────────────────────────────────────────
@@ -197,11 +225,16 @@ export interface Engagement {
   invoice_sent_at?: string        // ISO date when invoice was sent
 
   // ── Engagement progress (replaces flat engagement_flags for speaking) ──────
-  contract_required?: boolean          // undefined = not yet set; true = required; false = N/A
+  contract_required?: boolean
+  contract_sent_at?: string
+  contract_signed_at?: string
   outgoing_materials?: OutgoingMaterial[]
+  outgoing_not_needed?: boolean        // manually marked: no prep materials needed
   incoming_materials?: IncomingMaterial[]
+  incoming_not_needed?: boolean        // manually marked: no client materials needed
   briefing_complete?: boolean
   briefing_complete_at?: string
+  briefing_notes?: BriefingNote[]
 
   // AI confirmation status (for auto-sorted items)
   ai_created?: boolean
@@ -210,6 +243,8 @@ export interface Engagement {
   declined_at?: string
 
   organization: string
+  company_id?: string          // links to Company.id
+  team_id?: string             // links to CompanyTeam.id within that company
   source?: string
   contacts: EngagementContact[]
 

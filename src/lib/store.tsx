@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
-import { Engagement, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep } from '@/types'
+import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep } from '@/types'
 import { MOCK_ENGAGEMENTS, MOCK_REVIEW_ITEMS, MOCK_COMPANIES, MOCK_USERS } from '@/lib/mock-data'
 import type { ReviewItem, Company } from '@/types'
 
@@ -42,6 +42,12 @@ interface StoreActions {
   // Review
   confirmReviewItem: (id: string, confirmedBy: string) => void
   dismissReviewItem: (id: string) => void
+
+  // Companies
+  updateCompany: (id: string, patch: Partial<Company>) => void
+
+  // Contacts (global — updates all engagements sharing the same email)
+  updateContact: (email: string, patch: Partial<EngagementContact>) => void
 }
 
 type Store = StoreState & StoreActions
@@ -57,9 +63,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>(() =>
     JSON.parse(JSON.stringify(MOCK_REVIEW_ITEMS))
   )
-  const [companies] = useState<Company[]>(() =>
+  const [companies, setCompanies] = useState<Company[]>(() =>
     JSON.parse(JSON.stringify(MOCK_COMPANIES))
   )
+
+  const updateCompany = useCallback((id: string, patch: Partial<Company>) => {
+    setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
+  }, [])
+
+  const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
+    setEngagements(prev => prev.map(e => ({
+      ...e,
+      contacts: e.contacts.map(c =>
+        c.email.toLowerCase() === email.toLowerCase() ? { ...c, ...patch } : c
+      ),
+    })))
+  }, [])
 
   const updateEngagement = useCallback((id: string, patch: Partial<Engagement>) => {
     setEngagements(prev => prev.map(e =>
@@ -210,6 +229,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm,
       confirmReviewItem, dismissReviewItem,
+      updateCompany, updateContact,
     }}>
       {children}
     </StoreContext.Provider>
