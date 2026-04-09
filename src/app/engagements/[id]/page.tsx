@@ -926,7 +926,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
   const contractSub = contractRequired === undefined ? 'Not set'
     : contractRequired === false ? 'Not required'
     : contractSigned ? 'Signed'
-    : contractSent ? 'Sent — awaiting signature'
+    : contractSent ? 'Sent — client signature pending'
     : 'Pending'
 
   const outgoingSub = e.outgoing_not_needed ? 'Not needed' : outgoingComplete ? 'All sent' : outgoing.length === 0 ? '0 of 0 sent' : `${outgoingDone} of ${outgoing.length} sent`
@@ -979,7 +979,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
 
           {contractRequired === true && (
             <div className="flex gap-2">
-              {([{ flag: 'contract_sent' as const, label: 'Contract Sent', ts: e.contract_sent_at }, { flag: 'contract_signed' as const, label: 'Contract Signed', ts: e.contract_signed_at }]).map(({ flag, label, ts }) => {
+              {([{ flag: 'contract_sent' as const, label: 'Contract Sent to Client', ts: e.contract_sent_at }, { flag: 'contract_signed' as const, label: 'Contract Signed', ts: e.contract_signed_at }]).map(({ flag, label, ts }) => {
                 const done = e.engagement_flags?.includes(flag) ?? false
                 const locked = flag === 'contract_signed' && !contractSent
                 return (
