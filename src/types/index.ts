@@ -23,8 +23,8 @@ export type EngagementFlag = 'contract_sent' | 'contract_signed' | 'client_deliv
 // Media appearances use a lighter prep checklist
 export type MediaFlag = 'confirmed' | 'prep_sent' | 'bio_sent' | 'day_of_ready'
 
-export type PostEventFlag = 'invoice_sent' | 'invoice_paid' | 'media_uploaded' | 'marked_complete'
-export type Section = 'prospects' | 'engagements' | 'post-event'
+export type PostEventFlag = 'invoice' | 'thank_you' | 'testimonial' | 'media' | 'social_media' | 'follow_up'
+export type Section = 'prospects' | 'engagements' | 'wrap-up'
 
 export const PROSPECT_STEPS: { id: ProspectStep; label: string; entry?: boolean; terminal?: boolean }[] = [
   { id: 'inquiry',    label: 'Inquiry',    entry: true },
@@ -72,10 +72,12 @@ export const MEDIA_FLAGS: { id: MediaFlag; label: string }[] = [
 ]
 
 export const POST_EVENT_FLAGS: { id: PostEventFlag; label: string }[] = [
-  { id: 'invoice_sent',     label: 'Invoice Sent' },
-  { id: 'invoice_paid',     label: 'Invoice Paid' },
-  { id: 'media_uploaded',   label: 'Media Uploaded' },
-  { id: 'marked_complete',  label: 'Complete' },
+  { id: 'invoice',      label: 'Invoice' },
+  { id: 'thank_you',    label: 'Thank you sent' },
+  { id: 'testimonial',  label: 'Testimonial' },
+  { id: 'media',        label: 'Media' },
+  { id: 'social_media', label: 'Social media' },
+  { id: 'follow_up',    label: 'Follow-up' },
 ]
 
 // ─── Contact ──────────────────────────────────────────────────────────────────

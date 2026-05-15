@@ -1,24 +1,24 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { useState } from 'react'
-import { Company } from '@/types'
+import { Company, POST_EVENT_FLAGS } from '@/types'
 import { Search, Eye, ArrowRight, Plus, BookUser, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
-type Filter = 'all' | 'prospects' | 'engagements' | 'post-event' | 'client' | 'expired' | 'watching'
+type Filter = 'all' | 'prospects' | 'engagements' | 'wrap-up' | 'client' | 'expired' | 'watching'
 
 function getCompanyStage(company: Company, engagements: any[]) {
   const companyEngagements = engagements.filter(e => company.engagement_ids.includes(e.id))
   const hasProspect = companyEngagements.some(e => e.section === 'prospects')
   const hasEngagement = companyEngagements.some(e => e.section === 'engagements')
-  const hasPostEvent = companyEngagements.some(e => e.section === 'post-event')
+  const hasPostEvent = companyEngagements.some(e => e.section === 'wrap-up')
   const isFullyComplete = engagements
-    .filter(e => e.section === 'post-event')
-    .every(e => e.post_event_flags.includes('marked_complete'))
+    .filter(e => e.section === 'wrap-up')
+    .every(e => POST_EVENT_FLAGS.every(f => e.post_event_flags.includes(f.id as any)))
   const hasAnyPostEvent = hasPostEvent
 
   if (hasEngagement) return 'engagements'
-  if (hasAnyPostEvent && !isFullyComplete) return 'post-event'
+  if (hasAnyPostEvent && !isFullyComplete) return 'wrap-up'
   if (hasAnyPostEvent && isFullyComplete) return 'client'
   if (hasProspect) return 'prospects'
   return 'expired'
@@ -28,7 +28,7 @@ const FILTERS: { id: Filter; label: string; icon?: boolean; dividerBefore?: bool
   { id: 'all', label: 'All' },
   { id: 'prospects', label: 'Prospects' },
   { id: 'engagements', label: 'Engagements' },
-  { id: 'post-event', label: 'Post-Event' },
+  { id: 'wrap-up', label: 'Wrap-Up' },
   { id: 'client', label: 'Client', dividerBefore: true },
   { id: 'expired', label: 'Expired' },
   { id: 'watching', label: 'Watching', icon: true, dividerBefore: true },
@@ -37,7 +37,7 @@ const FILTERS: { id: Filter; label: string; icon?: boolean; dividerBefore?: bool
 const STAGE_COLORS: Record<string, string> = {
   prospects: 'text-sage bg-sage/10 border-sage/20',
   engagements: 'text-gold bg-gold/10 border-gold/20',
-  'post-event': 'text-blue-500 bg-blue-50 border-blue-100',
+  'wrap-up': 'text-blue-500 bg-blue-50 border-blue-100',
   client: 'text-ink bg-ink/8 border-ink/20',
   expired: 'text-ink-300 bg-parchment border-ink-100',
 }
@@ -45,7 +45,7 @@ const STAGE_COLORS: Record<string, string> = {
 const STAGE_LABELS: Record<string, string> = {
   prospects: 'Prospect',
   engagements: 'Engagement',
-  'post-event': 'Post-Event',
+  'wrap-up': 'Wrap-Up',
   client: 'Client',
   expired: 'Expired',
 }

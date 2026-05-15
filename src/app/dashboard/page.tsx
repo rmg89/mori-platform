@@ -109,37 +109,25 @@ function buildAlerts(prospects: Engagement[], active: Engagement[], postEvent: E
     }
   }
 
-  // ── Post-Event ────────────────────────────────────────────────────────────
+  // ── Wrap-Up ────────────────────────────────────────────────────────────────
   for (const e of postEvent) {
-    if (e.post_event_flags.includes('marked_complete')) continue
     const flags = e.post_event_flags
     const eventAge = e.event_date ? daysSince(e.event_date) : 0
 
-    // Invoice not sent — urgent if more than 3 days post-event
-    if (!flags.includes('invoice_sent')) {
-      postEventAlerts.push({ engagement: e, severity: eventAge >= 3 ? 'red' : 'yellow', href: `/post-event/${e.id}`,
-        label: eventAge >= 3 ? `${e.organization} — invoice not sent (${eventAge}d post-event)` : `${e.organization} — invoice not yet sent` })
+    if (!flags.includes('invoice')) {
+      postEventAlerts.push({ engagement: e, severity: eventAge >= 7 ? 'red' : 'yellow', href: `/wrap-up/${e.id}`,
+        label: eventAge >= 7 ? `${e.organization} — invoice not handled (${eventAge}d since event)` : `${e.organization} — invoice pending` })
     }
-    // Invoice sent but unpaid — escalate by age
-    else if (!flags.includes('invoice_paid')) {
-      const invoiceComm = e.comms?.find(c => c.subject?.toLowerCase().includes('invoice'))
-      const invoiceAge = daysSince(invoiceComm?.date ?? e.updated_at)
-      if (invoiceAge >= 30)
-        postEventAlerts.push({ engagement: e, severity: 'red', href: `/post-event/${e.id}`, label: `${e.organization} — invoice unpaid ${invoiceAge}d` })
-      else if (invoiceAge >= 14)
-        postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — invoice outstanding ${invoiceAge}d` })
-      else
-        postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — invoice sent, awaiting payment` })
-    }
-    // Paid but no media — nudge after 7 days
-    if (flags.includes('invoice_paid') && !flags.includes('media_uploaded') && eventAge >= 7)
-      postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/post-event/${e.id}`, label: `${e.organization} — media not yet received` })
+    if (!flags.includes('media') && eventAge >= 14)
+      postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/wrap-up/${e.id}`, label: `${e.organization} — media not yet collected` })
+    if (!flags.includes('testimonial') && eventAge >= 21)
+      postEventAlerts.push({ engagement: e, severity: 'yellow', href: `/wrap-up/${e.id}`, label: `${e.organization} — testimonial not yet requested` })
   }
 
   const groups: AlertGroup[] = []
   if (prospectAlerts.length > 0) groups.push({ category: 'Prospects', items: prospectAlerts })
   if (engagementAlerts.length > 0) groups.push({ category: 'Engagements', items: engagementAlerts })
-  if (postEventAlerts.length > 0) groups.push({ category: 'Post-Event', items: postEventAlerts })
+  if (postEventAlerts.length > 0) groups.push({ category: 'Wrap-Up', items: postEventAlerts })
   return groups
 }
 
@@ -352,7 +340,7 @@ export default function DashboardPage() {
   const { engagements: allEngagements, reviewItems } = useStore()
   const prospects = allEngagements.filter(e => e.section === 'prospects')
   const active = allEngagements.filter(e => e.section === 'engagements')
-  const postEvent = allEngagements.filter(e => e.section === 'post-event')
+  const postEvent = allEngagements.filter(e => e.section === 'wrap-up')
 
   const total = prospects.length + active.length + postEvent.length || 1
   const pPct = (prospects.length / total) * 100
@@ -397,7 +385,7 @@ export default function DashboardPage() {
               {[
                 { label: 'Prospects', count: prospects.length, color: '#7A9E87', href: '/prospects' },
                 { label: 'Engagements', count: active.length, color: '#C9A84C', href: '/engagements' },
-                { label: 'Post-Event', count: postEvent.length, color: '#4A4740', href: '/post-event' },
+                { label: 'Wrap-Up', count: postEvent.length, color: '#4A4740', href: '/wrap-up' },
               ].map(s => (
                 <Link key={s.label} href={s.href} className="flex items-center gap-1.5 whitespace-nowrap hover:opacity-60 transition-all">
                   <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />

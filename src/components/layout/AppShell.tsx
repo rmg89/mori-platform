@@ -12,7 +12,7 @@ const NAV = [
   { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
   { href: '/prospects',   label: 'Prospects',   icon: UserSearch },
   { href: '/engagements', label: 'Engagements', icon: Handshake },
-  { href: '/post-event',  label: 'Post-Event',  icon: Archive },
+  { href: '/wrap-up',  label: 'Wrap-Up',  icon: Archive },
   { href: '/review',      label: 'Review',      icon: ClipboardCheck },
   { href: '/companies',   label: 'Companies',   icon: Building2 },
   { href: '/ai-tools',    label: 'AI Tools',    icon: Sparkles },
