@@ -23,7 +23,12 @@ interface StoreActions {
   // Engagement flags
   toggleEngagementFlag: (id: string, flag: EngagementFlag) => void
   toggleMediaFlag: (id: string, flag: MediaFlag) => void
-  togglePostEventFlag: (id: string, flag: PostEventFlag) => void
+  setPostEventFlagNeeded: (id: string, flag: PostEventFlag) => void
+  setPostEventFlagDone: (id: string, flag: PostEventFlag) => void
+  setPostEventFlagNotNeeded: (id: string, flag: PostEventFlag) => void
+  resetPostEventFlag: (id: string, flag: PostEventFlag) => void
+  updatePostEventFollowUpDetails: (id: string, details: string) => void
+  updatePostEventNotes: (id: string, notes: string) => void
 
   // Proposed dates
   addProposedDate: (id: string, date: string) => void
@@ -111,14 +116,68 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const togglePostEventFlag = useCallback((id: string, flag: PostEventFlag) => {
+  const setPostEventFlagNeeded = useCallback((id: string, flag: PostEventFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
-      const flags = e.post_event_flags.includes(flag)
-        ? e.post_event_flags.filter(f => f !== flag)
-        : [...e.post_event_flags, flag]
-      return { ...e, post_event_flags: flags, updated_at: new Date().toISOString() }
+      return {
+        ...e,
+        post_event_needed: [...(e.post_event_needed ?? []).filter(f => f !== flag), flag],
+        post_event_not_needed: (e.post_event_not_needed ?? []).filter(f => f !== flag),
+        post_event_flags: (e.post_event_flags ?? []).filter(f => f !== flag),
+        updated_at: new Date().toISOString(),
+      }
     }))
+  }, [])
+
+  const setPostEventFlagDone = useCallback((id: string, flag: PostEventFlag) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      return {
+        ...e,
+        post_event_flags: [...(e.post_event_flags ?? []).filter(f => f !== flag), flag],
+        post_event_needed: (e.post_event_needed ?? []).filter(f => f !== flag),
+        post_event_not_needed: (e.post_event_not_needed ?? []).filter(f => f !== flag),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+  }, [])
+
+  const setPostEventFlagNotNeeded = useCallback((id: string, flag: PostEventFlag) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      return {
+        ...e,
+        post_event_not_needed: [...(e.post_event_not_needed ?? []).filter(f => f !== flag), flag],
+        post_event_needed: (e.post_event_needed ?? []).filter(f => f !== flag),
+        post_event_flags: (e.post_event_flags ?? []).filter(f => f !== flag),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+  }, [])
+
+  const resetPostEventFlag = useCallback((id: string, flag: PostEventFlag) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      return {
+        ...e,
+        post_event_flags: (e.post_event_flags ?? []).filter(f => f !== flag),
+        post_event_needed: (e.post_event_needed ?? []).filter(f => f !== flag),
+        post_event_not_needed: (e.post_event_not_needed ?? []).filter(f => f !== flag),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+  }, [])
+
+  const updatePostEventFollowUpDetails = useCallback((id: string, details: string) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, post_event_follow_up_details: details, updated_at: new Date().toISOString() } : e
+    ))
+  }, [])
+
+  const updatePostEventNotes = useCallback((id: string, notes: string) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, post_event_notes: notes, updated_at: new Date().toISOString() } : e
+    ))
   }, [])
 
   const addProposedDate = useCallback((id: string, date: string) => {
@@ -225,7 +284,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       engagements, reviewItems, companies,
       updateEngagement, setProspectStep,
-      toggleEngagementFlag, toggleMediaFlag, togglePostEventFlag,
+      toggleEngagementFlag, toggleMediaFlag,
+      setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
+      updatePostEventFollowUpDetails, updatePostEventNotes,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm,
       confirmReviewItem, dismissReviewItem,

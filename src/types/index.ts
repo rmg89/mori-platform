@@ -223,7 +223,11 @@ export interface Engagement {
   prospect_step?: ProspectStep
   engagement_flags: EngagementFlag[]
   media_flags?: MediaFlag[]       // used instead of engagement_flags for non-speaking types
-  post_event_flags: PostEventFlag[]
+  post_event_flags: PostEventFlag[]          // flags marked as "done"
+  post_event_needed: PostEventFlag[]         // flags marked as "needed" (but not yet done)
+  post_event_not_needed: PostEventFlag[]     // flags explicitly waived
+  post_event_follow_up_details?: string      // what the follow-up means for this engagement
+  post_event_notes?: string                  // general wrap-up notes/context
   invoice_sent_at?: string        // ISO date when invoice was sent
 
   // ── Engagement progress (replaces flat engagement_flags for speaking) ──────
@@ -303,7 +307,6 @@ export interface Engagement {
   panelist_info?: string          // Co-panelists info
   vip_info?: string
   dress_code?: string
-  post_event_notes?: string       // What happens after (book signing, dinner, etc.)
 }
 
 export function primaryContact(e: Engagement): EngagementContact | undefined {

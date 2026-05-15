@@ -3,14 +3,14 @@ import { useParams } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-import { ArrowLeft, AlertTriangle, CheckCircle2, Circle, Clock, Calendar, MapPin, Users, DollarSign, FileText, Sparkles } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, MinusCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
   const start = new Date(y, m - 1, d)
-  const today = new Date(); today.setHours(0,0,0,0)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
   return Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
 }
 
@@ -18,35 +18,185 @@ function elapsed(dateStr: string): string {
   const days = daysSince(dateStr)
   if (days === 0) return 'today'
   if (days === 1) return '1 day ago'
-  if (days < 7)  return `${days} days ago`
+  if (days < 7) return `${days} days ago`
   if (days < 14) return '1 week ago'
   if (days < 30) return `${Math.floor(days / 7)} weeks ago`
   if (days < 60) return '1 month ago'
   return `${Math.floor(days / 30)} months ago`
 }
 
+type FlagState = 'unmarked' | 'needed' | 'done' | 'not_needed'
+
+function getFlagState(flag: PostEventFlag, done: PostEventFlag[], needed: PostEventFlag[], notNeeded: PostEventFlag[]): FlagState {
+  if (done.includes(flag)) return 'done'
+  if (needed.includes(flag)) return 'needed'
+  if (notNeeded.includes(flag)) return 'not_needed'
+  return 'unmarked'
+}
+
+function FlagTile({
+  flag,
+  state,
+  onNeeded,
+  onDone,
+  onNotNeeded,
+  onReset,
+  followUpDetails,
+  onFollowUpDetails,
+}: {
+  flag: { id: PostEventFlag; label: string }
+  state: FlagState
+  onNeeded: () => void
+  onDone: () => void
+  onNotNeeded: () => void
+  onReset: () => void
+  followUpDetails?: string
+  onFollowUpDetails?: (v: string) => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const isFollowUp = flag.id === 'follow_up'
+
+  const tileClass = {
+    unmarked: 'bg-white border-ink-100',
+    needed: 'bg-white border-ink-200',
+    done: 'bg-sage/8 border-sage/30',
+    not_needed: 'bg-parchment border-ink-100',
+  }[state]
+
+  const dotClass = {
+    unmarked: 'border-ink-200 bg-white',
+    needed: 'border-sage bg-sage/10',
+    done: 'border-sage bg-sage',
+    not_needed: 'border-ink-200 bg-ink-200',
+  }[state]
+
+  const labelClass = {
+    unmarked: 'text-ink',
+    needed: 'text-ink',
+    done: 'text-sage-dark',
+    not_needed: 'text-ink-300',
+  }[state]
+
+  const subText = {
+    unmarked: 'Not assessed',
+    needed: 'Needed',
+    done: 'Done',
+    not_needed: 'Not needed',
+  }[state]
+
+  const subClass = {
+    unmarked: 'text-ink-300',
+    needed: 'text-sage',
+    done: 'text-sage',
+    not_needed: 'text-ink-300',
+  }[state]
+
+  return (
+    <div className={`relative rounded-xl border transition-all ${tileClass} ${isFollowUp ? 'flex-1 min-w-[160px]' : ''}`}>
+      <div
+        className="flex items-center gap-2.5 px-4 py-3 cursor-pointer"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <div className={`w-3.5 h-3.5 rounded-full border-[1.5px] flex items-center justify-center flex-shrink-0 ${dotClass}`}>
+          {state === 'done' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+          {state === 'not_needed' && <div className="w-2 h-[1.5px] bg-white rounded-full" />}
+        </div>
+        <div>
+          <p className={`text-sm font-medium ${labelClass}`}>{flag.label}</p>
+          <p className={`text-[11px] ${subClass}`}>{subText}</p>
+        </div>
+
+        {/* Hover actions */}
+        {hovered && (
+          <div className="absolute inset-0 rounded-xl bg-parchment/95 flex overflow-hidden z-10"
+            onMouseLeave={() => setHovered(false)}>
+            {state === 'unmarked' && <>
+              <button onClick={() => { onNeeded(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-sage/10 hover:text-sage-dark transition-colors border-r border-ink-100">
+                <CheckCircle2 size={13} />Needed
+              </button>
+              <button onClick={() => { onNotNeeded(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-parchment hover:text-ink-500 transition-colors">
+                <MinusCircle size={13} />Not needed
+              </button>
+            </>}
+            {state === 'needed' && <>
+              <button onClick={() => { onDone(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-sage/10 hover:text-sage-dark transition-colors border-r border-ink-100">
+                <CheckCircle2 size={13} />Mark done
+              </button>
+              <button onClick={() => { onNotNeeded(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-parchment hover:text-ink-500 transition-colors">
+                <MinusCircle size={13} />Not needed
+              </button>
+            </>}
+            {state === 'done' && <>
+              <button onClick={() => { onNeeded(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-sage/10 hover:text-sage-dark transition-colors border-r border-ink-100">
+                <CheckCircle2 size={13} />Mark needed
+              </button>
+              <button onClick={() => { onNotNeeded(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-parchment hover:text-ink-500 transition-colors">
+                <MinusCircle size={13} />Not needed
+              </button>
+            </>}
+            {state === 'not_needed' && <>
+              <button onClick={() => { onNeeded(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-sage/10 hover:text-sage-dark transition-colors border-r border-ink-100">
+                <CheckCircle2 size={13} />Needed
+              </button>
+              <button onClick={() => { onReset(); setHovered(false) }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-ink-400 hover:bg-parchment hover:text-ink-500 transition-colors">
+                <MinusCircle size={13} />Reset
+              </button>
+            </>}
+          </div>
+        )}
+      </div>
+
+      {/* Follow-up details expansion */}
+      {isFollowUp && (state === 'needed' || state === 'done') && (
+        <div className="px-4 pb-3 pt-0 border-t border-ink-100 mt-0">
+          <p className="text-[10px] font-medium text-ink-400 uppercase tracking-wider mb-1.5 mt-2">Follow-up details</p>
+          <input
+            type="text"
+            value={followUpDetails ?? ''}
+            onChange={e => onFollowUpDetails?.(e.target.value)}
+            placeholder="e.g. re-booking conversation, debrief call..."
+            className="w-full text-xs bg-white border border-ink-100 rounded-lg px-3 py-2 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-300"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function WrapUpDetailPage() {
   const { id } = useParams()
-  const { engagements: allEngagements, togglePostEventFlag } = useStore()
-  const e = allEngagements.find(eng => eng.id === id)
-  const [aiDismissed, setAiDismissed] = useState(false)
+  const {
+    engagements: allEngagements,
+    setPostEventFlagNeeded,
+    setPostEventFlagDone,
+    setPostEventFlagNotNeeded,
+    resetPostEventFlag,
+    updatePostEventFollowUpDetails,
+    updatePostEventNotes,
+  } = useStore()
 
+  const e = allEngagements.find(eng => eng.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
 
   const pc = primaryContact(e)
-  const doneCount = e.post_event_flags.length
-  const totalCount = POST_EVENT_FLAGS.length
-  const allDone = doneCount === totalCount
-  const outstanding = totalCount - doneCount
+  const done = e.post_event_flags ?? []
+  const needed = e.post_event_needed ?? []
+  const notNeeded = e.post_event_not_needed ?? []
   const sinceEvent = e.event_date ? daysSince(e.event_date) : null
 
-  // Show AI banner if flags haven't been confirmed yet (empty flags = not yet set)
-  const showAiBanner = !aiDismissed && doneCount === 0
-
-  const flagIsOverdue = (flagId: PostEventFlag) => {
-    if (flagId === 'invoice' && sinceEvent !== null && sinceEvent > 7) return true
-    return false
-  }
+  const neededCount = needed.length + done.length
+  const doneCount = done.length
+  const outstandingCount = needed.length
+  const allAssessedAndDone = neededCount > 0 && outstandingCount === 0
 
   return (
     <div className="p-8 max-w-4xl mx-auto animate-fade-in">
@@ -55,16 +205,14 @@ export default function WrapUpDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <FileText size={13} className="text-ink-400" />
-            <span className="text-xs text-ink-400 uppercase tracking-widest font-medium">Wrap-Up</span>
-          </div>
-          <h1 className="font-display text-3xl font-semibold text-ink">{e.event_name || e.organization}</h1>
-          <p className="text-ink-400 text-sm mt-1">{e.organization}{e.booker_name ? ` · via ${e.booker_name}` : ''}</p>
-          <div className="accent-line mt-3 w-24" />
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <FileText size={13} className="text-ink-400" />
+          <span className="text-xs text-ink-400 uppercase tracking-widest font-medium">Wrap-Up</span>
         </div>
+        <h1 className="font-display text-3xl font-semibold text-ink">{e.event_name || e.organization}</h1>
+        <p className="text-ink-400 text-sm mt-1">{e.organization}{e.booker_name ? ` · via ${e.booker_name}` : ''}</p>
+        <div className="accent-line mt-3 w-24" />
       </div>
 
       {/* Alerts */}
@@ -85,69 +233,50 @@ export default function WrapUpDetailPage() {
         <div className="flex items-center justify-between px-5 py-3 border-b border-ink-100">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">Wrap-Up Items</p>
           <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full border ${
-            allDone
+            allAssessedAndDone
               ? 'bg-sage/8 border-sage/20 text-sage'
-              : outstanding > 0
+              : outstandingCount > 0
               ? 'bg-amber-50 border-amber-100 text-amber-600'
-              : 'bg-parchment border-ink-100 text-ink-500'
+              : 'bg-parchment border-ink-100 text-ink-400'
           }`}>
-            {allDone ? <CheckCircle2 size={11} /> : <Clock size={11} />}
-            {allDone ? 'All done' : `${outstanding} item${outstanding !== 1 ? 's' : ''} outstanding`}
+            {allAssessedAndDone ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+            {allAssessedAndDone
+              ? 'All done'
+              : outstandingCount > 0
+              ? `${outstandingCount} item${outstandingCount !== 1 ? 's' : ''} outstanding`
+              : 'Not yet assessed'}
           </span>
         </div>
 
-        {/* AI suggestion banner */}
-        {showAiBanner && (
-          <div className="px-5 py-3.5 border-b border-ink-100 bg-parchment/60 flex items-start justify-between gap-4">
-            <div className="flex items-start gap-2.5">
-              <Sparkles size={14} className="text-ink-400 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-ink-500 leading-relaxed">
-                Mark the items that apply to this engagement. All items are available for every engagement — check what needs to be chased.
-              </p>
-            </div>
-            <button
-              onClick={() => setAiDismissed(true)}
-              className="text-xs text-ink-400 hover:text-ink transition-colors flex-shrink-0 underline underline-offset-2"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Flag tiles */}
         <div className="p-4 flex flex-wrap gap-3">
           {POST_EVENT_FLAGS.map((flag) => {
-            const done = e.post_event_flags.includes(flag.id as PostEventFlag)
-            const overdue = flagIsOverdue(flag.id as PostEventFlag)
+            const state = getFlagState(flag.id as PostEventFlag, done, needed, notNeeded)
             return (
-              <button
+              <FlagTile
                 key={flag.id}
-                onClick={() => togglePostEventFlag(e.id, flag.id as PostEventFlag)}
-                className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98] ${
-                  done
-                    ? 'bg-sage/8 border-sage/20 hover:bg-sage/12'
-                    : overdue
-                    ? 'bg-red-50 border-red-100 hover:bg-red-100/60'
-                    : 'bg-parchment/40 border-ink-100 hover:bg-parchment hover:border-ink-200'
-                }`}
-              >
-                {done
-                  ? <CheckCircle2 size={14} className="text-sage flex-shrink-0" />
-                  : <Circle size={14} className={`flex-shrink-0 ${overdue ? 'text-red-300' : 'text-ink-200'}`} />
-                }
-                <div>
-                  <p className={`text-sm font-medium ${
-                    done ? 'text-sage-dark' : overdue ? 'text-red-600' : 'text-ink'
-                  }`}>
-                    {flag.label}
-                  </p>
-                  {overdue && !done && (
-                    <p className="text-[11px] text-red-400 mt-0.5">Overdue</p>
-                  )}
-                </div>
-              </button>
+                flag={flag as { id: PostEventFlag; label: string }}
+                state={state}
+                onNeeded={() => setPostEventFlagNeeded(e.id, flag.id as PostEventFlag)}
+                onDone={() => setPostEventFlagDone(e.id, flag.id as PostEventFlag)}
+                onNotNeeded={() => setPostEventFlagNotNeeded(e.id, flag.id as PostEventFlag)}
+                onReset={() => resetPostEventFlag(e.id, flag.id as PostEventFlag)}
+                followUpDetails={e.post_event_follow_up_details}
+                onFollowUpDetails={(v) => updatePostEventFollowUpDetails(e.id, v)}
+              />
             )
           })}
+        </div>
+
+        {/* Notes */}
+        <div className="px-5 pb-5 pt-1 border-t border-ink-100">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400 mb-2 mt-4">Notes</p>
+          <textarea
+            value={e.post_event_notes ?? ''}
+            onChange={ev => updatePostEventNotes(e.id, ev.target.value)}
+            placeholder="Any context, outstanding items, or details about this engagement's wrap-up..."
+            rows={3}
+            className="w-full text-sm bg-parchment/40 border border-ink-100 rounded-xl px-4 py-3 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-200 resize-none"
+          />
         </div>
       </div>
 
@@ -171,9 +300,9 @@ export default function WrapUpDetailPage() {
             {e.fee && (
               <div className="flex items-center gap-2.5 text-sm">
                 <DollarSign size={14} className="text-ink-300 flex-shrink-0" />
-                <span className={e.post_event_flags.includes('invoice') ? 'text-sage font-medium' : ''}>${e.fee.toLocaleString()}</span>
-                <span className={`text-xs ${e.post_event_flags.includes('invoice') ? 'text-sage' : 'text-ink-300'}`}>
-                  {e.post_event_flags.includes('invoice') ? '· Invoice handled' : '· Invoice pending'}
+                <span className={done.includes('invoice') ? 'text-sage font-medium' : ''}>${e.fee.toLocaleString()}</span>
+                <span className={`text-xs ${done.includes('invoice') ? 'text-sage' : 'text-ink-300'}`}>
+                  {done.includes('invoice') ? '· Invoice handled' : needed.includes('invoice') ? '· Invoice needed' : '· Invoice pending'}
                 </span>
               </div>
             )}
