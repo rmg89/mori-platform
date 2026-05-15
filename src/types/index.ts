@@ -26,6 +26,23 @@ export type MediaFlag = 'confirmed' | 'prep_sent' | 'bio_sent' | 'day_of_ready'
 export type PostEventFlag = 'invoice' | 'thank_you' | 'testimonial' | 'media' | 'social_media' | 'follow_up'
 export type Section = 'prospects' | 'engagements' | 'wrap-up'
 
+// ─── Wrap-Up Flag Stages ──────────────────────────────────────────────────────
+export type InvoiceStage = 'sent' | 'partial_payment' | 'paid'
+export type ThankYouStage = 'sent'
+export type TestimonialStage = 'requested' | 'received'
+export type MediaStage = 'received' | 'uploaded' | 'processed'
+export type SocialMediaStage = 'planned' | 'in_progress' | 'complete'
+export type FollowUpStage = 'done'
+
+export type WrapUpFlagStages = {
+  invoice?: InvoiceStage
+  thank_you?: ThankYouStage
+  testimonial?: TestimonialStage
+  media?: MediaStage
+  social_media?: SocialMediaStage
+  follow_up?: FollowUpStage
+}
+
 export const PROSPECT_STEPS: { id: ProspectStep; label: string; entry?: boolean; terminal?: boolean }[] = [
   { id: 'inquiry',    label: 'Inquiry',    entry: true },
   { id: 'outreach',   label: 'Outreach',   entry: true },
@@ -224,6 +241,7 @@ export interface Engagement {
   engagement_flags: EngagementFlag[]
   media_flags?: MediaFlag[]       // used instead of engagement_flags for non-speaking types
   post_event_flags: PostEventFlag[]          // flags marked as "done"
+  post_event_stages?: WrapUpFlagStages       // stage within each active flag
   post_event_needed: PostEventFlag[]         // flags marked as "needed" (but not yet done)
   post_event_not_needed: PostEventFlag[]     // flags explicitly waived
   post_event_follow_up_details?: string      // what the follow-up means for this engagement

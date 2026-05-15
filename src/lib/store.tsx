@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
-import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep } from '@/types'
+import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages } from '@/types'
 import { MOCK_ENGAGEMENTS, MOCK_REVIEW_ITEMS, MOCK_COMPANIES, MOCK_USERS } from '@/lib/mock-data'
 import type { ReviewItem, Company } from '@/types'
 
@@ -29,6 +29,7 @@ interface StoreActions {
   resetPostEventFlag: (id: string, flag: PostEventFlag) => void
   updatePostEventFollowUpDetails: (id: string, details: string) => void
   updatePostEventNotes: (id: string, notes: string) => void
+  updatePostEventStage: (id: string, stages: Partial<WrapUpFlagStages>) => void
 
   // Proposed dates
   addProposedDate: (id: string, date: string) => void
@@ -180,6 +181,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ))
   }, [])
 
+  const updatePostEventStage = useCallback((id: string, stages: Partial<WrapUpFlagStages>) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, post_event_stages: { ...e.post_event_stages, ...stages }, updated_at: new Date().toISOString() } : e
+    ))
+  }, [])
+
   const addProposedDate = useCallback((id: string, date: string) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -286,7 +293,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateEngagement, setProspectStep,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
-      updatePostEventFollowUpDetails, updatePostEventNotes,
+      updatePostEventFollowUpDetails, updatePostEventNotes, updatePostEventStage,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm,
       confirmReviewItem, dismissReviewItem,
