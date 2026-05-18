@@ -493,7 +493,6 @@ async function handle(req: NextRequest): Promise<Response> {
     const server = createMcpServer()
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless mode
-      enableJsonResponse: true,
     })
     await server.connect(transport)
     const response = await transport.handleRequest(req)
