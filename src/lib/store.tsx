@@ -1,8 +1,9 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages } from '@/types'
-import { MOCK_ENGAGEMENTS, MOCK_REVIEW_ITEMS, MOCK_COMPANIES, MOCK_USERS } from '@/lib/mock-data'
+import { MOCK_REVIEW_ITEMS, MOCK_COMPANIES } from '@/lib/mock-data'
+import { fetchAllEngagements, updateEngagementRow, upsertCall, insertComm, upsertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -11,6 +12,8 @@ interface StoreState {
   engagements: Engagement[]
   reviewItems: ReviewItem[]
   companies: Company[]
+  loading: boolean
+  error: string | null
 }
 
 interface StoreActions {
@@ -63,9 +66,9 @@ type Store = StoreState & StoreActions
 const StoreContext = createContext<Store | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [engagements, setEngagements] = useState<Engagement[]>(() =>
-    JSON.parse(JSON.stringify(MOCK_ENGAGEMENTS)) // deep clone so mock data stays clean
-  )
+  const [engagements, setEngagements] = useState<Engagement[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>(() =>
     JSON.parse(JSON.stringify(MOCK_REVIEW_ITEMS))
   )
@@ -73,37 +76,94 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     JSON.parse(JSON.stringify(MOCK_COMPANIES))
   )
 
+  // ── Load from Supabase on mount ──────────────────────────────────────────
+  useEffect(() => {
+    fetchAllEngagements()
+      .then(data => {
+        setEngagements(data)
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error('Failed to load engagements:', err)
+        setError('Failed to load data. Please refresh.')
+        setLoading(false)
+      })
+  }, [])
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  // Map EngagementFlag toggle to the correct Supabase column
+  const flagToColumn = (flag: EngagementFlag): Record<string, unknown> => {
+    const now = new Date().toISOString()
+    switch (flag) {
+      case 'contract_sent':            return { contract_sent_at: now }
+      case 'contract_signed':          return { contract_signed_at: now }
+      case 'client_deliverables_sent': return { client_deliverables_sent: true }
+      case 'advance_sheet_complete':   return { advance_sheet_complete: true }
+      case 'materials_requested':      return { materials_requested: true }
+    }
+  }
+
+  const flagOffColumn = (flag: EngagementFlag): Record<string, unknown> => {
+    switch (flag) {
+      case 'contract_sent':            return { contract_sent_at: null }
+      case 'contract_signed':          return { contract_signed_at: null }
+      case 'client_deliverables_sent': return { client_deliverables_sent: false }
+      case 'advance_sheet_complete':   return { advance_sheet_complete: false }
+      case 'materials_requested':      return { materials_requested: false }
+    }
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
   const updateCompany = useCallback((id: string, patch: Partial<Company>) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
   }, [])
 
   const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
-    setEngagements(prev => prev.map(e => ({
-      ...e,
-      contacts: e.contacts.map(c =>
-        c.email.toLowerCase() === email.toLowerCase() ? { ...c, ...patch } : c
-      ),
-    })))
+    setEngagements((prev: Engagement[]) => {
+      prev.forEach((e: Engagement) => {
+        e.contacts.forEach((c: EngagementContact) => {
+          if (c.email.toLowerCase() === email.toLowerCase()) {
+            upsertContact({ id: c.id, engagement_id: e.id, ...patch } as never).catch(console.error)
+          }
+        })
+      })
+      return prev.map((e: Engagement) => ({
+        ...e,
+        contacts: e.contacts.map((c: EngagementContact) =>
+          c.email.toLowerCase() === email.toLowerCase() ? { ...c, ...patch } : c
+        ),
+      }))
+    })
   }, [])
 
   const updateEngagement = useCallback((id: string, patch: Partial<Engagement>) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, ...patch, updated_at: new Date().toISOString() } : e
     ))
+    // Write scalar fields to Supabase (strip nested arrays which have their own tables)
+    const { contacts, comms, calls, outgoing_materials, incoming_materials, briefing_notes, alerts, engagement_flags, media_flags, post_event_flags, post_event_needed, post_event_not_needed, ...scalarPatch } = patch as Engagement
+    if (Object.keys(scalarPatch).length > 0) {
+      updateEngagementRow(id, scalarPatch as Record<string, unknown>).catch(console.error)
+    }
   }, [])
 
   const setProspectStep = useCallback((id: string, step: ProspectStep) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, prospect_step: step, updated_at: new Date().toISOString() } : e
     ))
+    updateEngagementRow(id, { prospect_step: step }).catch(console.error)
   }, [])
 
   const toggleEngagementFlag = useCallback((id: string, flag: EngagementFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
-      const flags = e.engagement_flags.includes(flag)
+      const isOn = e.engagement_flags.includes(flag)
+      const flags = isOn
         ? e.engagement_flags.filter(f => f !== flag)
         : [...e.engagement_flags, flag]
+      updateEngagementRow(id, isOn ? flagOffColumn(flag) : flagToColumn(flag)).catch(console.error)
       return { ...e, engagement_flags: flags, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -113,6 +173,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (e.id !== id) return e
       const flags = (e.media_flags ?? [])
       const next = flags.includes(flag) ? flags.filter(f => f !== flag) : [...flags, flag]
+      const colMap: Record<MediaFlag, string> = {
+        confirmed: 'media_confirmed', bio_sent: 'media_bio_sent',
+        prep_sent: 'media_prep_sent', day_of_ready: 'media_day_of_ready',
+      }
+      updateEngagementRow(id, { [colMap[flag]]: !flags.includes(flag) }).catch(console.error)
       return { ...e, media_flags: next, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -133,6 +198,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setPostEventFlagDone = useCallback((id: string, flag: PostEventFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
+      // Map flag to Supabase column
+      const colMap: Partial<Record<PostEventFlag, Record<string, unknown>>> = {
+        invoice:      { invoice_sent_at: new Date().toISOString() },
+        thank_you:    { thank_you_sent: true },
+        testimonial:  { testimonial_requested: true },
+        media:        { media_received: true },
+        social_media: { social_media_complete: true },
+        follow_up:    { follow_up_required: true },
+      }
+      if (colMap[flag]) updateEngagementRow(id, colMap[flag]!).catch(console.error)
       return {
         ...e,
         post_event_flags: [...(e.post_event_flags ?? []).filter(f => f !== flag), flag],
@@ -173,12 +248,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_follow_up_details: details, updated_at: new Date().toISOString() } : e
     ))
+    updateEngagementRow(id, { follow_up_details: details }).catch(console.error)
   }, [])
 
   const updatePostEventNotes = useCallback((id: string, notes: string) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_notes: notes, updated_at: new Date().toISOString() } : e
     ))
+    updateEngagementRow(id, { notes }).catch(console.error)
   }, [])
 
   const updatePostEventStage = useCallback((id: string, stages: Partial<WrapUpFlagStages>) => {
@@ -243,6 +320,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     ))
+    updateEngagementRow(id, { event_date: date, event_time: time ?? null }).catch(console.error)
   }, [])
 
   const addCall = useCallback((engagementId: string, call: EngagementCall) => {
@@ -251,6 +329,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? { ...e, calls: [...(e.calls ?? []), call], updated_at: new Date().toISOString() }
         : e
     ))
+    upsertCall({ ...call, engagement_id: engagementId }).catch(console.error)
   }, [])
 
   const updateCall = useCallback((engagementId: string, callId: string, patch: Partial<EngagementCall>) => {
@@ -262,6 +341,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     }))
+    upsertCall({ id: callId, engagement_id: engagementId, ...patch } as never).catch(console.error)
   }, [])
 
   const addComm = useCallback((engagementId: string, comm: CommEntry) => {
@@ -275,6 +355,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
         : e
     ))
+    insertComm({
+      engagement_id: engagementId,
+      type: comm.type,
+      date: comm.date,
+      channel: comm.channel ?? null,
+      subject: comm.subject ?? null,
+      body: comm.body ?? null,
+      from_name: comm.from_name ?? null,
+      to_name: comm.to_name ?? null,
+      contact_id: comm.contact_id ?? null,
+      staff_name: comm.staff_name ?? null,
+      needs_response: comm.needs_response ?? false,
+      response_due_by: comm.response_due_by ?? null,
+    }).catch(console.error)
   }, [])
 
   const confirmReviewItem = useCallback((id: string, confirmedBy: string) => {
@@ -289,7 +383,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      engagements, reviewItems, companies,
+      engagements, reviewItems, companies, loading, error,
       updateEngagement, setProspectStep,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
