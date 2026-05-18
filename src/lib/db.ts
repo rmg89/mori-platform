@@ -1,3 +1,5 @@
+"use client"
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Mori Platform — Supabase data layer
 // Fetches from Supabase and maps rows into the Engagement shape the app expects.
