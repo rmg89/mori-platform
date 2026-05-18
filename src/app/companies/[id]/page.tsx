@@ -24,7 +24,7 @@ export default function CompanyProfilePage() {
     .flatMap(e => e.contacts)
     .filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i) // dedupe
 
-  const hasHistory = engagements.some(e => e.section === 'post-event')
+  const hasHistory = engagements.some(e => e.section === 'wrap-up')
   const isActive = engagements.some(e => e.section === 'engagements')
   const isProspect = engagements.some(e => e.section === 'prospects')
   const statusLabel = hasHistory || isActive ? 'Client' : isProspect ? 'Prospect' : '—'
@@ -108,7 +108,7 @@ export default function CompanyProfilePage() {
             <p className="text-sm text-ink-400">No engagements yet.</p>
           ) : (
             <>
-              {(['prospects', 'engagements', 'post-event'] as const).map(section => {
+              {(['prospects', 'engagements', 'wrap-up'] as const).map(section => {
                 const sectionEngagements = engagements.filter(e => e.section === section)
                 if (sectionEngagements.length === 0) return null
                 const sectionLabel = section === 'prospects' ? 'Prospects' : section === 'engagements' ? 'Engagements' : 'Completed'

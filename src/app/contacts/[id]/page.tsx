@@ -41,12 +41,12 @@ export default function ContactProfilePage() {
   const SECTION_LABELS: Record<string, string> = {
     prospects: 'Prospect',
     engagements: 'Engagement',
-    'post-event': 'Completed',
+    'wrap-up': 'Completed',
   }
   const SECTION_COLORS: Record<string, string> = {
     prospects: '#7A9E87',
     engagements: '#C9A84C',
-    'post-event': '#4A4740',
+    'wrap-up': '#4A4740',
   }
 
   return (
@@ -124,8 +124,8 @@ export default function ContactProfilePage() {
           {contactEngagements.map(e => {
             const sectionColor = SECTION_COLORS[e.section] ?? '#4A4740'
             const sectionLabel = SECTION_LABELS[e.section] ?? e.section
-            const flags = e.section === 'post-event' ? POST_EVENT_FLAGS : ENGAGEMENT_FLAGS
-            const activeFlags = e.section === 'post-event'
+            const flags = e.section === 'wrap-up' ? POST_EVENT_FLAGS : ENGAGEMENT_FLAGS
+            const activeFlags = e.section === 'wrap-up'
               ? e.post_event_flags
               : e.engagement_flags
 
@@ -156,7 +156,7 @@ export default function ContactProfilePage() {
                 </div>
 
                 {/* Flags */}
-                {(e.section === 'engagements' || e.section === 'post-event') && (
+                {(e.section === 'engagements' || e.section === 'wrap-up') && (
                   <div className="flex items-center gap-3 flex-wrap">
                     {flags.map(flag => {
                       const done = (activeFlags as string[]).includes(flag.id)
