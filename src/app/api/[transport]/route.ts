@@ -389,6 +389,27 @@ const handler = createMcpHandler(
       return { content: [{ type: 'text' as const, text: `Call added.` }] }
     })
 
+    server.registerTool('update_call', {
+      title: 'Update Call',
+      description: 'Update an existing call record — change its status, scheduled time, or notes. Use this instead of add_call when a call already exists and just needs updating.',
+      inputSchema: {
+        call_id: z.string(),
+        status: z.enum(['requested','scheduled','completed']).optional(),
+        scheduled_at: z.string().optional(),
+        requested_at: z.string().optional(),
+        notes: z.string().optional(),
+      },
+    }, async ({ call_id, status, scheduled_at, requested_at, notes }) => {
+      const updates: Record<string, unknown> = {}
+      if (status !== undefined) updates.status = status
+      if (scheduled_at !== undefined) updates.scheduled_at = scheduled_at
+      if (requested_at !== undefined) updates.requested_at = requested_at
+      if (notes !== undefined) updates.notes = notes
+      const { error } = await supabase.from('calls').update(updates).eq('id', call_id)
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: 'Call updated.' }] }
+    })
+
     server.registerTool('add_material', {
       title: 'Add Material',
       description: 'Add a material item. outgoing = sent to client (bio, headshot etc), incoming = received from client (agenda, attendee list etc).',
