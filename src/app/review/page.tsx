@@ -94,9 +94,9 @@ export default function ReviewPage() {
 
       {pending.length === 0 && (
         <div className="bg-white border border-ink-100 rounded-xl p-12 text-center">
-          <CheckCircle2 size={32} className="text-sage mx-auto mb-3" />
-          <p className="text-sm font-semibold text-ink">All clear</p>
-          <p className="text-xs text-ink-400 mt-1">Nothing needs your attention right now.</p>
+          <Mail size={32} className="text-ink-200 mx-auto mb-3" />
+          <p className="text-sm font-semibold text-ink">No items to review</p>
+          <p className="text-xs text-ink-400 mt-1 max-w-xs mx-auto">This queue will populate once the email inbox is connected. Items flagged by AI for review will appear here.</p>
         </div>
       )}
 

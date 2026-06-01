@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages } from '@/types'
-import { MOCK_REVIEW_ITEMS } from '@/lib/mock-data'
 import { fetchAllEngagements, fetchCompanies, updateEngagementRow, updateCompanyRow, upsertCall, insertComm, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
@@ -69,9 +68,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [engagements, setEngagements] = useState<Engagement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [reviewItems, setReviewItems] = useState<ReviewItem[]>(() =>
-    JSON.parse(JSON.stringify(MOCK_REVIEW_ITEMS))
-  )
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
