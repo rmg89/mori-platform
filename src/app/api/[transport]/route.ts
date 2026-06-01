@@ -229,14 +229,27 @@ const handler = createMcpHandler(
     // ── 10. set_engagement_flag ───────────────────────────────────────────────
     server.registerTool('set_engagement_flag', {
       title: 'Set Engagement Flag',
-      description: 'Mark a workflow flag on a confirmed engagement. Use travel_not_needed or venue_not_needed to opt out whole briefing sections (e.g. virtual events have no travel/venue). Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, travel_not_needed, venue_not_needed.',
+      description: 'Mark a workflow flag on an engagement. For not_needed: pass flag="not_needed", item="<field_or_section>" and value=true to opt it out (e.g. item="deposit", item="hotel", item="travel", item="dress_code", item="moderator_info"). value=false removes it from the not_needed list. Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, not_needed.',
       inputSchema: {
         engagement_id: z.string(),
-        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','travel_not_needed','venue_not_needed']),
+        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','not_needed']),
         value: z.boolean(),
+        item: z.string().optional(),
       },
-    }, async ({ engagement_id, flag, value }) => {
+    }, async ({ engagement_id, flag, value, item }) => {
       const now = new Date().toISOString()
+      // not_needed: add or remove an item from the text[] column
+      if (flag === 'not_needed') {
+        if (!item) return { content: [{ type: 'text' as const, text: 'item is required when flag is not_needed.' }] }
+        const { data: row } = await supabase.from('engagements').select('not_needed').eq('id', engagement_id).single()
+        const current: string[] = (row as Record<string, unknown>)?.not_needed as string[] ?? []
+        const updated = value
+          ? Array.from(new Set([...current, item]))
+          : current.filter((x: string) => x !== item)
+        const { error } = await supabase.from('engagements').update({ not_needed: updated, updated_at: now }).eq('id', engagement_id)
+        if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+        return { content: [{ type: 'text' as const, text: `"${item}" ${value ? 'marked not needed' : 'removed from not_needed'}.` }] }
+      }
       const colMap: Record<string, Record<string, unknown>> = {
         contract_sent:        { contract_sent_at: value ? now : null },
         contract_signed:      { contract_signed_at: value ? now : null },
@@ -245,8 +258,6 @@ const handler = createMcpHandler(
         materials_requested:  { materials_requested: value },
         deposit_invoice_sent: { deposit_invoice_sent_at: value ? now : null },
         deposit_received:     { deposit_received_at: value ? now : null },
-        travel_not_needed:    { travel_not_needed: value },
-        venue_not_needed:     { venue_not_needed: value },
       }
       const { error } = await supabase.from('engagements').update({ ...colMap[flag], updated_at: now }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }

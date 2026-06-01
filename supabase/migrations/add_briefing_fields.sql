@@ -34,6 +34,7 @@ ALTER TABLE engagements
   -- Run of show (structured)
   ADD COLUMN IF NOT EXISTS run_of_show                jsonb DEFAULT '[]',
 
-  -- "Not needed" flags — lets Claude/EA opt out whole sections
-  ADD COLUMN IF NOT EXISTS travel_not_needed          boolean DEFAULT false,
-  ADD COLUMN IF NOT EXISTS venue_not_needed           boolean DEFAULT false;
+  -- Granular "not needed" list — any field or section name can be added here
+  -- e.g. ['deposit', 'hotel', 'dress_code', 'moderator_info', 'travel', 'venue']
+  -- Claude checks this before flagging something as missing
+  ADD COLUMN IF NOT EXISTS not_needed                 text[] DEFAULT '{}';
