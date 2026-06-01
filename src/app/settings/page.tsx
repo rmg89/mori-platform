@@ -1,8 +1,6 @@
 'use client'
 import { useState } from 'react'
 import AppShell from '@/components/layout/AppShell'
-import { MOCK_USERS } from '@/lib/mock-data'
-import { TeamUser } from '@/types'
 import { BookUser, Shield, Plug, Users } from 'lucide-react'
 import Link from 'next/link'
 
@@ -10,14 +8,6 @@ type Tab = 'users' | 'integrations'
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('users')
-  const [users, setUsers] = useState(MOCK_USERS)
-
-  function toggleRole(id: string) {
-    setUsers(prev => prev.map(u => u.id === id
-      ? { ...u, role: u.role === 'admin' ? 'regular' : 'admin' }
-      : u
-    ))
-  }
 
   return (
     <AppShell>
@@ -32,7 +22,7 @@ export default function SettingsPage() {
           {([
             { id: 'users', label: 'Users & Permissions', icon: Users },
             { id: 'integrations', label: 'Integrations', icon: Plug },
-          ] as { id: Tab; label: string; icon: any }[]).map(t => (
+          ] as { id: Tab; label: string; icon: React.ElementType }[]).map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -80,16 +70,15 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* User list */}
+            {/* User list — placeholder until user management is built */}
             <div className="bg-white border border-ink-100 rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-ink-100 bg-parchment flex items-center justify-between">
                 <p className="text-xs font-semibold text-ink-400 uppercase tracking-wider">Team Members</p>
-                <button className="text-xs text-gold hover:text-gold-dark font-medium transition-all">+ Add user</button>
               </div>
-              <div className="divide-y divide-ink-50">
-                {users.map(user => (
-                  <UserRow key={user.id} user={user} onToggleRole={toggleRole} />
-                ))}
+              <div className="px-5 py-8 text-center">
+                <Users size={24} className="text-ink-200 mx-auto mb-2" />
+                <p className="text-sm font-medium text-ink">Team management coming soon</p>
+                <p className="text-xs text-ink-400 mt-1">User accounts will be managed here once auth is fully configured.</p>
               </div>
             </div>
           </div>
@@ -99,47 +88,30 @@ export default function SettingsPage() {
         {tab === 'integrations' && (
           <div className="space-y-3">
             {[
-              { label: 'Supabase', desc: 'Database connection', status: 'Not connected' },
-              { label: 'Microsoft 365', desc: 'Email sync via Microsoft Graph API', status: 'Not connected' },
-              { label: 'Anthropic API', desc: 'Claude AI for email drafts and IG captions', status: 'Configure in .env.local' },
-              { label: 'Document Storage', desc: 'Supabase Storage for contracts, invoices, advance sheets', status: 'Not connected' },
-              { label: 'Media Storage', desc: 'Post-event media and press assets', status: 'TBD' },
+              { label: 'Supabase', desc: 'Database — engagements, contacts, companies, calls, communications', status: 'Connected', connected: true },
+              { label: 'Vercel', desc: 'Hosting and deployment', status: 'Connected', connected: true },
+              { label: 'Anthropic / Claude', desc: 'AI via MCP server — briefing, contacts, pipeline management', status: 'Connected', connected: true },
+              { label: 'Microsoft 365', desc: 'Email sync via Microsoft Graph API', status: 'Not connected', connected: false },
+              { label: 'Supabase Storage', desc: 'Document storage for contracts, invoices, briefing docs', status: 'Not connected', connected: false },
+              { label: 'Media Storage', desc: 'Post-event media and press assets', status: 'Not connected', connected: false },
             ].map(item => (
               <div key={item.label} className="bg-white border border-ink-100 rounded-xl px-5 py-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-ink">{item.label}</p>
                   <p className="text-xs text-ink-400 mt-0.5">{item.desc}</p>
                 </div>
-                <span className="text-xs text-ink-400 bg-parchment px-3 py-1 rounded-full">{item.status}</span>
+                <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                  item.connected
+                    ? 'text-sage bg-sage/10'
+                    : 'text-ink-400 bg-parchment'
+                }`}>
+                  {item.status}
+                </span>
               </div>
             ))}
           </div>
         )}
       </div>
     </AppShell>
-  )
-}
-
-function UserRow({ user, onToggleRole }: { user: TeamUser, onToggleRole: (id: string) => void }) {
-  return (
-    <div className="flex items-center gap-4 px-5 py-3.5">
-      <div className="w-8 h-8 rounded-full bg-ink-800 flex items-center justify-center text-xs font-bold text-gold flex-shrink-0">
-        {user.avatar_initials}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-ink">{user.name}</p>
-        <p className="text-xs text-ink-400">{user.email} · {user.account}</p>
-      </div>
-      <button
-        onClick={() => onToggleRole(user.id)}
-        className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all hover:opacity-80 ${
-          user.role === 'admin'
-            ? 'text-gold bg-gold/10 border-gold/20'
-            : 'text-ink-400 bg-parchment border-ink-200'
-        }`}
-      >
-        {user.role === 'admin' ? 'Admin' : 'Regular'}
-      </button>
-    </div>
   )
 }
