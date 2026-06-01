@@ -437,9 +437,38 @@ export async function updateEngagementRow(id: string, patch: Record<string, unkn
   if (error) throw new Error(`updateEngagementRow: ${error.message}`)
 }
 
+export async function insertContact(engagement_id: string, contact: Omit<ContactRow, 'id'>): Promise<string | null> {
+  const { data, error } = await supabase.from('contacts').insert({ ...contact, engagement_id }).select('id').single()
+  if (error) { console.error('insertContact:', error.message); return null }
+  return data.id
+}
+
 export async function upsertContact(contact: Partial<ContactRow> & { engagement_id: string }): Promise<void> {
+  // Only upsert if the id looks like a real UUID (not a temp id from the UI)
+  if (!contact.id || /^(new_|lnk_)/.test(contact.id)) return
   const { error } = await supabase.from('contacts').upsert(contact)
   if (error) throw new Error(`upsertContact: ${error.message}`)
+}
+
+export async function fetchCompanies(): Promise<import('@/types').Company[]> {
+  const { data, error } = await supabase.from('companies').select('*').order('name')
+  if (error) throw new Error(`fetchCompanies: ${error.message}`)
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    id: row.id as string,
+    name: row.name as string,
+    industry: (row.industry as string) ?? undefined,
+    website: (row.website as string) ?? undefined,
+    notes: (row.notes as string) ?? undefined,
+    watching: (row.watching as boolean) ?? false,
+    teams: [],
+    engagement_ids: [],
+    contact_ids: [],
+  }))
+}
+
+export async function updateCompanyRow(id: string, patch: Record<string, unknown>): Promise<void> {
+  const { error } = await supabase.from('companies').update(patch).eq('id', id)
+  if (error) throw new Error(`updateCompanyRow: ${error.message}`)
 }
 
 export async function insertComm(comm: Omit<CommRow, 'id'>): Promise<void> {

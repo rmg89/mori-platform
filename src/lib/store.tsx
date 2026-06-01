@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages } from '@/types'
-import { MOCK_REVIEW_ITEMS, MOCK_COMPANIES } from '@/lib/mock-data'
-import { fetchAllEngagements, updateEngagementRow, upsertCall, insertComm, upsertContact } from '@/lib/db'
+import { MOCK_REVIEW_ITEMS } from '@/lib/mock-data'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, updateCompanyRow, upsertCall, insertComm, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -72,19 +72,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>(() =>
     JSON.parse(JSON.stringify(MOCK_REVIEW_ITEMS))
   )
-  const [companies, setCompanies] = useState<Company[]>(() =>
-    JSON.parse(JSON.stringify(MOCK_COMPANIES))
-  )
+  const [companies, setCompanies] = useState<Company[]>([])
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
   useEffect(() => {
-    fetchAllEngagements()
-      .then(data => {
-        setEngagements(data)
+    Promise.all([fetchAllEngagements(), fetchCompanies()])
+      .then(([engData, coData]) => {
+        setEngagements(engData)
+        setCompanies(coData)
         setLoading(false)
       })
       .catch(err => {
-        console.error('Failed to load engagements:', err)
+        console.error('Failed to load data:', err)
         setError('Failed to load data. Please refresh.')
         setLoading(false)
       })
@@ -118,6 +117,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateCompany = useCallback((id: string, patch: Partial<Company>) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
+    const { teams, engagement_ids, contact_ids, ...dbPatch } = patch
+    if (Object.keys(dbPatch).length > 0) updateCompanyRow(id, dbPatch as Record<string, unknown>).catch(console.error)
   }, [])
 
   const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
@@ -146,6 +147,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const { contacts, comms, calls, outgoing_materials, incoming_materials, briefing_notes, alerts, engagement_flags, media_flags, post_event_flags, post_event_needed, post_event_not_needed, ...scalarPatch } = patch as Engagement
     if (Object.keys(scalarPatch).length > 0) {
       updateEngagementRow(id, scalarPatch as Record<string, unknown>).catch(console.error)
+    }
+    // Persist any new contacts (temp IDs = new or linked from UI)
+    if (contacts) {
+      contacts.forEach(c => {
+        if (/^(new_|lnk_)/.test(c.id)) {
+          insertContact(id, {
+            engagement_id: id,
+            first_name: c.first_name,
+            last_name: c.last_name ?? '',
+            email: c.email ?? null,
+            phone: c.phone ?? null,
+            title: c.title ?? null,
+            role: c.role ?? 'primary',
+            is_current_point_of_contact: c.is_current_point_of_contact,
+            status: (c.status as string) ?? 'prospect_active',
+            watching: c.watching ?? false,
+            notes: c.notes ?? null,
+          }).catch(console.error)
+        }
+      })
     }
   }, [])
 
