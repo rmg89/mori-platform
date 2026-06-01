@@ -380,10 +380,11 @@ const handler = createMcpHandler(
         type: z.enum(['discovery','mori']),
         status: z.enum(['requested','scheduled','completed']),
         scheduled_at: z.string().optional(),
+        requested_at: z.string().optional(),
         notes: z.string().optional(),
       },
-    }, async ({ engagement_id, type, status, scheduled_at, notes }) => {
-      const { error } = await supabase.from('calls').insert({ engagement_id, type, status, scheduled_at, notes, added_by: 'ai', requested_at: new Date().toISOString() })
+    }, async ({ engagement_id, type, status, scheduled_at, requested_at, notes }) => {
+      const { error } = await supabase.from('calls').insert({ engagement_id, type, status, scheduled_at, notes, added_by: 'ai', requested_at: requested_at ?? new Date().toISOString() })
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
       return { content: [{ type: 'text' as const, text: `Call added.` }] }
     })
