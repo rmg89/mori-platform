@@ -12,7 +12,8 @@ import {
   Download, FileText, Mic, Radio, Newspaper,
   Clock, Wifi, Hotel, Plane, ExternalLink,
   Pencil, Check, X, Plus, Trash2, GripVertical, ChevronDown,
-  FileCheck, Upload, Pin, PinOff, ArrowDown, Paperclip, Building2
+  FileCheck, Upload, Pin, PinOff, ArrowDown, Paperclip, Building2,
+  Receipt
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -848,6 +849,144 @@ function ContactsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement
   )
 }
 
+// ─── Deposit Card ─────────────────────────────────────────────────────────────
+
+function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const [downloading, setDownloading] = useState(false)
+  const [editingAmount, setEditingAmount] = useState(false)
+  const [amountDraft, setAmountDraft] = useState('')
+
+  const sent = !!(e as any).deposit_invoice_sent_at
+  const received = !!(e as any).deposit_received_at
+  const amount = (e as any).deposit_amount as number | undefined
+
+  const status = received ? 'received' : sent ? 'sent' : 'pending'
+
+  function saveAmount() {
+    const parsed = parseFloat(amountDraft.replace(/[^0-9.]/g, ''))
+    if (!isNaN(parsed)) save({ deposit_amount: parsed } as any)
+    setEditingAmount(false)
+  }
+
+  function markSent() {
+    save({ deposit_invoice_sent_at: new Date().toISOString() } as any)
+  }
+  function markReceived() {
+    save({ deposit_received_at: new Date().toISOString() } as any)
+  }
+  function undo(field: string) {
+    save({ [field]: undefined } as any)
+  }
+
+  async function handleDownload() {
+    if (!amount) return
+    setDownloading(true)
+    try {
+      const { generateDepositInvoice } = await import('@/lib/documents')
+      const invoiceNum = `DEP-${e.id.slice(0, 6).toUpperCase()}`
+      const blob = generateDepositInvoice(e, invoiceNum)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `deposit-invoice-${e.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  return (
+    <div className="bg-white border border-ink-100 rounded-xl p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Receipt size={14} className="text-gold" />
+          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium">Deposit Invoice</p>
+        </div>
+
+        {/* Status badge */}
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+          status === 'received' ? 'bg-sage/10 text-sage' :
+          status === 'sent'     ? 'bg-gold/10 text-gold-dark' :
+          'bg-parchment text-ink-300'
+        }`}>
+          {status === 'received' ? 'Received' : status === 'sent' ? 'Invoice Sent' : 'Not Sent'}
+        </span>
+      </div>
+
+      <div className="flex items-end gap-6">
+        {/* Amount */}
+        <div className="flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300 mb-1.5">Deposit Amount</p>
+          {editingAmount ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={amountDraft}
+                onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setAmountDraft(ev.target.value)}
+                onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => { if (ev.key === 'Enter') saveAmount(); if (ev.key === 'Escape') setEditingAmount(false) }}
+                placeholder="e.g. 5000"
+                className="w-32 text-sm text-ink bg-parchment border border-gold/40 rounded-lg px-2.5 py-1 focus:outline-none focus:border-gold"
+              />
+              <button onClick={saveAmount} className="p-1 text-sage hover:text-sage-dark"><Check size={13} /></button>
+              <button onClick={() => setEditingAmount(false)} className="p-1 text-ink-300 hover:text-ink"><X size={13} /></button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setAmountDraft(amount ? String(amount) : ''); setEditingAmount(true) }}
+              className="text-left group">
+              {amount
+                ? <span className="text-2xl font-semibold text-ink group-hover:text-gold transition-colors">{formatCurrency(amount)}</span>
+                : <span className="text-sm text-ink-300 italic group-hover:text-ink transition-colors">Set deposit amount…</span>
+              }
+            </button>
+          )}
+          {/* Sent / received timestamps */}
+          <div className="mt-2 space-y-0.5">
+            {sent && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-ink-300">Invoice sent {formatDate((e as any).deposit_invoice_sent_at)}</span>
+                {!received && (
+                  <button onClick={() => undo('deposit_invoice_sent_at')} className="text-[10px] text-ink-200 hover:text-ink-400 transition-colors">undo</button>
+                )}
+              </div>
+            )}
+            {received && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-sage font-medium">Deposit received {formatDate((e as any).deposit_received_at)}</span>
+                <button onClick={() => undo('deposit_received_at')} className="text-[10px] text-ink-200 hover:text-ink-400 transition-colors">undo</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2 flex-shrink-0">
+          {amount && (
+            <button onClick={handleDownload} disabled={downloading}
+              className="flex items-center gap-1.5 text-xs font-medium text-gold hover:text-gold-dark border border-gold/30 hover:border-gold/60 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+              <Download size={11} />
+              {downloading ? 'Generating…' : 'Download PDF'}
+            </button>
+          )}
+          {!sent && (
+            <button onClick={markSent}
+              className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all">
+              <Check size={11} /> Mark Invoice Sent
+            </button>
+          )}
+          {sent && !received && (
+            <button onClick={markReceived}
+              className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all">
+              <Check size={11} /> Mark Deposit Received
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Progress Track ────────────────────────────────────────────────────────────
 
 type ZoneKey = 'contract' | 'outgoing' | 'incoming' | 'briefing'
@@ -1649,6 +1788,9 @@ export default function EngagementDetailPage() {
 
         <ContactsCard e={e} save={save} />
       </div>
+
+      {/* Deposit Invoice */}
+      <DepositCard e={e} save={save} />
 
       {/* Briefing Document */}
       <BriefingDocument e={e} />

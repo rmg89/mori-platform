@@ -246,7 +246,10 @@ export interface Engagement {
   post_event_not_needed: PostEventFlag[]     // flags explicitly waived
   post_event_follow_up_details?: string      // what the follow-up means for this engagement
   post_event_notes?: string                  // general wrap-up notes/context
-  invoice_sent_at?: string        // ISO date when invoice was sent
+  invoice_sent_at?: string
+  deposit_amount?: number
+  deposit_invoice_sent_at?: string
+  deposit_received_at?: string
 
   // ── Engagement progress (replaces flat engagement_flags for speaking) ──────
   contract_required?: boolean

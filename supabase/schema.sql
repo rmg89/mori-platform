@@ -115,6 +115,11 @@ create table engagements (
   post_event_notes         text,
   invoice_sent_at          timestamptz,
 
+  -- ── Deposit invoice ───────────────────────────────────────
+  deposit_amount           numeric(10,2),
+  deposit_invoice_sent_at  timestamptz,
+  deposit_received_at      timestamptz,
+
   -- ── Last contact (mirrors sheet) ─────────────────────────
   last_contact_date   date,
   last_contact_notes  text,

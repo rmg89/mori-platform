@@ -206,10 +206,10 @@ const handler = createMcpHandler(
 
     server.registerTool('update_engagement_field', {
       title: 'Update Engagement Field',
-      description: 'Update a specific field on an engagement. Allowed: organization, event_name, event_date, event_time, event_city, event_location, event_format, topic, fee, session_length, audience_size, travel_covered, travel_destination, hotel_covered, av_needs, source, booker_name, notes, outstanding_items, follow_up_details.',
+      description: 'Update a specific field on an engagement. Allowed: organization, event_name, event_date, event_time, event_city, event_location, event_format, topic, fee, deposit_amount, session_length, audience_size, travel_covered, travel_destination, hotel_covered, av_needs, source, booker_name, notes, outstanding_items, follow_up_details.',
       inputSchema: {
         engagement_id: z.string(),
-        field: z.enum(['organization','event_name','event_date','event_time','event_city','event_location','event_format','topic','fee','session_length','audience_size','travel_covered','travel_destination','hotel_covered','av_needs','source','booker_name','notes','outstanding_items','follow_up_details']),
+        field: z.enum(['organization','event_name','event_date','event_time','event_city','event_location','event_format','topic','fee','deposit_amount','session_length','audience_size','travel_covered','travel_destination','hotel_covered','av_needs','source','booker_name','notes','outstanding_items','follow_up_details']),
         value: z.union([z.string(), z.number(), z.boolean()]),
       },
     }, async ({ engagement_id, field, value }) => {
@@ -220,10 +220,10 @@ const handler = createMcpHandler(
 
     server.registerTool('set_engagement_flag', {
       title: 'Set Engagement Flag',
-      description: 'Mark a workflow flag on a confirmed engagement: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested.',
+      description: 'Mark a workflow flag on a confirmed engagement: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received.',
       inputSchema: {
         engagement_id: z.string(),
-        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested']),
+        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received']),
         value: z.boolean(),
       },
     }, async ({ engagement_id, flag, value }) => {
@@ -234,6 +234,8 @@ const handler = createMcpHandler(
         materials_sent: { client_deliverables_sent: value },
         briefing_complete: { briefing_complete: value, briefing_complete_at: value ? now : null },
         materials_requested: { materials_requested: value },
+        deposit_invoice_sent: { deposit_invoice_sent_at: value ? now : null },
+        deposit_received: { deposit_received_at: value ? now : null },
       }
       const { error } = await supabase.from('engagements').update({ ...colMap[flag], updated_at: now }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }

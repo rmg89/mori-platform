@@ -53,6 +53,9 @@ interface EngagementRow {
   briefing_complete_at: string | null
   invoice_sent_at: string | null
   payment_received_at: string | null
+  deposit_amount: number | null
+  deposit_invoice_sent_at: string | null
+  deposit_received_at: string | null
   thank_you_sent: boolean
   testimonial_requested: boolean
   media_received: boolean
@@ -326,6 +329,9 @@ function assembleEngagement(
     briefing_complete_at: row.briefing_complete_at ?? undefined,
     briefing_notes: briefingNotes.map(mapBriefingNote),
     invoice_sent_at: row.invoice_sent_at ?? undefined,
+    deposit_amount: row.deposit_amount ?? undefined,
+    deposit_invoice_sent_at: row.deposit_invoice_sent_at ?? undefined,
+    deposit_received_at: row.deposit_received_at ?? undefined,
 
     outgoing_materials: materials.filter(m => m.direction === 'outgoing').map(mapOutgoing),
     incoming_materials: materials.filter(m => m.direction === 'incoming').map(mapIncoming),

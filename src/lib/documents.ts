@@ -549,3 +549,103 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
   addFooter(doc, 1)
   return doc.output('blob')
 }
+
+// ─── Deposit Invoice ───────────────────────────────────────────────────────────
+
+export function generateDepositInvoice(client: Client, invoiceNumber: string): Blob {
+  const doc = createDoc()
+  addHeader(doc, 'Deposit Invoice')
+
+  let y = 110
+
+  doc.setFontSize(10)
+  doc.setTextColor(15, 14, 12)
+  addField(doc, 'Invoice Number', invoiceNumber, 50, y)
+  addField(doc, 'Invoice Date', formatDate(new Date().toISOString()), 200, y)
+  addField(doc, 'Due Date', formatDate(new Date(Date.now() + 14 * 86400000).toISOString()), 370, y)
+  y += 50
+
+  doc.setDrawColor(201, 168, 76)
+  doc.setLineWidth(0.5)
+  doc.line(50, y, 562, y)
+  y += 16
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'bold')
+  doc.text('BILLED TO', 50, y)
+  y += 16
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(60, 58, 54)
+  doc.text(`${pc(client)?.first_name || '—'} ${pc(client)?.last_name || '—'}`, 50, y); y += 14
+  if (pc(client)?.title) { doc.text(pc(client)!.title!, 50, y); y += 14 }
+  doc.text(client.organization, 50, y); y += 14
+  doc.text(pc(client)?.email || '—', 50, y); y += 30
+
+  doc.setDrawColor(201, 168, 76)
+  doc.line(50, y, 562, y)
+  y += 16
+
+  doc.setFillColor(247, 246, 243)
+  doc.rect(50, y - 6, 512, 22, 'F')
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(100, 97, 90)
+  doc.text('DESCRIPTION', 60, y + 8)
+  doc.text('AMOUNT', 530, y + 8, { align: 'right' })
+  y += 30
+
+  const depositAmount = client.deposit_amount ?? 0
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(15, 14, 12)
+  const desc = `Deposit — ${client.event_name || client.topic || 'Speaking Engagement'}\n${formatDate(client.event_date)} · ${client.event_city || ''} · ${client.organization}`
+  const descLines = doc.splitTextToSize(desc, 380)
+  doc.text(descLines, 60, y)
+  doc.text(formatCurrency(depositAmount), 530, y, { align: 'right' })
+  y += descLines.length * 14 + 10
+
+  y += 10
+  doc.setDrawColor(201, 168, 76)
+  doc.line(400, y, 562, y)
+  y += 14
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text('DEPOSIT DUE', 400, y)
+  doc.text(formatCurrency(depositAmount), 530, y, { align: 'right' })
+  y += 30
+
+  if (client.fee && client.fee > depositAmount) {
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'italic')
+    doc.setTextColor(100, 97, 90)
+    const balanceNote = doc.splitTextToSize(`Balance of ${formatCurrency(client.fee - depositAmount)} due per separate final invoice after the event.`, 162)
+    doc.text(balanceNote, 530, y, { align: 'right' })
+    y += balanceNote.length * 13 + 10
+  }
+  y += 10
+
+  doc.setDrawColor(200, 198, 194)
+  doc.line(50, y, 562, y)
+  y += 16
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(15, 14, 12)
+  doc.text('PAYMENT INSTRUCTIONS', 50, y)
+  y += 14
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(60, 58, 54)
+  const payLines = [
+    'Wire Transfer / ACH: [TODO: Add bank details]',
+    'Check payable to: Mori Taheripour',
+    'Please include invoice number in payment reference.',
+    'Questions: team@moritaheripour.com',
+  ]
+  for (const l of payLines) { doc.text(l, 50, y); y += 14 }
+  y += 20
+  doc.setFontSize(9)
+  doc.setTextColor(100, 97, 90)
+  doc.text('Thank you for the opportunity to work together.', 50, y)
+
+  addFooter(doc, 1)
+  return doc.output('blob')
+}
