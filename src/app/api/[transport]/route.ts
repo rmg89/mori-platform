@@ -83,7 +83,7 @@ const handler = createMcpHandler(
     // ── 2. get_engagement ─────────────────────────────────────────────────────
     server.registerTool('get_engagement', {
       title: 'Get Engagement',
-      description: 'Get full details for a single engagement including contacts, recent communications, calls, materials, and briefing notes.',
+      description: 'Get full details for a single engagement including contacts, communications, calls, materials, and briefing notes. The engagement row also contains the briefing document fields: purpose, audience_description, join_link (virtual), arrival_time (in-person), venue_maps_link, flight_details, hotel_name, ground_transport, moderator_info, panelist_info, dress_code, etc. Null = not yet filled in. travel_not_needed/venue_not_needed flags indicate those sections were deliberately skipped.',
       inputSchema: { id: z.string().optional(), organization: z.string().optional() },
     }, async ({ id, organization }) => {
       let row: Record<string, unknown> | null = null
@@ -198,10 +198,26 @@ const handler = createMcpHandler(
     // ── 9. update_engagement_field ────────────────────────────────────────────
     server.registerTool('update_engagement_field', {
       title: 'Update Engagement Field',
-      description: 'Update a specific field on an engagement. Allowed fields: organization, event_name, event_date, event_time, event_city, event_location, event_format, topic, fee, deposit_amount, session_length, audience_size, travel_covered, travel_destination, hotel_covered, av_needs, source, booker_name, notes, outstanding_items, follow_up_details.',
+      description: 'Update any field on an engagement — event details, briefing doc content, or logistics. Briefing doc fields: purpose, audience_description, join_link, dial_in_backup, green_room_time, go_live_time, arrival_time, venue_maps_link, venue_special_instructions, flight_details, flight_confirmation, hotel_name, hotel_checkin, hotel_confirmation, hotel_maps_link, ground_transport, drive_time, drive_route_link, parking_details, moderator_info, panelist_info, vip_info, dress_code.',
       inputSchema: {
         engagement_id: z.string(),
-        field: z.enum(['organization','event_name','event_date','event_time','event_city','event_location','event_format','topic','fee','deposit_amount','session_length','audience_size','travel_covered','travel_destination','hotel_covered','av_needs','source','booker_name','notes','outstanding_items','follow_up_details']),
+        field: z.enum([
+          // Core event details
+          'organization','event_name','event_date','event_time','event_city','event_location',
+          'event_format','topic','fee','deposit_amount','session_length','audience_size',
+          'travel_covered','travel_destination','hotel_covered','av_needs','source',
+          'booker_name','notes','outstanding_items','follow_up_details',
+          // Briefing — prep context
+          'purpose','audience_description','dress_code','moderator_info','panelist_info','vip_info',
+          // Briefing — virtual logistics
+          'join_link','dial_in_backup','green_room_time','go_live_time',
+          // Briefing — in-person venue
+          'arrival_time','venue_maps_link','venue_special_instructions',
+          // Briefing — travel
+          'flight_details','flight_confirmation','hotel_name','hotel_checkin',
+          'hotel_confirmation','hotel_maps_link','ground_transport',
+          'drive_time','drive_route_link','parking_details',
+        ]),
         value: z.union([z.string(), z.number(), z.boolean()]),
       },
     }, async ({ engagement_id, field, value }) => {
@@ -213,10 +229,10 @@ const handler = createMcpHandler(
     // ── 10. set_engagement_flag ───────────────────────────────────────────────
     server.registerTool('set_engagement_flag', {
       title: 'Set Engagement Flag',
-      description: 'Mark a workflow flag on a confirmed engagement: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received.',
+      description: 'Mark a workflow flag on a confirmed engagement. Use travel_not_needed or venue_not_needed to opt out whole briefing sections (e.g. virtual events have no travel/venue). Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, travel_not_needed, venue_not_needed.',
       inputSchema: {
         engagement_id: z.string(),
-        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received']),
+        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','travel_not_needed','venue_not_needed']),
         value: z.boolean(),
       },
     }, async ({ engagement_id, flag, value }) => {
@@ -229,6 +245,8 @@ const handler = createMcpHandler(
         materials_requested:  { materials_requested: value },
         deposit_invoice_sent: { deposit_invoice_sent_at: value ? now : null },
         deposit_received:     { deposit_received_at: value ? now : null },
+        travel_not_needed:    { travel_not_needed: value },
+        venue_not_needed:     { venue_not_needed: value },
       }
       const { error } = await supabase.from('engagements').update({ ...colMap[flag], updated_at: now }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
