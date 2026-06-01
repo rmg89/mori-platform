@@ -358,6 +358,15 @@ function assembleEngagement(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function fetchAllEngagements(): Promise<Engagement[]> {
+  // Auto-transition any confirmed engagement whose event date has passed into wrap-up
+  const today = new Date().toISOString().split('T')[0]
+  await supabase
+    .from('engagements')
+    .update({ section: 'wrap-up' })
+    .eq('section', 'engagements')
+    .eq('archived', false)
+    .lt('event_date', today)
+
   const [
     { data: engRows, error: engError },
     { data: contactRows },
