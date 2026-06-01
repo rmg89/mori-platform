@@ -6,7 +6,7 @@ import {
   ClipboardCheck, Sparkles, Settings, Building2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { MOCK_REVIEW_ITEMS } from '@/lib/mock-data'
+import { useStore } from '@/lib/store'
 
 const NAV = [
   { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
@@ -20,7 +20,8 @@ const NAV = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const reviewCount = MOCK_REVIEW_ITEMS.filter(i => !i.confirmed_at).length
+  const { reviewItems } = useStore()
+  const reviewCount = reviewItems.filter(i => !i.confirmed_by).length
 
   return (
     <div className="flex h-screen overflow-hidden bg-parchment">
