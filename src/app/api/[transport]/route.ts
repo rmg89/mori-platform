@@ -428,6 +428,152 @@ const handler = createMcpHandler(
       return { content: [{ type: 'text' as const, text: `Material "${label}" added.` }] }
     })
 
+    server.registerTool('create_prospect', {
+      title: 'Create Prospect',
+      description: 'Create a new prospect in the pipeline. Use this when a new inquiry or lead comes in. Returns the new engagement id.',
+      inputSchema: {
+        organization: z.string(),
+        prospect_step: z.enum(['inquiry','outreach','in_contact']).optional(),
+        event_type: z.enum(['speaking','podcast','interview','panel','livestream','coaching']).optional(),
+        event_name: z.string().optional(),
+        event_date: z.string().optional(),
+        event_city: z.string().optional(),
+        event_format: z.enum(['in_person','virtual','hybrid']).optional(),
+        fee: z.number().optional(),
+        source: z.string().optional(),
+        booker_name: z.string().optional(),
+        topic: z.string().optional(),
+        notes: z.string().optional(),
+      },
+    }, async ({ organization, prospect_step, event_type, event_name, event_date, event_city, event_format, fee, source, booker_name, topic, notes }) => {
+      const now = new Date().toISOString()
+      const { data, error } = await supabase.from('engagements').insert({
+        organization, section: 'prospects',
+        prospect_step: prospect_step ?? 'inquiry',
+        event_type: event_type ?? 'speaking',
+        event_name, event_date, event_city, event_format, fee, source, booker_name, topic, notes,
+        archived: false, created_at: now, updated_at: now, last_activity_at: now,
+      }).select('id').single()
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: `Prospect created. id: ${data.id}` }] }
+    })
+
+    server.registerTool('add_contact', {
+      title: 'Add Contact',
+      description: 'Add a new contact to an engagement. Use is_point_of_contact: true for the primary person Claude should communicate with.',
+      inputSchema: {
+        engagement_id: z.string(),
+        first_name: z.string(),
+        last_name: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        title: z.string().optional(),
+        role: z.enum(['primary','bureau','legal','logistics','av','assistant','other']).optional(),
+        is_point_of_contact: z.boolean().optional(),
+        notes: z.string().optional(),
+      },
+    }, async ({ engagement_id, first_name, last_name, email, phone, title, role, is_point_of_contact, notes }) => {
+      const { error } = await supabase.from('contacts').insert({
+        engagement_id, first_name, last_name: last_name ?? '', email, phone, title,
+        role: role ?? 'primary',
+        is_current_point_of_contact: is_point_of_contact ?? false,
+        status: 'prospect_active', watching: false, notes,
+      })
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: `Contact ${first_name} ${last_name ?? ''} added.` }] }
+    })
+
+    server.registerTool('update_contact', {
+      title: 'Update Contact',
+      description: 'Update an existing contact by their id. Get the id from get_contacts or get_engagement.',
+      inputSchema: {
+        contact_id: z.string(),
+        first_name: z.string().optional(),
+        last_name: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        title: z.string().optional(),
+        role: z.enum(['primary','bureau','legal','logistics','av','assistant','other']).optional(),
+        is_point_of_contact: z.boolean().optional(),
+        notes: z.string().optional(),
+      },
+    }, async ({ contact_id, first_name, last_name, email, phone, title, role, is_point_of_contact, notes }) => {
+      const updates: Record<string, unknown> = {}
+      if (first_name !== undefined) updates.first_name = first_name
+      if (last_name !== undefined) updates.last_name = last_name
+      if (email !== undefined) updates.email = email
+      if (phone !== undefined) updates.phone = phone
+      if (title !== undefined) updates.title = title
+      if (role !== undefined) updates.role = role
+      if (is_point_of_contact !== undefined) updates.is_current_point_of_contact = is_point_of_contact
+      if (notes !== undefined) updates.notes = notes
+      const { error } = await supabase.from('contacts').update(updates).eq('id', contact_id)
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: 'Contact updated.' }] }
+    })
+
+    server.registerTool('remove_contact', {
+      title: 'Remove Contact',
+      description: 'Remove a contact from an engagement by their contact id.',
+      inputSchema: { contact_id: z.string() },
+    }, async ({ contact_id }) => {
+      const { error } = await supabase.from('contacts').delete().eq('id', contact_id)
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: 'Contact removed.' }] }
+    })
+
+    server.registerTool('get_companies', {
+      title: 'Get Companies',
+      description: 'List all companies, or search by name. Returns id, name, industry, website, watching status.',
+      inputSchema: { name: z.string().optional(), watching_only: z.boolean().optional() },
+    }, async ({ name, watching_only }) => {
+      let q = supabase.from('companies').select('id,name,industry,website,watching,notes').order('name')
+      if (name) q = q.ilike('name', `%${name}%`)
+      if (watching_only) q = q.eq('watching', true)
+      const { data, error } = await q
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? [], null, 2) }] }
+    })
+
+    server.registerTool('create_company', {
+      title: 'Create Company',
+      description: 'Create a new company record. Returns the new company id.',
+      inputSchema: {
+        name: z.string(),
+        industry: z.string().optional(),
+        website: z.string().optional(),
+        watching: z.boolean().optional(),
+        notes: z.string().optional(),
+      },
+    }, async ({ name, industry, website, watching, notes }) => {
+      const { data, error } = await supabase.from('companies').insert({ name, industry, website, watching: watching ?? false, notes }).select('id').single()
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: `Company "${name}" created. id: ${data.id}` }] }
+    })
+
+    server.registerTool('update_company', {
+      title: 'Update Company',
+      description: 'Update a company record by id. Use get_companies to find the id.',
+      inputSchema: {
+        company_id: z.string(),
+        name: z.string().optional(),
+        industry: z.string().optional(),
+        website: z.string().optional(),
+        watching: z.boolean().optional(),
+        notes: z.string().optional(),
+      },
+    }, async ({ company_id, name, industry, website, watching, notes }) => {
+      const updates: Record<string, unknown> = {}
+      if (name !== undefined) updates.name = name
+      if (industry !== undefined) updates.industry = industry
+      if (website !== undefined) updates.website = website
+      if (watching !== undefined) updates.watching = watching
+      if (notes !== undefined) updates.notes = notes
+      const { error } = await supabase.from('companies').update(updates).eq('id', company_id)
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: 'Company updated.' }] }
+    })
+
     server.registerTool('archive_engagement', {
       title: 'Archive Engagement',
       description: 'Archive an engagement so it no longer appears in the active pipeline. Cannot be undone from Claude.',
