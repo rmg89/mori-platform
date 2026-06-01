@@ -452,7 +452,7 @@ export async function upsertContact(contact: Partial<ContactRow> & { engagement_
 
 export async function fetchCompanies(): Promise<import('@/types').Company[]> {
   const { data, error } = await supabase.from('companies').select('*').order('name')
-  if (error) throw new Error(`fetchCompanies: ${error.message}`)
+  if (error) { console.warn('fetchCompanies:', error.message); return [] }
   return (data ?? []).map((row: Record<string, unknown>) => ({
     id: row.id as string,
     name: row.name as string,
