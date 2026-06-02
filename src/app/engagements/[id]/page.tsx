@@ -212,10 +212,11 @@ function useProgressState(e: Engagement, save: (p: Partial<Engagement>) => void)
 
 // ─── Incoming Item ────────────────────────────────────────────────────────────
 
-function IncomingItem({ item, overdue, captured, onUndo, onRemove, onPin, onCaptureNote, onCaptureLink, onAttachFile, onRemoveFile }: {
+function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove, onPin, onCaptureNote, onCaptureLink, onAttachFile, onRemoveFile }: {
   item: IncomingMaterial
   overdue: boolean
   captured: boolean
+  engagementId: string
   onUndo: () => void
   onRemove: () => void
   onPin: () => void
@@ -351,12 +352,17 @@ function IncomingItem({ item, overdue, captured, onUndo, onRemove, onPin, onCapt
             <label className="text-xs text-ink-300 hover:text-ink-500 cursor-pointer transition-colors">
               Upload file…
               <input type="file" className="hidden"
-                onChange={(ev: React.ChangeEvent<HTMLInputElement>) => {
+                onChange={async (ev: React.ChangeEvent<HTMLInputElement>) => {
                   const file = ev.target.files?.[0]
                   if (!file) return
-                  // TODO: upload to Supabase storage, get URL back
-                  const url = URL.createObjectURL(file)
-                  onAttachFile(url, file.name)
+                  const fd = new FormData()
+                  fd.append('file', file)
+                  fd.append('engagement_id', engagementId)
+                  const res = await fetch('/api/upload', { method: 'POST', body: fd })
+                  if (res.ok) {
+                    const { url, name } = await res.json()
+                    onAttachFile(url, name)
+                  }
                 }} />
             </label>
           )}
@@ -1264,6 +1270,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
                 const captured = item.received
                 return (
                   <IncomingItem key={item.id} item={item} overdue={overdue} captured={captured}
+                    engagementId={e.id}
                     onUndo={() => toggleIncoming(item.id)}
                     onRemove={() => removeIncoming(item.id)}
                     onPin={() => toggleIncomingPin(item.id)}

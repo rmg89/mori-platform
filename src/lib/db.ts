@@ -71,6 +71,11 @@ interface EngagementRow {
   notes: string | null
   outstanding_items: string | null
   media_links: string | null
+  outgoing_materials: unknown[] | null
+  incoming_materials: unknown[] | null
+  outgoing_not_needed: boolean
+  incoming_not_needed: boolean
+  not_needed: string[] | null
 }
 
 interface ContactRow {
@@ -282,9 +287,12 @@ function deriveAlerts(row: EngagementRow): EngagementAlert[] {
   }
 
   // Event approaching (within 7 days)
+  // Compare whole calendar days in local time to avoid UTC midnight timezone shifts
   if (row.event_date && row.section === 'engagements') {
-    const eventDate = new Date(row.event_date)
-    const daysUntil = Math.floor((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const [y, m, d] = (row.event_date as string).split('-').map(Number)
+    const eventDate = new Date(y, m - 1, d)
+    const daysUntil = Math.round((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
     if (daysUntil >= 0 && daysUntil <= 7) {
       alerts.push({ type: 'event_approaching', label: `Event in ${daysUntil === 0 ? 'today' : `${daysUntil} day${daysUntil === 1 ? '' : 's'}`} — ${row.organization}`, severity: 'high' })
     }
@@ -333,8 +341,15 @@ function assembleEngagement(
     deposit_invoice_sent_at: row.deposit_invoice_sent_at ?? undefined,
     deposit_received_at: row.deposit_received_at ?? undefined,
 
-    outgoing_materials: materials.filter(m => m.direction === 'outgoing').map(mapOutgoing),
-    incoming_materials: materials.filter(m => m.direction === 'incoming').map(mapIncoming),
+    // Prefer JSONB columns (UI edits) — fall back to materials table rows (Claude MCP inserts)
+    outgoing_materials: (row.outgoing_materials as OutgoingMaterial[] | null)?.length
+      ? row.outgoing_materials as OutgoingMaterial[]
+      : materials.filter(m => m.direction === 'outgoing').map(mapOutgoing),
+    outgoing_not_needed: row.outgoing_not_needed ?? false,
+    incoming_materials: (row.incoming_materials as IncomingMaterial[] | null)?.length
+      ? row.incoming_materials as IncomingMaterial[]
+      : materials.filter(m => m.direction === 'incoming').map(mapIncoming),
+    incoming_not_needed: row.incoming_not_needed ?? false,
 
     organization: row.organization,
     source: row.source ?? undefined,

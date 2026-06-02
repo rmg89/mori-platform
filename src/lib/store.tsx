@@ -140,8 +140,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, ...patch, updated_at: new Date().toISOString() } : e
     ))
-    // Write scalar fields to Supabase (strip nested arrays which have their own tables)
-    const { contacts, comms, calls, outgoing_materials, incoming_materials, briefing_notes, alerts, engagement_flags, media_flags, post_event_flags, post_event_needed, post_event_not_needed, ...scalarPatch } = patch as Engagement
+    // Write to Supabase — strip relational arrays (own tables) but keep JSONB material columns
+    const { contacts, comms, calls, briefing_notes, alerts, engagement_flags, media_flags, post_event_flags, post_event_needed, post_event_not_needed, ...scalarPatch } = patch as Engagement
     if (Object.keys(scalarPatch).length > 0) {
       updateEngagementRow(id, scalarPatch as Record<string, unknown>).catch(console.error)
     }
