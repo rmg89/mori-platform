@@ -198,30 +198,36 @@ const handler = createMcpHandler(
     // ── 9. update_engagement_field ────────────────────────────────────────────
     server.registerTool('update_engagement_field', {
       title: 'Update Engagement Field',
-      description: 'Update any field on an engagement — event details, briefing doc content, or logistics. Briefing doc fields: purpose, audience_description, join_link, dial_in_backup, green_room_time, go_live_time, arrival_time, venue_maps_link, venue_special_instructions, flight_details, flight_confirmation, hotel_name, hotel_checkin, hotel_confirmation, hotel_maps_link, ground_transport, drive_time, drive_route_link, parking_details, moderator_info, panelist_info, vip_info, dress_code.',
+      description: 'Update any field on an engagement. For run_of_show pass a JSON string: \'[{"time":"9am","what":"Welcome","notes":"Opening"}]\'. For company_id pass the company UUID. All other fields are plain strings/numbers/booleans.',
       inputSchema: {
         engagement_id: z.string(),
         field: z.enum([
-          // Core event details
+          // Core
           'organization','event_name','event_date','event_time','event_city','event_location',
           'event_format','topic','fee','deposit_amount','payment_notes','session_length','audience_size',
           'travel_covered','travel_destination','hotel_covered','av_needs','source',
-          'booker_name','notes','outstanding_items','follow_up_details',
-          // Briefing — prep context
+          'booker_name','notes','outstanding_items','follow_up_details','company_id',
+          // Briefing — prep
           'purpose','audience_description','dress_code','moderator_info','panelist_info','vip_info',
-          // Briefing — virtual logistics
+          // Briefing — virtual
           'join_link','dial_in_backup','green_room_time','go_live_time',
-          // Briefing — in-person venue
+          // Briefing — venue
           'arrival_time','venue_maps_link','venue_special_instructions',
           // Briefing — travel
           'flight_details','flight_confirmation','hotel_name','hotel_checkin',
           'hotel_confirmation','hotel_maps_link','ground_transport',
           'drive_time','drive_route_link','parking_details',
+          // Structured JSON
+          'run_of_show',
         ]),
         value: z.union([z.string(), z.number(), z.boolean()]),
       },
     }, async ({ engagement_id, field, value }) => {
-      const { error } = await supabase.from('engagements').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', engagement_id)
+      // run_of_show is JSONB — parse from string if needed
+      const dbValue = field === 'run_of_show' && typeof value === 'string'
+        ? (() => { try { return JSON.parse(value) } catch { return value } })()
+        : value
+      const { error } = await supabase.from('engagements').update({ [field]: dbValue, updated_at: new Date().toISOString() }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
       return { content: [{ type: 'text' as const, text: `Updated ${field}.` }] }
     })
