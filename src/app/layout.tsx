@@ -25,7 +25,7 @@ const mono = DM_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Mori Taheripour — Business Platform',
+  title: 'Team Mori Platform',
   description: 'Client & engagement management platform',
 }
 

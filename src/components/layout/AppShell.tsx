@@ -33,7 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="px-4 pt-4 pb-4 border-b border-ink-200/40">
           <div className="font-display">
             <span className="text-[11px] font-semibold tracking-[0.2em] uppercase text-ink-400 block">Team</span>
-            <span className="text-xl font-semibold text-gold-dark tracking-wide block leading-tight">Taheripour</span>
+            <span className="text-xl font-semibold text-gold-dark tracking-wide block leading-tight">Mori</span>
           </div>
         </div>
 
