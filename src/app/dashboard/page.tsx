@@ -353,15 +353,16 @@ export default function DashboardPage() {
   const beyond2Weeks = allUpcoming.filter(e => daysUntil(e.event_date!) > 14)
   const carouselEvents = within2Weeks.length >= 3 ? within2Weeks : [...within2Weeks, ...beyond2Weeks.slice(0, 3 - within2Weeks.length)]
 
-  const bookingReview = active.filter(e => (e as any).booking_review_needed)
-  const postEventReview = postEvent.filter(e => (e as any).wrap_up_review_needed)
-
-  // Ready to Progress — prospects confirmed but not yet promoted, + past-date engagements not yet wrapped
-  const readyToBook = prospects.filter(e => e.prospect_step === 'confirmed')
-  const readyToWrap = active.filter(e => e.event_date && daysUntil(e.event_date) < 0)
+  // Ready to Progress — all pipeline items needing a human move or review
   const readyToProgress = [
-    ...readyToBook.map(e => ({ e, move: 'confirm' as const })),
-    ...readyToWrap.map(e => ({ e, move: 'wrapup' as const })),
+    ...prospects.filter(e => e.prospect_step === 'confirmed')
+      .map(e => ({ e, type: 'confirm' as const, label: 'Ready to book', sub: `${e.organization} · confirmed, not yet moved to engagements` })),
+    ...active.filter(e => e.event_date && daysUntil(e.event_date) < 0)
+      .map(e => ({ e, type: 'wrapup' as const, label: 'Move to wrap-up', sub: `${e.organization} · ${e.event_date ? new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''} has passed` })),
+    ...active.filter(e => (e as any).booking_review_needed)
+      .map(e => ({ e, type: 'booking_review' as const, label: 'Review new booking', sub: `${e.organization} · Claude moved this, needs your review` })),
+    ...postEvent.filter(e => (e as any).wrap_up_review_needed)
+      .map(e => ({ e, type: 'debrief' as const, label: 'Debrief needed', sub: `${e.organization} · post-event setup needs review` })),
   ]
 
   const alertGroups = buildAlerts(prospects, active, postEvent)
@@ -436,7 +437,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Ready to Progress strip ── */}
+        {/* ── Ready to Progress (unified pipeline actions strip) ── */}
         {readyToProgress.length > 0 && (
           <div className="mb-6 bg-white border border-ink-100 rounded-2xl overflow-hidden">
             <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
@@ -445,114 +446,43 @@ export default function DashboardPage() {
               <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{readyToProgress.length}</span>
             </div>
             <div className="divide-y divide-ink-50">
-              {readyToProgress.map(({ e, move }) => (
-                <div key={e.id} className="flex items-center gap-4 px-6 py-3.5">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2.5">
-                      <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
-                      {move === 'confirm' ? (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sage/10 text-sage border border-sage/20 flex-shrink-0">
-                          Ready to confirm
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ink/8 text-ink-400 border border-ink-200 flex-shrink-0">
-                          Move to wrap-up
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-ink-400 mt-0.5">
-                      {move === 'confirm'
-                        ? `${e.organization} · prospect confirmed, not yet booked`
-                        : `${e.organization} · ${e.event_date ? new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''} has passed`
-                      }
-                    </p>
-                  </div>
-                  <Link
-                    href={move === 'confirm' ? `/prospects/${e.id}` : `/engagements/${e.id}`}
-                    className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0"
-                  >
-                    {move === 'confirm' ? 'Confirm' : 'Wrap up'}
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── New Booking Review strip ── */}
-        {bookingReview.length > 0 && (
-          <div className="mb-6 bg-white border border-sage/30 rounded-2xl overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-sage/20">
-              <div className="w-2 h-2 rounded-full bg-sage flex-shrink-0" />
-              <h2 className="font-display text-xl font-semibold text-ink">New Bookings to Confirm</h2>
-              <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{bookingReview.length} need{bookingReview.length === 1 ? 's' : ''} review</span>
-            </div>
-            <div className="divide-y divide-ink-50">
-              {bookingReview.map(e => {
-                const note = e.briefing_notes?.filter((n: any) => !n.resolved).slice(-1)[0]
+              {readyToProgress.map(({ e, type, label, sub }) => {
+                const badgeColor =
+                  type === 'confirm'        ? 'bg-sage/10 text-sage border-sage/20' :
+                  type === 'booking_review' ? 'bg-sage/10 text-sage border-sage/20' :
+                  type === 'debrief'        ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                                             'bg-parchment text-ink-400 border-ink-200'
+                const href =
+                  type === 'confirm'        ? `/prospects/${e.id}` :
+                  type === 'debrief'        ? `/wrap-up/${e.id}` :
+                                             `/engagements/${e.id}`
+                const actionLabel =
+                  type === 'confirm'        ? 'Confirm' :
+                  type === 'wrapup'         ? 'Wrap up' :
+                  type === 'booking_review' ? 'Review' : 'Debrief'
                 return (
-                  <div key={e.id} className="flex items-center gap-4 px-6 py-4">
+                  <div key={`${type}-${e.id}`} className="flex items-center gap-4 px-6 py-3.5">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex items-center gap-2.5 mb-0.5">
                         <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
-                        {e.event_date && (
-                          <span className="text-[10px] text-ink-300 flex-shrink-0">
-                            {new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        )}
-                        {e.fee && (
-                          <span className="text-[10px] text-sage font-medium flex-shrink-0">${e.fee.toLocaleString()}</span>
-                        )}
-                      </div>
-                      {note
-                        ? <p className="text-xs text-ink-400 truncate">{note.body}</p>
-                        : <p className="text-xs text-ink-300 italic">No booking note yet — ask Claude to summarise what's confirmed and what's still needed</p>
-                      }
-                    </div>
-                    <Link href={`/engagements/${e.id}`}
-                      className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0">
-                      Review
-                    </Link>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── Post-Event Review strip ── */}
-        {postEventReview.length > 0 && (
-          <div className="mb-6 bg-white border border-ink-100 rounded-2xl overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
-              <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-              <h2 className="font-display text-xl font-semibold text-ink">Post-Event Review</h2>
-              <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{postEventReview.length} need{postEventReview.length === 1 ? 's' : ''} debrief</span>
-            </div>
-            <div className="divide-y divide-ink-50">
-              {postEventReview.map(e => {
-                const note = e.briefing_notes?.filter((n: any) => !n.resolved).slice(-1)[0]
-                return (
-                  <div key={e.id} className="flex items-center gap-4 px-6 py-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${badgeColor}`}>
+                          {label}
+                        </span>
                         {e.event_date && (
                           <span className="text-[10px] text-ink-300 flex-shrink-0">
                             {new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </span>
                         )}
+                        {e.fee && type !== 'wrapup' && (
+                          <span className="text-[10px] text-ink-400 flex-shrink-0">${e.fee.toLocaleString()}</span>
+                        )}
                       </div>
-                      {note
-                        ? <p className="text-xs text-ink-400 truncate">{note.body}</p>
-                        : <p className="text-xs text-ink-300 italic">No debrief note yet — ask Claude to review this engagement</p>
-                      }
+                      <p className="text-xs text-ink-400 truncate">{sub}</p>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Link href={`/wrap-up/${e.id}`}
-                        className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all">
-                        View
-                      </Link>
-                    </div>
+                    <Link href={href}
+                      className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0">
+                      {actionLabel}
+                    </Link>
                   </div>
                 )
               })}
