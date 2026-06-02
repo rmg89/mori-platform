@@ -483,9 +483,10 @@ const handler = createMcpHandler(
         title: z.string().optional(),
         role: z.enum(['primary','bureau','legal','logistics','av','assistant','other','unknown']).optional(),
         is_point_of_contact: z.boolean().optional(),
+        company_id: z.string().optional(),
         notes: z.string().optional(),
       },
-    }, async ({ contact_id, first_name, last_name, email, phone, title, role, is_point_of_contact, notes }) => {
+    }, async ({ contact_id, first_name, last_name, email, phone, title, role, is_point_of_contact, company_id, notes }) => {
       const updates: Record<string, unknown> = {}
       if (first_name !== undefined) updates.first_name = first_name
       if (last_name !== undefined) updates.last_name = last_name
@@ -494,6 +495,7 @@ const handler = createMcpHandler(
       if (title !== undefined) updates.title = title
       if (role !== undefined) updates.role = role
       if (is_point_of_contact !== undefined) updates.is_current_point_of_contact = is_point_of_contact
+      if (company_id !== undefined) updates.company_id = company_id
       if (notes !== undefined) updates.notes = notes
       const { error } = await supabase.from('contacts').update(updates).eq('id', contact_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
