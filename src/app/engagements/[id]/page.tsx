@@ -230,6 +230,7 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
   const [linkInput, setLinkInput] = useState(item.link ?? '')
   const [editingNote, setEditingNote] = useState(false)
   const [editingLink, setEditingLink] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   return (
     <div className="group/in rounded-lg border bg-white overflow-hidden transition-all">
@@ -349,20 +350,33 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
               </button>
             </div>
           ) : (
-            <label className="text-xs text-ink-300 hover:text-ink-500 cursor-pointer transition-colors">
-              Upload file…
-              <input type="file" className="hidden"
+            <label className={`text-xs cursor-pointer transition-colors ${uploading ? 'text-ink-300 pointer-events-none' : 'text-ink-300 hover:text-ink-500'}`}>
+              {uploading ? (
+                <span className="flex items-center gap-1.5">
+                  <svg className="animate-spin w-3 h-3 text-gold" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Uploading…
+                </span>
+              ) : 'Upload file…'}
+              <input type="file" className="hidden" disabled={uploading}
                 onChange={async (ev: React.ChangeEvent<HTMLInputElement>) => {
                   const file = ev.target.files?.[0]
                   if (!file) return
-                  const { supabase } = await import('@/lib/supabase')
-                  const path = `${engagementId}/${Date.now()}-${file.name}`
-                  const { data, error } = await supabase.storage
-                    .from('materials')
-                    .upload(path, file, { contentType: file.type })
-                  if (!error && data) {
-                    const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
-                    onAttachFile(publicUrl, file.name)
+                  setUploading(true)
+                  try {
+                    const { supabase } = await import('@/lib/supabase')
+                    const path = `${engagementId}/${Date.now()}-${file.name}`
+                    const { data, error } = await supabase.storage
+                      .from('materials')
+                      .upload(path, file, { contentType: file.type })
+                    if (!error && data) {
+                      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
+                      onAttachFile(publicUrl, file.name)
+                    }
+                  } finally {
+                    setUploading(false)
                   }
                 }} />
             </label>
