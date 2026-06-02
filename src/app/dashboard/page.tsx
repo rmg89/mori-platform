@@ -353,16 +353,14 @@ export default function DashboardPage() {
   const beyond2Weeks = allUpcoming.filter(e => daysUntil(e.event_date!) > 14)
   const carouselEvents = within2Weeks.length >= 3 ? within2Weeks : [...within2Weeks, ...beyond2Weeks.slice(0, 3 - within2Weeks.length)]
 
-  // Ready to Progress — all pipeline items needing a human move or review
+  // Ready to Progress — two clean pipeline moves
   const readyToProgress = [
-    ...prospects.filter(e => e.prospect_step === 'confirmed')
-      .map(e => ({ e, type: 'confirm' as const, label: 'Ready to book', sub: `${e.organization} · confirmed, not yet moved to engagements` })),
-    ...active.filter(e => e.event_date && daysUntil(e.event_date) < 0)
-      .map(e => ({ e, type: 'wrapup' as const, label: 'Move to wrap-up', sub: `${e.organization} · ${e.event_date ? new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''} has passed` })),
-    ...active.filter(e => (e as any).booking_review_needed)
-      .map(e => ({ e, type: 'booking_review' as const, label: 'Review new booking', sub: `${e.organization} · Claude moved this, needs your review` })),
-    ...postEvent.filter(e => (e as any).wrap_up_review_needed)
-      .map(e => ({ e, type: 'debrief' as const, label: 'Debrief needed', sub: `${e.organization} · post-event setup needs review` })),
+    ...prospects.filter(e => e.prospect_step === 'confirmed' || (e as any).booking_review_needed)
+      .map(e => ({ e, type: 'confirm' as const })),
+    ...[...active, ...postEvent.filter(e => (e as any).wrap_up_review_needed)]
+      .filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i) // dedupe
+      .filter(e => (e.section === 'engagements' && e.event_date && daysUntil(e.event_date) < 0) || (e as any).wrap_up_review_needed)
+      .map(e => ({ e, type: 'wrapup' as const })),
   ]
 
   const alertGroups = buildAlerts(prospects, active, postEvent)
@@ -446,46 +444,37 @@ export default function DashboardPage() {
               <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{readyToProgress.length}</span>
             </div>
             <div className="divide-y divide-ink-50">
-              {readyToProgress.map(({ e, type, label, sub }) => {
-                const badgeColor =
-                  type === 'confirm'        ? 'bg-sage/10 text-sage border-sage/20' :
-                  type === 'booking_review' ? 'bg-sage/10 text-sage border-sage/20' :
-                  type === 'debrief'        ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                                             'bg-parchment text-ink-400 border-ink-200'
-                const href =
-                  type === 'confirm'        ? `/prospects/${e.id}` :
-                  type === 'debrief'        ? `/wrap-up/${e.id}` :
-                                             `/engagements/${e.id}`
-                const actionLabel =
-                  type === 'confirm'        ? 'Confirm' :
-                  type === 'wrapup'         ? 'Wrap up' :
-                  type === 'booking_review' ? 'Review' : 'Debrief'
-                return (
-                  <div key={`${type}-${e.id}`} className="flex items-center gap-4 px-6 py-3.5">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2.5 mb-0.5">
-                        <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${badgeColor}`}>
-                          {label}
+              {readyToProgress.map(({ e, type }) => (
+                <div key={`${type}-${e.id}`} className="flex items-center gap-4 px-6 py-3.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5 mb-0.5">
+                      <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${
+                        type === 'confirm'
+                          ? 'bg-sage/10 text-sage border-sage/20'
+                          : 'bg-parchment text-ink-400 border-ink-200'
+                      }`}>
+                        {type === 'confirm' ? '→ Engagement' : '→ Wrap-Up'}
+                      </span>
+                      {e.event_date && (
+                        <span className="text-[10px] text-ink-300 flex-shrink-0">
+                          {new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </span>
-                        {e.event_date && (
-                          <span className="text-[10px] text-ink-300 flex-shrink-0">
-                            {new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </span>
-                        )}
-                        {e.fee && type !== 'wrapup' && (
-                          <span className="text-[10px] text-ink-400 flex-shrink-0">${e.fee.toLocaleString()}</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-ink-400 truncate">{sub}</p>
+                      )}
+                      {e.fee && <span className="text-[10px] text-ink-400 flex-shrink-0">${e.fee.toLocaleString()}</span>}
                     </div>
-                    <Link href={href}
-                      className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0">
-                      {actionLabel}
-                    </Link>
+                    <p className="text-xs text-ink-400">
+                      {type === 'confirm' ? `${e.organization} · confirmed` : `${e.organization} · event has passed`}
+                    </p>
                   </div>
-                )
-              })}
+                  <Link
+                    href={type === 'confirm' ? `/prospects/${e.id}` : `/engagements/${e.id}`}
+                    className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0"
+                  >
+                    {type === 'confirm' ? 'Confirm' : 'Wrap up'}
+                  </Link>
+                </div>
+              ))}
             </div>
           </div>
         )}
