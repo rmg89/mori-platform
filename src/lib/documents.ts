@@ -10,6 +10,41 @@ function pc(client: Client) {
 }
 import { formatDate, formatCurrency } from './utils'
 
+// Sanitize unicode characters that Helvetica can't render
+function s(text: string | undefined | null): string {
+  if (!text) return ''
+  return String(text)
+    .replace(/→|➔|⟶/g, '->')
+    .replace(/←/g, '<-')
+    .replace(/–/g, '-')
+    .replace(/—/g, '--')
+    .replace(/’|‘/g, "'")
+    .replace(/“|”/g, '"')
+    .replace(/…/g, '...')
+    .replace(/[^\x00-\xFF]/g, '?') // replace any remaining non-latin-1
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function formatRosDatePdf(d: string): string {
+  const [y, m, day] = d.split('-').map(Number)
+  return new Date(y, m - 1, day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+// Normalize a run_of_show row from whatever Claude wrote to {date, time, end_time, what, notes}
+function normalizeRosForPdf(r: Record<string, unknown>) {
+  const rawTime = (r.time ?? r.start_time ?? '') as string
+  const isIsoDate = ISO_DATE_RE.test(rawTime)
+  const rawDate = (r.date ?? (isIsoDate ? rawTime : undefined)) as string | undefined
+  return {
+    date: rawDate ? (ISO_DATE_RE.test(rawDate) ? formatRosDatePdf(rawDate) : rawDate) : '',
+    time: (isIsoDate ? '' : rawTime) as string,
+    end_time: (r.end_time ?? '') as string,
+    what: s((r.what ?? r.session ?? r.title ?? r.description ?? '') as string),
+    notes: s((r.notes ?? r.role ?? '') as string),
+  }
+}
+
 // ─── Shared PDF setup ─────────────────────────────────────────────────────────
 
 function createDoc() {
@@ -359,7 +394,7 @@ export function generateBriefingDoc(client: Client): Blob {
       doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
       doc.text('FLIGHT', 50, y); y += 13
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      const flightLines = doc.splitTextToSize(String((client as any).flight_details), 512)
+      const flightLines = doc.splitTextToSize(s((client as any).flight_details), 512)
       doc.text(flightLines, 50, y); y += flightLines.length * 13 + 2
     }
 
@@ -367,10 +402,10 @@ export function generateBriefingDoc(client: Client): Blob {
       doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
       doc.text('HOTEL', 50, y); y += 13
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      doc.text((client as any).hotel_name, 50, y); y += 14
+      doc.text(s((client as any).hotel_name), 50, y); y += 14
       const hotelMeta = [
-        (client as any).hotel_checkin ? `Check-in: ${(client as any).hotel_checkin}` : null,
-        (client as any).hotel_confirmation ? `Conf: ${(client as any).hotel_confirmation}` : null,
+        (client as any).hotel_checkin ? `Check-in: ${s((client as any).hotel_checkin)}` : null,
+        (client as any).hotel_confirmation ? `Conf: ${s((client as any).hotel_confirmation)}` : null,
       ].filter(Boolean).join('   ')
       if (hotelMeta) {
         doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 97, 90)
@@ -379,25 +414,26 @@ export function generateBriefingDoc(client: Client): Blob {
     }
 
     if ((client as any).ground_transport) {
-      pfWide('Ground Transport', (client as any).ground_transport)
+      pfWide('Ground Transport', s((client as any).ground_transport))
     }
 
     if ((client as any).drive_time) {
       doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
       doc.text('DRIVE TIME', 50, y); y += 13
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      doc.text((client as any).drive_time, 50, y); y += 14
+      doc.text(s((client as any).drive_time), 50, y); y += 14
     }
 
-    if ((client as any).parking_details) pfWide('Parking', (client as any).parking_details)
+    if ((client as any).parking_details) pfWide('Parking', s((client as any).parking_details))
 
     y += 4
     rule()
   }
 
   // ── SCHEDULE / RUN OF SHOW ────────────────────────────────────────────────
-  const ros = (client as any).run_of_show as { time: string; what: string; notes?: string }[] | undefined
-  if (ros && ros.length > 0) {
+  const rosRaw = (client as any).run_of_show as Record<string, unknown>[] | undefined
+  if (rosRaw && rosRaw.length > 0) {
+    const ros = rosRaw.map(normalizeRosForPdf)
     checkPage(60)
     doc.setFontSize(8)
     doc.setFont('helvetica', 'bold')
@@ -410,30 +446,31 @@ export function generateBriefingDoc(client: Client): Blob {
     doc.rect(50, y - 6, 512, 18, 'F')
     doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
     doc.text('TIME', 54, y + 5)
-    doc.text("WHAT'S HAPPENING", 160, y + 5)
-    doc.text('HER ROLE / NOTES', 400, y + 5)
+    doc.text("WHAT'S HAPPENING", 200, y + 5)
+    doc.text('HER ROLE / NOTES', 420, y + 5)
     y += 18
 
-    doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
     for (const row of ros) {
       checkPage(20)
-      const rosRow = row as { date?: string; time?: string; end_time?: string; what?: string; notes?: string }
-      const timeRange = [rosRow.time, rosRow.end_time].filter(Boolean).join(' – ')
-      const timeLabel = [rosRow.date, timeRange].filter(Boolean).join('  ')
+      const timeRange = [row.time, row.end_time].filter(Boolean).join('-')
+      const timeLabel = [row.date, timeRange].filter(Boolean).join('\n')
       doc.setFont('helvetica', 'bold')
-      if (timeLabel) doc.text(timeLabel, 54, y)
+      if (timeLabel) {
+        const timeLines = doc.splitTextToSize(timeLabel, 135)
+        doc.text(timeLines, 54, y)
+      }
       doc.setFont('helvetica', 'normal')
-      const whatText = rosRow.what || ''
-      const whatLines = whatText ? doc.splitTextToSize(whatText, 220) : ['']
-      doc.text(whatLines, 160, y)
-      if (rosRow.notes) {
+      const whatLines = row.what ? doc.splitTextToSize(row.what, 200) : []
+      if (whatLines.length) doc.text(whatLines, 200, y)
+      if (row.notes) {
         doc.setTextColor(100, 97, 90)
-        const noteLines = doc.splitTextToSize(rosRow.notes, 145)
-        doc.text(noteLines, 400, y)
+        const noteLines = doc.splitTextToSize(row.notes, 130)
+        doc.text(noteLines, 420, y)
         doc.setTextColor(15, 14, 12)
       }
       doc.setDrawColor(230, 228, 224); doc.setLineWidth(0.3)
-      const rowH = Math.max(whatLines.length, 1) * 13 + 6
+      const rowH = Math.max(whatLines.length || 1, 1) * 13 + 8
       doc.line(50, y + rowH - 2, 562, y + rowH - 2)
       y += rowH
     }
