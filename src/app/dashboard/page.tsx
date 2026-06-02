@@ -355,6 +355,15 @@ export default function DashboardPage() {
 
   const bookingReview = active.filter(e => (e as any).booking_review_needed)
   const postEventReview = postEvent.filter(e => (e as any).wrap_up_review_needed)
+
+  // Ready to Progress — prospects confirmed but not yet promoted, + past-date engagements not yet wrapped
+  const readyToBook = prospects.filter(e => e.prospect_step === 'confirmed')
+  const readyToWrap = active.filter(e => e.event_date && daysUntil(e.event_date) < 0)
+  const readyToProgress = [
+    ...readyToBook.map(e => ({ e, move: 'confirm' as const })),
+    ...readyToWrap.map(e => ({ e, move: 'wrapup' as const })),
+  ]
+
   const alertGroups = buildAlerts(prospects, active, postEvent)
   const reviewCount = reviewItems.filter(r => !r.confirmed_by).length
   const needsResponseCount = allEngagements.filter(e => e.comms?.some(c => c.needs_response)).length
@@ -424,6 +433,49 @@ export default function DashboardPage() {
         {carouselEvents.length > 0 && (
           <div className="mb-6">
             <BriefingDocCarousel events={carouselEvents} />
+          </div>
+        )}
+
+        {/* ── Ready to Progress strip ── */}
+        {readyToProgress.length > 0 && (
+          <div className="mb-6 bg-white border border-ink-100 rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
+              <div className="w-2 h-2 rounded-full bg-gold flex-shrink-0" />
+              <h2 className="font-display text-xl font-semibold text-ink">Ready to Progress</h2>
+              <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{readyToProgress.length}</span>
+            </div>
+            <div className="divide-y divide-ink-50">
+              {readyToProgress.map(({ e, move }) => (
+                <div key={e.id} className="flex items-center gap-4 px-6 py-3.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5">
+                      <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
+                      {move === 'confirm' ? (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sage/10 text-sage border border-sage/20 flex-shrink-0">
+                          Ready to confirm
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ink/8 text-ink-400 border border-ink-200 flex-shrink-0">
+                          Move to wrap-up
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-ink-400 mt-0.5">
+                      {move === 'confirm'
+                        ? `${e.organization} · prospect confirmed, not yet booked`
+                        : `${e.organization} · ${e.event_date ? new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''} has passed`
+                      }
+                    </p>
+                  </div>
+                  <Link
+                    href={move === 'confirm' ? `/prospects/${e.id}` : `/engagements/${e.id}`}
+                    className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0"
+                  >
+                    {move === 'confirm' ? 'Confirm' : 'Wrap up'}
+                  </Link>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
