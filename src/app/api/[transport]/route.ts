@@ -198,7 +198,7 @@ const handler = createMcpHandler(
     // ── 9. update_engagement_field ────────────────────────────────────────────
     server.registerTool('update_engagement_field', {
       title: 'Update Engagement Field',
-      description: 'Update any field on an engagement. For run_of_show pass a JSON string: \'[{"time":"9am","what":"Welcome","notes":"Opening"}]\'. For company_id pass the company UUID. All other fields are plain strings/numbers/booleans.',
+      description: 'Update any field on an engagement. Field formatting rules: flight_details — one leg per line, format each as "AA 1234 JFK→LAX 8:00 AM–11:30 AM"; include connection info as a separate line "Connection: 1h 15m in CLT"; for return flights add a blank line then the return leg. run_of_show — JSON string: \'[{"date":"Thu Jun 5","time":"9:30 AM","end_time":"11:00 AM","what":"Session title","notes":"Mori\'s role"}]\'. company_id — pass the company UUID. All other fields are plain strings/numbers/booleans.',
       inputSchema: {
         engagement_id: z.string(),
         field: z.enum([
