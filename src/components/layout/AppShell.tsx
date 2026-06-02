@@ -30,10 +30,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-52 flex-shrink-0 flex flex-col bg-parchment border-r border-ink-200/40">
 
         {/* Wordmark */}
-        <div className="px-5 pt-5 pb-4">
-          <span className="text-[9px] font-semibold tracking-[0.3em] uppercase text-ink-300 block mb-0.5">Team</span>
-          <span className="font-display text-[26px] font-semibold text-gold-dark leading-none block">Mori</span>
-          <div className="mt-3 w-6 h-px" style={{ background: 'linear-gradient(90deg, #C9A84C, transparent)' }} />
+        <div className="px-5 pt-6 pb-5">
+          <span className="text-[8px] font-medium tracking-[0.45em] uppercase text-ink-300 block mb-1.5">Team</span>
+          <span className="font-display text-[40px] font-light text-gold-dark leading-none block tracking-wide">Mori</span>
+          <div className="mt-4 w-10 h-px" style={{ background: 'linear-gradient(90deg, #C9A84C, transparent)' }} />
         </div>
 
         {/* Nav */}
