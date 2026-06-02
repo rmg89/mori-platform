@@ -316,6 +316,11 @@ function assembleEngagement(
   const postEvent = derivePostEventFlags(row)
 
   return {
+    // Spread all raw Supabase columns first so nothing is silently dropped
+    // (briefing fields, run_of_show, not_needed, etc. all pass through automatically)
+    ...(row as unknown as Record<string, unknown>),
+
+    // Then override with properly typed / transformed values
     id: row.id,
     created_at: row.created_at,
     updated_at: row.updated_at,
