@@ -99,7 +99,7 @@ export const POST_EVENT_FLAGS: { id: PostEventFlag; label: string }[] = [
 
 // ─── Contact ──────────────────────────────────────────────────────────────────
 
-export type ContactRole = 'primary' | 'bureau' | 'legal' | 'logistics' | 'av' | 'assistant' | 'other'
+export type ContactRole = 'primary' | 'bureau' | 'legal' | 'logistics' | 'av' | 'assistant' | 'other' | 'unknown'
 export type ContactStatus = 'prospect_active' | 'prospect_expired' | 'client'
 
 export interface EngagementContact {

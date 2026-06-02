@@ -185,7 +185,7 @@ create table contacts (
   title           text,
 
   role            text default 'primary'
-    check (role in ('primary','bureau','legal','logistics','av','assistant','other')),
+    check (role in ('primary','bureau','legal','logistics','av','assistant','other','unknown')),
   is_current_point_of_contact boolean default false,
 
   status          text default 'prospect_active'

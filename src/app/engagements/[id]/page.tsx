@@ -745,11 +745,18 @@ function ContactsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement
               />
             ) : (
               <div className="flex items-center gap-3 group/contact">
-                <div className="w-8 h-8 rounded-full bg-ink-800 flex items-center justify-center text-xs font-bold text-gold flex-shrink-0">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${c.role === 'unknown' ? 'bg-amber-100 text-amber-600 ring-1 ring-amber-300' : 'bg-ink-800 text-gold'}`}>
                   {getInitials(c.first_name, c.last_name)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink">{c.first_name} {c.last_name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-ink">{c.first_name} {c.last_name}</p>
+                    {c.role === 'unknown' && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 flex-shrink-0">
+                        Role unknown
+                      </span>
+                    )}
+                  </div>
                   {c.title && <p className="text-xs text-ink-400">{c.title}</p>}
                   <p className="text-xs text-ink-300 truncate">{c.email}</p>
                 </div>
