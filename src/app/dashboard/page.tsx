@@ -20,11 +20,11 @@ function getGreeting() {
 }
 
 function daysUntil(dateStr: string) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const d = new Date(dateStr)
-  d.setHours(0, 0, 0, 0)
-  return Math.round((d.getTime() - today.getTime()) / 86400000)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d) // local midnight — avoids UTC parse shift
+  return Math.round((date.getTime() - today.getTime()) / 86400000)
 }
 
 function daysSince(dateStr: string) { return -daysUntil(dateStr) }
