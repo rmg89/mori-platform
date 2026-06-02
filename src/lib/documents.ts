@@ -192,8 +192,17 @@ export function generateBriefingDoc(client: Client): Blob {
   let y = 100
   const L = 50, R = 330
 
+  const PAGE_H = 760 // usable height before footer
+  const checkPage = (needed = 40) => {
+    if (y + needed > PAGE_H) {
+      doc.addPage()
+      y = 60
+    }
+  }
+
   // Helper: divider rule
   const rule = () => {
+    checkPage(30)
     doc.setDrawColor(220, 218, 212)
     doc.setLineWidth(0.4)
     doc.line(50, y, 562, y)
@@ -216,6 +225,8 @@ export function generateBriefingDoc(client: Client): Blob {
   // Helper: full-width label + value (wrapping)
   const pfWide = (label: string, value: string | undefined | null) => {
     if (!value) return
+    const lines = doc.splitTextToSize(String(value), 512)
+    checkPage(20 + lines.length * 13)
     doc.setFontSize(7.5)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(140, 138, 132)
@@ -224,7 +235,6 @@ export function generateBriefingDoc(client: Client): Blob {
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(15, 14, 12)
-    const lines = doc.splitTextToSize(value, 512)
     doc.text(lines, 50, y)
     y += lines.length * 13 + 6
   }
@@ -388,6 +398,7 @@ export function generateBriefingDoc(client: Client): Blob {
   // ── SCHEDULE / RUN OF SHOW ────────────────────────────────────────────────
   const ros = (client as any).run_of_show as { time: string; what: string; notes?: string }[] | undefined
   if (ros && ros.length > 0) {
+    checkPage(60)
     doc.setFontSize(8)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(201, 168, 76)
@@ -405,8 +416,10 @@ export function generateBriefingDoc(client: Client): Blob {
 
     doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
     for (const row of ros) {
-      const rosRow = row as { date?: string; time?: string; what?: string; notes?: string }
-      const timeLabel = [rosRow.date, rosRow.time].filter(Boolean).join(' ')
+      checkPage(20)
+      const rosRow = row as { date?: string; time?: string; end_time?: string; what?: string; notes?: string }
+      const timeRange = [rosRow.time, rosRow.end_time].filter(Boolean).join(' – ')
+      const timeLabel = [rosRow.date, timeRange].filter(Boolean).join('  ')
       doc.setFont('helvetica', 'bold')
       if (timeLabel) doc.text(timeLabel, 54, y)
       doc.setFont('helvetica', 'normal')

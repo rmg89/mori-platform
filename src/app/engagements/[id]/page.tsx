@@ -614,8 +614,21 @@ function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engage
         <div className="border-t border-ink-50 pt-2 space-y-3">
           <div className="flex items-start gap-2.5">
             <Calendar size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
-            <EditableField label="" value={e.event_date ? formatDate(e.event_date) : undefined}
-              placeholder="Date" onSave={v => save({ event_date: v })} />
+            <div className="flex items-center gap-1.5 flex-1">
+              <EditableField label="" value={e.event_date ? formatDate(e.event_date) : undefined}
+                placeholder="Start date" onSave={v => save({ event_date: v })} />
+              {(e as any).event_end_date && (
+                <>
+                  <span className="text-ink-300 text-xs">–</span>
+                  <EditableField label="" value={formatDate((e as any).event_end_date)}
+                    placeholder="End date" onSave={v => save({ event_end_date: v } as any)} />
+                </>
+              )}
+              {!(e as any).event_end_date && (
+                <button onClick={() => save({ event_end_date: e.event_date } as any)}
+                  className="text-[10px] text-ink-200 hover:text-ink-400 transition-colors">+ end</button>
+              )}
+            </div>
           </div>
           <div className="flex items-start gap-2.5">
             <Clock size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
@@ -1610,7 +1623,7 @@ function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial
   )
 }
 
-type RosRow = { date?: string; time: string; what: string; notes?: string }
+type RosRow = { date?: string; time: string; end_time?: string; what: string; notes?: string }
 
 function formatRosDate(d: string) {
   const [y, m, day] = d.split('-').map(Number)
@@ -1627,8 +1640,9 @@ function normalizeRosRow(r: Record<string, unknown>): RosRow {
   return {
     date: rawDate ? (ISO_DATE.test(rawDate) ? formatRosDate(rawDate) : rawDate) : undefined,
     time: (isIsoDate ? '' : rawTime) as string,
+    end_time: (r.end_time ?? undefined) as string | undefined,
     what: (r.what ?? r.session ?? r.title ?? r.description ?? '') as string,
-    notes: (r.notes ?? r.end_time ?? r.role ?? '') as string,
+    notes: (r.notes ?? r.role ?? '') as string,
   }
 }
 
@@ -1680,8 +1694,13 @@ function SectionRunOfShow({ e, save, onRemove }: { e: Engagement; save: (p: Part
                   </td>
                 )}
                 <td className="px-2 py-1.5">
-                  <input value={row.time} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { time: ev.target.value })}
-                    placeholder="Time" className="w-full text-xs text-ink bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5" />
+                  <div className="flex items-center gap-1">
+                    <input value={row.time} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { time: ev.target.value })}
+                      placeholder="Start" className="w-16 text-xs text-ink bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5" />
+                    <span className="text-ink-200 text-xs flex-shrink-0">–</span>
+                    <input value={row.end_time || ''} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { end_time: ev.target.value || undefined })}
+                      placeholder="End" className="w-16 text-xs text-ink-400 bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5" />
+                  </div>
                 </td>
                 <td className="px-2 py-1.5">
                   <input value={row.what} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { what: ev.target.value })}

@@ -203,7 +203,7 @@ const handler = createMcpHandler(
         engagement_id: z.string(),
         field: z.enum([
           // Core
-          'organization','event_name','event_date','event_time','event_city','event_location',
+          'organization','event_name','event_date','event_end_date','event_time','event_city','event_location',
           'event_format','topic','fee','deposit_amount','payment_notes','session_length','audience_size',
           'travel_covered','travel_destination','hotel_covered','av_needs','source',
           'booker_name','notes','outstanding_items','follow_up_details','company_id',
@@ -220,7 +220,7 @@ const handler = createMcpHandler(
           // Structured JSON
           'run_of_show',
         ]),
-        value: z.union([z.string(), z.number(), z.boolean()]),
+        value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
       },
     }, async ({ engagement_id, field, value }) => {
       // run_of_show is JSONB — parse from string if needed
@@ -235,26 +235,27 @@ const handler = createMcpHandler(
     // ── 10. set_engagement_flag ───────────────────────────────────────────────
     server.registerTool('set_engagement_flag', {
       title: 'Set Engagement Flag',
-      description: 'Mark a workflow flag on an engagement. For not_needed: pass flag="not_needed", item="<field_or_section>" and value=true to opt it out. Use booking_reviewed (value=true) to clear the new-booking review flag after summarising what is confirmed and what is still needed. Use wrap_up_reviewed (value=true) to clear the post-event review flag after debriefing. Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, not_needed, booking_reviewed, wrap_up_reviewed.',
+      description: 'Mark a workflow flag on an engagement. For not_needed: pass flag="not_needed", item="<field>" and value=true to opt it out. For needed: pass flag="needed", item="<field>" and value=true to flag something as explicitly required but not yet provided. Use booking_reviewed/wrap_up_reviewed to clear review flags. Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, not_needed, needed, booking_reviewed, wrap_up_reviewed.',
       inputSchema: {
         engagement_id: z.string(),
-        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','not_needed','wrap_up_reviewed','booking_reviewed']),
+        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','not_needed','needed','wrap_up_reviewed','booking_reviewed']),
         value: z.boolean(),
         item: z.string().optional(),
       },
     }, async ({ engagement_id, flag, value, item }) => {
       const now = new Date().toISOString()
-      // not_needed: add or remove an item from the text[] column
-      if (flag === 'not_needed') {
-        if (!item) return { content: [{ type: 'text' as const, text: 'item is required when flag is not_needed.' }] }
-        const { data: row } = await supabase.from('engagements').select('not_needed').eq('id', engagement_id).single()
-        const current: string[] = (row as Record<string, unknown>)?.not_needed as string[] ?? []
+      // Array flags: not_needed and needed share the same pattern
+      if (flag === 'not_needed' || flag === 'needed') {
+        if (!item) return { content: [{ type: 'text' as const, text: `item is required when flag is ${flag}.` }] }
+        const col = flag === 'not_needed' ? 'not_needed' : 'needed'
+        const { data: row } = await supabase.from('engagements').select(col).eq('id', engagement_id).single()
+        const current: string[] = (row as Record<string, unknown>)?.[col] as string[] ?? []
         const updated = value
           ? Array.from(new Set([...current, item]))
           : current.filter((x: string) => x !== item)
-        const { error } = await supabase.from('engagements').update({ not_needed: updated, updated_at: now }).eq('id', engagement_id)
+        const { error } = await supabase.from('engagements').update({ [col]: updated, updated_at: now }).eq('id', engagement_id)
         if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-        return { content: [{ type: 'text' as const, text: `"${item}" ${value ? 'marked not needed' : 'removed from not_needed'}.` }] }
+        return { content: [{ type: 'text' as const, text: `"${item}" ${value ? `marked ${flag}` : `removed from ${flag}`}.` }] }
       }
       const colMap: Record<string, Record<string, unknown>> = {
         contract_sent:        { contract_sent_at: value ? now : null },
