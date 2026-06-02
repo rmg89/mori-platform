@@ -355,13 +355,14 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
                 onChange={async (ev: React.ChangeEvent<HTMLInputElement>) => {
                   const file = ev.target.files?.[0]
                   if (!file) return
-                  const fd = new FormData()
-                  fd.append('file', file)
-                  fd.append('engagement_id', engagementId)
-                  const res = await fetch('/api/upload', { method: 'POST', body: fd })
-                  if (res.ok) {
-                    const { url, name } = await res.json()
-                    onAttachFile(url, name)
+                  const { supabase } = await import('@/lib/supabase')
+                  const path = `${engagementId}/${Date.now()}-${file.name}`
+                  const { data, error } = await supabase.storage
+                    .from('materials')
+                    .upload(path, file, { contentType: file.type })
+                  if (!error && data) {
+                    const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
+                    onAttachFile(publicUrl, file.name)
                   }
                 }} />
             </label>
