@@ -30,7 +30,8 @@ function daysUntil(dateStr: string) {
 function daysSince(dateStr: string) { return -daysUntil(dateStr) }
 
 function formatCountdown(days: number) {
-  if (days <= 0) return 'Today'
+  if (days < 0) return 'Past'
+  if (days === 0) return 'Today'
   if (days === 1) return 'Tomorrow'
   if (days < 7) return `${days}d`
   if (days < 30) return `${Math.round(days / 7)}w`
@@ -347,7 +348,7 @@ export default function DashboardPage() {
   const aPct = (active.length / total) * 100
   const pePct = (postEvent.length / total) * 100
 
-  const allUpcoming = active.filter(e => e.event_date).sort((a, b) => a.event_date! > b.event_date! ? 1 : -1)
+  const allUpcoming = active.filter(e => e.event_date && daysUntil(e.event_date) >= 0).sort((a, b) => a.event_date! > b.event_date! ? 1 : -1)
   const within2Weeks = allUpcoming.filter(e => daysUntil(e.event_date!) <= 14)
   const beyond2Weeks = allUpcoming.filter(e => daysUntil(e.event_date!) > 14)
   const carouselEvents = within2Weeks.length >= 3 ? within2Weeks : [...within2Weeks, ...beyond2Weeks.slice(0, 3 - within2Weeks.length)]
