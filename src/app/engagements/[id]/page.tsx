@@ -1587,25 +1587,38 @@ function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial
   )
 }
 
-type RosRow = { time: string; what: string; notes?: string }
+type RosRow = { date?: string; time: string; what: string; notes?: string }
 
-// Normalize rows written by Claude with alternate key names (date/session/end_time → time/what/notes)
+function formatRosDate(d: string) {
+  const [y, m, day] = d.split('-').map(Number)
+  return new Date(y, m - 1, day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+// Normalize rows from Claude (date/session/end_time → date/time/what/notes)
 function normalizeRosRow(r: Record<string, unknown>): RosRow {
+  const rawTime = (r.time ?? r.start_time ?? '') as string
+  const isIsoDate = ISO_DATE.test(rawTime)
   return {
-    time: (r.time ?? r.date ?? r.start_time ?? '') as string,
+    date: (r.date ?? (isIsoDate ? rawTime : undefined)) as string | undefined,
+    time: (isIsoDate ? '' : rawTime) as string,
     what: (r.what ?? r.session ?? r.title ?? r.description ?? '') as string,
-    notes: (r.notes ?? r.end_time ?? r.role ?? '') as string,
+    notes: (r.notes ?? r.role ?? '') as string,
   }
 }
 
 function SectionRunOfShow({ e, save, onRemove }: { e: Engagement; save: (p: Partial<Engagement>) => void; onRemove: () => void }) {
   const raw: Record<string, unknown>[] = (e as any).run_of_show ?? []
   const rows: RosRow[] = raw.map(normalizeRosRow)
+  const isMultiDay = rows.some(r => r.date)
 
   function updateRows(next: RosRow[]) { save({ run_of_show: next } as any) }
   function updateRow(i: number, patch: Partial<RosRow>) { updateRows(rows.map((r, idx) => idx === i ? { ...r, ...patch } : r)) }
-  function addRow() { updateRows([...rows, { time: '', what: '', notes: '' }]) }
+  function addRow() { updateRows([...rows, { date: isMultiDay ? '' : undefined, time: '', what: '', notes: '' }]) }
   function removeRow(i: number) { updateRows(rows.filter((_, idx) => idx !== i)) }
+
+  const colSpanTotal = isMultiDay ? 6 : 5
 
   return (
     <div className="space-y-3">
@@ -1616,7 +1629,8 @@ function SectionRunOfShow({ e, save, onRemove }: { e: Engagement; save: (p: Part
           <thead>
             <tr className="bg-parchment border-b border-ink-100">
               <th className="w-5 px-2" />
-              <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-28">Time</th>
+              {isMultiDay && <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-28">Day</th>}
+              <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-24">Time</th>
               <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300">What&apos;s Happening</th>
               <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-40">Her Role / Notes</th>
               <th className="w-8 px-2" />
@@ -1626,6 +1640,21 @@ function SectionRunOfShow({ e, save, onRemove }: { e: Engagement; save: (p: Part
             {rows.map((row, i) => (
               <tr key={i} className={`border-b border-ink-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-parchment/20'} group`}>
                 <td className="px-2 text-ink-200"><GripVertical size={12} /></td>
+                {isMultiDay && (
+                  <td className="px-2 py-1.5">
+                    <input
+                      value={row.date || ''}
+                      onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { date: ev.target.value })}
+                      placeholder="e.g. Jun 5"
+                      className="w-full text-xs text-ink bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5"
+                      onBlur={(ev: React.FocusEvent<HTMLInputElement>) => {
+                        // Auto-format ISO dates on blur
+                        const v = ev.target.value
+                        if (ISO_DATE.test(v)) updateRow(i, { date: formatRosDate(v) })
+                      }}
+                    />
+                  </td>
+                )}
                 <td className="px-2 py-1.5">
                   <input value={row.time} onChange={(ev: React.ChangeEvent<HTMLInputElement>) => updateRow(i, { time: ev.target.value })}
                     placeholder="Time" className="w-full text-xs text-ink bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none py-0.5" />
@@ -1644,7 +1673,7 @@ function SectionRunOfShow({ e, save, onRemove }: { e: Engagement; save: (p: Part
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="text-center text-xs text-ink-200 italic py-4">No schedule yet — add a row below</td></tr>
+              <tr><td colSpan={colSpanTotal} className="text-center text-xs text-ink-200 italic py-4">No schedule yet — add a row below</td></tr>
             )}
           </tbody>
         </table>
