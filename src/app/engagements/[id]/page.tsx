@@ -1567,6 +1567,104 @@ function SectionVenue({ e, save, onRemove }: { e: Engagement; save: (p: Partial<
   )
 }
 
+// ─── Flight Card ──────────────────────────────────────────────────────────────
+
+function FlightCard({ details, confirmation, onSaveDetails, onSaveConfirmation }: {
+  details?: string
+  confirmation?: string
+  onSaveDetails: (v: string) => void
+  onSaveConfirmation: (v: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(details || '')
+
+  const legs = (details || '').split('\n').filter(l => l.trim())
+
+  function commit() { onSaveDetails(draft); setEditing(false) }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Flight</p>
+        <button onClick={() => { setDraft(details || ''); setEditing(e => !e) }}
+          className="text-[10px] text-ink-300 hover:text-ink-500 transition-colors">
+          {editing ? 'Cancel' : 'Edit'}
+        </button>
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          <textarea autoFocus value={draft} onChange={ev => setDraft(ev.target.value)}
+            rows={4}
+            placeholder={"AA 2174 MSY→CLT 4:17 PM–7:28 PM\nConnection: 1h 07m in CLT\nAA 1858 CLT→ALB 8:35 PM–10:35 PM"}
+            className="w-full text-xs text-ink bg-parchment border border-gold/40 rounded-lg px-3 py-2 focus:outline-none focus:border-gold resize-none font-mono" />
+          <div className="flex gap-2">
+            <button onClick={commit} className="text-xs font-medium text-sage border border-sage/30 rounded-lg px-3 py-1.5 hover:bg-sage/5 transition-all">Save</button>
+            <button onClick={() => setEditing(false)} className="text-xs text-ink-300 hover:text-ink transition-colors px-2">Cancel</button>
+          </div>
+        </div>
+      ) : legs.length > 0 ? (
+        <div className="rounded-xl border border-ink-100 overflow-hidden divide-y divide-ink-50">
+          {legs.map((line, i) => {
+            const isConnection = /^connection:/i.test(line.trim())
+            const isBlank = !line.trim()
+            if (isBlank) return null
+            if (isConnection) return (
+              <div key={i} className="px-4 py-2 bg-parchment/60 flex items-center gap-2">
+                <div className="w-px h-4 bg-ink-200 mx-1.5 flex-shrink-0" />
+                <span className="text-xs text-ink-400 italic">{line.trim()}</span>
+              </div>
+            )
+            // Parse flight leg: AA 2174 MSY→CLT 4:17 PM–7:28 PM
+            const match = line.match(/^([A-Z0-9]{2,3})\s+(\d+)\s+([A-Z]{3})(?:→|->)([A-Z]{3})\s+(.+)/)
+            if (match) {
+              const [, carrier, num, from, to, times] = match
+              const [depart, arrive] = times.split(/[–-]/).map(t => t.trim())
+              return (
+                <div key={i} className="px-4 py-3 flex items-center gap-3 bg-white">
+                  <span className="text-[10px] font-bold text-ink-300 w-12 flex-shrink-0">{carrier} {num}</span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-ink">{from}</span>
+                    <div className="flex-1 flex items-center gap-1 min-w-0">
+                      <div className="h-px flex-1 bg-ink-200" />
+                      <span className="text-ink-200 text-xs">✈</span>
+                      <div className="h-px flex-1 bg-ink-200" />
+                    </div>
+                    <span className="text-sm font-semibold text-ink">{to}</span>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-xs font-medium text-ink">{depart}</p>
+                    {arrive && <p className="text-xs text-ink-400">{arrive}</p>}
+                  </div>
+                </div>
+              )
+            }
+            // Fallback: raw line
+            return <div key={i} className="px-4 py-2 text-xs text-ink-400">{line}</div>
+          })}
+        </div>
+      ) : (
+        <button onClick={() => setEditing(true)}
+          className="text-sm text-ink-200 italic hover:text-ink-400 transition-colors">
+          Add flight details…
+        </button>
+      )}
+
+      {/* Confirmation */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">Conf #</span>
+        {confirmation ? (
+          <span className="text-xs font-mono font-semibold text-ink tracking-wider">{confirmation}</span>
+        ) : (
+          <EditableField label="" value={confirmation}
+            placeholder="Add confirmation…"
+            onSave={v => onSaveConfirmation(v)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial<Engagement>) => void; onRemove: () => void }) {
   const [mode, setMode] = useState<'fly' | 'drive'>((e as any).drive_time && !(e as any).flight_details ? 'drive' : 'fly')
 
@@ -1586,35 +1684,12 @@ function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial
 
       {mode === 'fly' ? (
         <div className="space-y-4">
-          <div className="space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Flight</p>
-            <EditableField label="Flight Details" value={(e as any).flight_details}
-              placeholder="e.g. AA 2174 MSY→CLT 4:17–7:28 PM · AA 1858 CLT→ALB 8:35–10:35 PM"
-              multiline
-              onSave={v => save({ flight_details: v } as any)} />
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300 mb-1">Confirmation #</p>
-              {(e as any).flight_confirmation ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-mono font-semibold text-ink tracking-wider">{(e as any).flight_confirmation}</span>
-                  <button onClick={() => {
-                    const val = (e as any).flight_confirmation as string
-                    if (val?.startsWith('http')) window.open(val, '_blank')
-                  }}
-                    className="text-[10px] text-ink-300 hover:text-ink-500 transition-colors">
-                    {((e as any).flight_confirmation as string)?.startsWith('http') ? 'Open →' : ''}
-                  </button>
-                </div>
-              ) : (
-                <button onClick={() => {
-                  const v = prompt('Confirmation # or link:')
-                  if (v) save({ flight_confirmation: v } as any)
-                }} className="text-sm text-ink-200 italic hover:text-ink-400 transition-colors">
-                  Add confirmation…
-                </button>
-              )}
-            </div>
-          </div>
+          <FlightCard
+            details={(e as any).flight_details as string | undefined}
+            confirmation={(e as any).flight_confirmation as string | undefined}
+            onSaveDetails={v => save({ flight_details: v } as any)}
+            onSaveConfirmation={v => save({ flight_confirmation: v } as any)}
+          />
           <div className="space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Hotel</p>
             <EditableField label="Hotel Name" value={(e as any).hotel_name} placeholder="Hotel name" onSave={v => save({ hotel_name: v } as any)} />
