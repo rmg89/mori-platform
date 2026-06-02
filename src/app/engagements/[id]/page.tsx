@@ -1589,8 +1589,18 @@ function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial
 
 type RosRow = { time: string; what: string; notes?: string }
 
+// Normalize rows written by Claude with alternate key names (date/session/end_time → time/what/notes)
+function normalizeRosRow(r: Record<string, unknown>): RosRow {
+  return {
+    time: (r.time ?? r.date ?? r.start_time ?? '') as string,
+    what: (r.what ?? r.session ?? r.title ?? r.description ?? '') as string,
+    notes: (r.notes ?? r.end_time ?? r.role ?? '') as string,
+  }
+}
+
 function SectionRunOfShow({ e, save, onRemove }: { e: Engagement; save: (p: Partial<Engagement>) => void; onRemove: () => void }) {
-  const rows: RosRow[] = (e as any).run_of_show ?? []
+  const raw: Record<string, unknown>[] = (e as any).run_of_show ?? []
+  const rows: RosRow[] = raw.map(normalizeRosRow)
 
   function updateRows(next: RosRow[]) { save({ run_of_show: next } as any) }
   function updateRow(i: number, patch: Partial<RosRow>) { updateRows(rows.map((r, idx) => idx === i ? { ...r, ...patch } : r)) }
