@@ -190,9 +190,9 @@ const handler = createMcpHandler(
       description: 'Move a confirmed engagement to wrap-up after the event has occurred.',
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
-      const { error } = await supabase.from('engagements').update({ section: 'wrap-up', updated_at: new Date().toISOString() }).eq('id', engagement_id)
+      const { error } = await supabase.from('engagements').update({ section: 'wrap-up', wrap_up_review_needed: true, updated_at: new Date().toISOString() }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-      return { content: [{ type: 'text' as const, text: 'Moved to wrap-up.' }] }
+      return { content: [{ type: 'text' as const, text: 'Moved to wrap-up. wrap_up_review_needed is now true — add a debrief briefing note summarising what you\'ve set up and what still needs attention.' }] }
     })
 
     // ── 9. update_engagement_field ────────────────────────────────────────────
@@ -229,10 +229,10 @@ const handler = createMcpHandler(
     // ── 10. set_engagement_flag ───────────────────────────────────────────────
     server.registerTool('set_engagement_flag', {
       title: 'Set Engagement Flag',
-      description: 'Mark a workflow flag on an engagement. For not_needed: pass flag="not_needed", item="<field_or_section>" and value=true to opt it out (e.g. item="deposit", item="hotel", item="travel", item="dress_code", item="moderator_info"). value=false removes it from the not_needed list. Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, not_needed.',
+      description: 'Mark a workflow flag on an engagement. For not_needed: pass flag="not_needed", item="<field_or_section>" and value=true to opt it out. Use wrap_up_reviewed (value=true) to clear the post-event review flag once you have set up the wrap-up checklist and added a debrief note. Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, not_needed, wrap_up_reviewed.',
       inputSchema: {
         engagement_id: z.string(),
-        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','not_needed']),
+        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','not_needed','wrap_up_reviewed']),
         value: z.boolean(),
         item: z.string().optional(),
       },
@@ -258,6 +258,7 @@ const handler = createMcpHandler(
         materials_requested:  { materials_requested: value },
         deposit_invoice_sent: { deposit_invoice_sent_at: value ? now : null },
         deposit_received:     { deposit_received_at: value ? now : null },
+        wrap_up_reviewed:     { wrap_up_review_needed: false },
       }
       const { error } = await supabase.from('engagements').update({ ...colMap[flag], updated_at: now }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }

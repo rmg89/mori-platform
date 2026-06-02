@@ -107,6 +107,8 @@ create table engagements (
   briefing_complete_at timestamptz,
   briefing_notes       jsonb default '[]',
 
+  wrap_up_review_needed    boolean default false,
+
   -- ── Post-event / Wrap-up flags ────────────────────────────
   post_event_flags         text[] default '{}',
   post_event_needed        text[] default '{}',

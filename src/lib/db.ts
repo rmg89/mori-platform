@@ -71,6 +71,7 @@ interface EngagementRow {
   notes: string | null
   outstanding_items: string | null
   media_links: string | null
+  wrap_up_review_needed: boolean
   outgoing_materials: unknown[] | null
   incoming_materials: unknown[] | null
   outgoing_not_needed: boolean
@@ -337,6 +338,7 @@ function assembleEngagement(
     briefing_complete_at: row.briefing_complete_at ?? undefined,
     briefing_notes: briefingNotes.map(mapBriefingNote),
     invoice_sent_at: row.invoice_sent_at ?? undefined,
+    wrap_up_review_needed: row.wrap_up_review_needed ?? false,
     deposit_amount: row.deposit_amount ?? undefined,
     deposit_invoice_sent_at: row.deposit_invoice_sent_at ?? undefined,
     deposit_received_at: row.deposit_received_at ?? undefined,
@@ -383,7 +385,7 @@ export async function fetchAllEngagements(): Promise<Engagement[]> {
   const today = new Date().toISOString().split('T')[0]
   await supabase
     .from('engagements')
-    .update({ section: 'wrap-up' })
+    .update({ section: 'wrap-up', wrap_up_review_needed: true })
     .eq('section', 'engagements')
     .eq('archived', false)
     .lt('event_date', today)

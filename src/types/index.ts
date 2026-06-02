@@ -247,6 +247,7 @@ export interface Engagement {
   post_event_follow_up_details?: string      // what the follow-up means for this engagement
   post_event_notes?: string                  // general wrap-up notes/context
   invoice_sent_at?: string
+  wrap_up_review_needed?: boolean
   deposit_amount?: number
   deposit_invoice_sent_at?: string
   deposit_received_at?: string
