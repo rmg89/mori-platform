@@ -954,6 +954,15 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
               }
             </button>
           )}
+          {/* Payment notes */}
+          <EditableField
+            label="Payment notes"
+            value={(e as any).payment_notes}
+            placeholder="e.g. travel stipend not speaking fee, net 30, split payment…"
+            multiline
+            onSave={v => save({ payment_notes: v } as any)}
+          />
+
           {/* Sent / received timestamps */}
           <div className="mt-2 space-y-0.5">
             {sent && (

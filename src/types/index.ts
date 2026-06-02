@@ -252,6 +252,7 @@ export interface Engagement {
   deposit_amount?: number
   deposit_invoice_sent_at?: string
   deposit_received_at?: string
+  payment_notes?: string
 
   // ── Engagement progress (replaces flat engagement_flags for speaking) ──────
   contract_required?: boolean

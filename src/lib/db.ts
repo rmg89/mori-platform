@@ -56,6 +56,7 @@ interface EngagementRow {
   deposit_amount: number | null
   deposit_invoice_sent_at: string | null
   deposit_received_at: string | null
+  payment_notes: string | null
   thank_you_sent: boolean
   testimonial_requested: boolean
   media_received: boolean
@@ -344,6 +345,7 @@ function assembleEngagement(
     deposit_amount: row.deposit_amount ?? undefined,
     deposit_invoice_sent_at: row.deposit_invoice_sent_at ?? undefined,
     deposit_received_at: row.deposit_received_at ?? undefined,
+    payment_notes: row.payment_notes ?? undefined,
 
     // Prefer JSONB columns (UI edits) — fall back to materials table rows (Claude MCP inserts)
     outgoing_materials: (row.outgoing_materials as OutgoingMaterial[] | null)?.length

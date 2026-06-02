@@ -204,7 +204,7 @@ const handler = createMcpHandler(
         field: z.enum([
           // Core event details
           'organization','event_name','event_date','event_time','event_city','event_location',
-          'event_format','topic','fee','deposit_amount','session_length','audience_size',
+          'event_format','topic','fee','deposit_amount','payment_notes','session_length','audience_size',
           'travel_covered','travel_destination','hotel_covered','av_needs','source',
           'booker_name','notes','outstanding_items','follow_up_details',
           // Briefing — prep context
