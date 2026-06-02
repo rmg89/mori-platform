@@ -202,7 +202,7 @@ export function generateContract(client: Client): Blob {
 
 // ─── Briefing Document ────────────────────────────────────────────────────────────
 
-export function generateBriefingDoc(client: Client): Blob {
+function buildBriefingDoc(client: Client) {
   const doc = createDoc()
 
   const eventType = (client as any).event_type || 'speaking'
@@ -499,7 +499,15 @@ export function generateBriefingDoc(client: Client): Blob {
   }
 
   addFooter(doc, 1)
-  return doc.output('blob')
+  return doc
+}
+
+export function generateBriefingDoc(client: Client): Blob {
+  return buildBriefingDoc(client).output('blob') as Blob
+}
+
+export function generateBriefingDocBytes(client: Client): Uint8Array {
+  return buildBriefingDoc(client).output('uint8array') as Uint8Array
 }
 
 // ─── Invoice ──────────────────────────────────────────────────────────────────

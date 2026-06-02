@@ -1588,10 +1588,32 @@ function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial
         <div className="space-y-4">
           <div className="space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Flight</p>
-            <EditableField label="Airline + Flight #  |  Route  |  Times" value={(e as any).flight_details}
-              placeholder="Airline, flight number, route, times" onSave={v => save({ flight_details: v } as any)} />
-            <EditableField label="Confirmation Link" value={(e as any).flight_confirmation}
-              placeholder="Confirmation link" onSave={v => save({ flight_confirmation: v } as any)} />
+            <EditableField label="Flight Details" value={(e as any).flight_details}
+              placeholder="e.g. AA 2174 MSY→CLT 4:17–7:28 PM · AA 1858 CLT→ALB 8:35–10:35 PM"
+              multiline
+              onSave={v => save({ flight_details: v } as any)} />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300 mb-1">Confirmation #</p>
+              {(e as any).flight_confirmation ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-mono font-semibold text-ink tracking-wider">{(e as any).flight_confirmation}</span>
+                  <button onClick={() => {
+                    const val = (e as any).flight_confirmation as string
+                    if (val?.startsWith('http')) window.open(val, '_blank')
+                  }}
+                    className="text-[10px] text-ink-300 hover:text-ink-500 transition-colors">
+                    {((e as any).flight_confirmation as string)?.startsWith('http') ? 'Open →' : ''}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => {
+                  const v = prompt('Confirmation # or link:')
+                  if (v) save({ flight_confirmation: v } as any)
+                }} className="text-sm text-ink-200 italic hover:text-ink-400 transition-colors">
+                  Add confirmation…
+                </button>
+              )}
+            </div>
           </div>
           <div className="space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Hotel</p>
