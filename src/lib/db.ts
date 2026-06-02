@@ -72,6 +72,7 @@ interface EngagementRow {
   outstanding_items: string | null
   media_links: string | null
   wrap_up_review_needed: boolean
+  booking_review_needed: boolean
   outgoing_materials: unknown[] | null
   incoming_materials: unknown[] | null
   outgoing_not_needed: boolean
@@ -339,6 +340,7 @@ function assembleEngagement(
     briefing_notes: briefingNotes.map(mapBriefingNote),
     invoice_sent_at: row.invoice_sent_at ?? undefined,
     wrap_up_review_needed: row.wrap_up_review_needed ?? false,
+    booking_review_needed: row.booking_review_needed ?? false,
     deposit_amount: row.deposit_amount ?? undefined,
     deposit_invoice_sent_at: row.deposit_invoice_sent_at ?? undefined,
     deposit_received_at: row.deposit_received_at ?? undefined,

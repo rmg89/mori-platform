@@ -248,6 +248,7 @@ export interface Engagement {
   post_event_notes?: string                  // general wrap-up notes/context
   invoice_sent_at?: string
   wrap_up_review_needed?: boolean
+  booking_review_needed?: boolean
   deposit_amount?: number
   deposit_invoice_sent_at?: string
   deposit_received_at?: string

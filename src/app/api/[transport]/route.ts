@@ -179,9 +179,9 @@ const handler = createMcpHandler(
       description: 'Graduate a prospect to a confirmed engagement when they have been booked.',
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
-      const { error } = await supabase.from('engagements').update({ section: 'engagements', prospect_step: null, updated_at: new Date().toISOString() }).eq('id', engagement_id)
+      const { error } = await supabase.from('engagements').update({ section: 'engagements', prospect_step: null, booking_review_needed: true, updated_at: new Date().toISOString() }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-      return { content: [{ type: 'text' as const, text: 'Moved to confirmed engagements.' }] }
+      return { content: [{ type: 'text' as const, text: 'Moved to confirmed engagements. booking_review_needed is now true — add a briefing note summarising what you know: confirmed date, fee, format, contact, and what still needs to be set up (contract, deposit, materials).' }] }
     })
 
     // ── 8. move_to_wrapup ─────────────────────────────────────────────────────
@@ -229,10 +229,10 @@ const handler = createMcpHandler(
     // ── 10. set_engagement_flag ───────────────────────────────────────────────
     server.registerTool('set_engagement_flag', {
       title: 'Set Engagement Flag',
-      description: 'Mark a workflow flag on an engagement. For not_needed: pass flag="not_needed", item="<field_or_section>" and value=true to opt it out. Use wrap_up_reviewed (value=true) to clear the post-event review flag once you have set up the wrap-up checklist and added a debrief note. Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, not_needed, wrap_up_reviewed.',
+      description: 'Mark a workflow flag on an engagement. For not_needed: pass flag="not_needed", item="<field_or_section>" and value=true to opt it out. Use booking_reviewed (value=true) to clear the new-booking review flag after summarising what is confirmed and what is still needed. Use wrap_up_reviewed (value=true) to clear the post-event review flag after debriefing. Flags: contract_sent, contract_signed, materials_sent, briefing_complete, materials_requested, deposit_invoice_sent, deposit_received, not_needed, booking_reviewed, wrap_up_reviewed.',
       inputSchema: {
         engagement_id: z.string(),
-        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','not_needed','wrap_up_reviewed']),
+        flag: z.enum(['contract_sent','contract_signed','materials_sent','briefing_complete','materials_requested','deposit_invoice_sent','deposit_received','not_needed','wrap_up_reviewed','booking_reviewed']),
         value: z.boolean(),
         item: z.string().optional(),
       },
@@ -259,6 +259,7 @@ const handler = createMcpHandler(
         deposit_invoice_sent: { deposit_invoice_sent_at: value ? now : null },
         deposit_received:     { deposit_received_at: value ? now : null },
         wrap_up_reviewed:     { wrap_up_review_needed: false },
+        booking_reviewed:     { booking_review_needed: false },
       }
       const { error } = await supabase.from('engagements').update({ ...colMap[flag], updated_at: now }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }

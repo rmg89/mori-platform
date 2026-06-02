@@ -353,6 +353,7 @@ export default function DashboardPage() {
   const beyond2Weeks = allUpcoming.filter(e => daysUntil(e.event_date!) > 14)
   const carouselEvents = within2Weeks.length >= 3 ? within2Weeks : [...within2Weeks, ...beyond2Weeks.slice(0, 3 - within2Weeks.length)]
 
+  const bookingReview = active.filter(e => (e as any).booking_review_needed)
   const postEventReview = postEvent.filter(e => (e as any).wrap_up_review_needed)
   const alertGroups = buildAlerts(prospects, active, postEvent)
   const reviewCount = reviewItems.filter(r => !r.confirmed_by).length
@@ -423,6 +424,47 @@ export default function DashboardPage() {
         {carouselEvents.length > 0 && (
           <div className="mb-6">
             <BriefingDocCarousel events={carouselEvents} />
+          </div>
+        )}
+
+        {/* ── New Booking Review strip ── */}
+        {bookingReview.length > 0 && (
+          <div className="mb-6 bg-white border border-sage/30 rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-sage/20">
+              <div className="w-2 h-2 rounded-full bg-sage flex-shrink-0" />
+              <h2 className="font-display text-xl font-semibold text-ink">New Bookings to Confirm</h2>
+              <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{bookingReview.length} need{bookingReview.length === 1 ? 's' : ''} review</span>
+            </div>
+            <div className="divide-y divide-ink-50">
+              {bookingReview.map(e => {
+                const note = e.briefing_notes?.filter((n: any) => !n.resolved).slice(-1)[0]
+                return (
+                  <div key={e.id} className="flex items-center gap-4 px-6 py-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
+                        {e.event_date && (
+                          <span className="text-[10px] text-ink-300 flex-shrink-0">
+                            {new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        )}
+                        {e.fee && (
+                          <span className="text-[10px] text-sage font-medium flex-shrink-0">${e.fee.toLocaleString()}</span>
+                        )}
+                      </div>
+                      {note
+                        ? <p className="text-xs text-ink-400 truncate">{note.body}</p>
+                        : <p className="text-xs text-ink-300 italic">No booking note yet — ask Claude to summarise what's confirmed and what's still needed</p>
+                      }
+                    </div>
+                    <Link href={`/engagements/${e.id}`}
+                      className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0">
+                      Review
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 
