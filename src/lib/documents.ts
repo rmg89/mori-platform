@@ -349,7 +349,8 @@ export function generateBriefingDoc(client: Client): Blob {
       doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
       doc.text('FLIGHT', 50, y); y += 13
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      doc.text((client as any).flight_details, 50, y); y += 14
+      const flightLines = doc.splitTextToSize(String((client as any).flight_details), 512)
+      doc.text(flightLines, 50, y); y += flightLines.length * 13 + 2
     }
 
     if ((client as any).hotel_name) {
@@ -404,14 +405,17 @@ export function generateBriefingDoc(client: Client): Blob {
 
     doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
     for (const row of ros) {
+      const rosRow = row as { date?: string; time?: string; what?: string; notes?: string }
+      const timeLabel = [rosRow.date, rosRow.time].filter(Boolean).join(' ')
       doc.setFont('helvetica', 'bold')
-      doc.text(row.time, 54, y)
+      if (timeLabel) doc.text(timeLabel, 54, y)
       doc.setFont('helvetica', 'normal')
-      const whatLines = doc.splitTextToSize(row.what, 220)
+      const whatText = rosRow.what || ''
+      const whatLines = whatText ? doc.splitTextToSize(whatText, 220) : ['']
       doc.text(whatLines, 160, y)
-      if (row.notes) {
+      if (rosRow.notes) {
         doc.setTextColor(100, 97, 90)
-        const noteLines = doc.splitTextToSize(row.notes, 145)
+        const noteLines = doc.splitTextToSize(rosRow.notes, 145)
         doc.text(noteLines, 400, y)
         doc.setTextColor(15, 14, 12)
       }

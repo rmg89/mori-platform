@@ -392,7 +392,10 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
 
 function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: Partial<Engagement>) => void; briefingComplete: boolean }) {
   const [draft, setDraft] = useState('')
+  const [showResolved, setShowResolved] = useState(false)
   const notes: BriefingNote[] = e.briefing_notes ?? []
+  const open = notes.filter(n => !n.resolved)
+  const resolved = notes.filter(n => n.resolved)
 
   function addNote() {
     if (!draft.trim()) return
@@ -439,31 +442,51 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
       </div>
 
       {/* Notes log */}
-      {notes.length > 0 && (
+      {/* Open notes first */}
+      {open.length > 0 && (
         <div className="space-y-1.5 mb-3">
-          {notes.map(note => {
-            const resolved = note.resolved
-            return (
-              <div key={note.id} className={`group/note flex items-start gap-2 ${resolved ? 'opacity-40' : ''}`}>
-                <div className={`flex-1 bg-white border rounded-lg px-3 py-2 ${resolved ? 'border-ink-100' : 'border-ink-100'}`}>
-                  <p className={`text-xs leading-snug ${resolved ? 'line-through text-ink-300' : 'text-ink'}`}>{note.body}</p>
-                  <p className="text-[10px] text-ink-300 mt-0.5">{formatElapsed(note.created_at)}</p>
-                </div>
-                <div className="flex flex-col gap-1 opacity-0 group-hover/note:opacity-100 transition-all flex-shrink-0 mt-1.5">
-                  {!resolved && (
-                    <button onClick={() => resolveNote(note.id)}
-                      className="text-ink-200 hover:text-sage transition-colors" title="Mark resolved">
-                      <Check size={11} />
-                    </button>
-                  )}
-                  <button onClick={() => removeNote(note.id)}
-                    className="text-ink-200 hover:text-red-400 transition-colors" title="Delete">
+          {open.map(note => (
+            <div key={note.id} className="group/note flex items-start gap-2">
+              <div className="flex-1 bg-white border border-ink-100 rounded-lg px-3 py-2">
+                <p className="text-xs leading-relaxed text-ink whitespace-pre-line">{note.body}</p>
+                <p className="text-[10px] text-ink-300 mt-1">{formatElapsed(note.created_at)}</p>
+              </div>
+              <div className="flex flex-col gap-1 opacity-0 group-hover/note:opacity-100 transition-all flex-shrink-0 mt-1.5">
+                <button onClick={() => resolveNote(note.id)} className="text-ink-200 hover:text-sage transition-colors" title="Mark resolved">
+                  <Check size={11} />
+                </button>
+                <button onClick={() => removeNote(note.id)} className="text-ink-200 hover:text-red-400 transition-colors" title="Delete">
+                  <X size={11} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Resolved notes — collapsed by default */}
+      {resolved.length > 0 && (
+        <div className="mb-3">
+          <button onClick={() => setShowResolved(v => !v)}
+            className="flex items-center gap-1.5 text-[10px] text-ink-300 hover:text-ink-500 transition-colors mb-1.5 font-medium uppercase tracking-wider">
+            <ChevronDown size={11} className={`transition-transform ${showResolved ? '' : '-rotate-90'}`} />
+            Completed ({resolved.length})
+          </button>
+          {showResolved && (
+            <div className="space-y-1.5">
+              {resolved.map(note => (
+                <div key={note.id} className="group/note flex items-start gap-2 opacity-40">
+                  <div className="flex-1 bg-white border border-ink-100 rounded-lg px-3 py-2">
+                    <p className="text-xs leading-relaxed line-through text-ink-300 whitespace-pre-line">{note.body}</p>
+                    <p className="text-[10px] text-ink-300 mt-0.5">{formatElapsed(note.created_at)}</p>
+                  </div>
+                  <button onClick={() => removeNote(note.id)} className="opacity-0 group-hover/note:opacity-100 mt-1.5 text-ink-200 hover:text-red-400 transition-all">
                     <X size={11} />
                   </button>
                 </div>
-              </div>
-            )
-          })}
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1596,15 +1619,16 @@ function formatRosDate(d: string) {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
-// Normalize rows from Claude (date/session/end_time → date/time/what/notes)
+// Normalize rows from Claude — handles multiple key conventions, auto-formats ISO dates
 function normalizeRosRow(r: Record<string, unknown>): RosRow {
   const rawTime = (r.time ?? r.start_time ?? '') as string
   const isIsoDate = ISO_DATE.test(rawTime)
+  const rawDate = (r.date ?? (isIsoDate ? rawTime : undefined)) as string | undefined
   return {
-    date: (r.date ?? (isIsoDate ? rawTime : undefined)) as string | undefined,
+    date: rawDate ? (ISO_DATE.test(rawDate) ? formatRosDate(rawDate) : rawDate) : undefined,
     time: (isIsoDate ? '' : rawTime) as string,
     what: (r.what ?? r.session ?? r.title ?? r.description ?? '') as string,
-    notes: (r.notes ?? r.role ?? '') as string,
+    notes: (r.notes ?? r.end_time ?? r.role ?? '') as string,
   }
 }
 
