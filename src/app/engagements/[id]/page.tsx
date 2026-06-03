@@ -167,6 +167,9 @@ function useProgressState(e: Engagement, save: (p: Partial<Engagement>) => void)
     const now = new Date().toISOString()
     save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, received: !m.received, received_at: !m.received ? now : undefined } : m) })
   }
+  function renameIncoming(id: string, label: string) {
+    save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, label } : m) })
+  }
   function captureNote(id: string, note: string) {
     const now = new Date().toISOString()
     save({ incoming_materials: incoming.map(m => m.id === id ? { ...m, note, received: true, received_at: m.received_at ?? now } : m) })
@@ -205,14 +208,27 @@ function useProgressState(e: Engagement, save: (p: Partial<Engagement>) => void)
     outgoingDone, incomingDone,
     contractComplete, outgoingComplete, incomingComplete, briefingComplete,
     toggleOutgoing, removeOutgoing, addCustomOutgoing,
-    addIncoming, toggleIncoming, toggleIncomingPin, removeIncoming, toggleContractFlag,
+    addIncoming, toggleIncoming, toggleIncomingPin, removeIncoming, renameIncoming, toggleContractFlag,
     attachFile, removeFile, captureNote, captureLink,
   }
 }
 
 // ─── Incoming Item ────────────────────────────────────────────────────────────
 
-function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove, onPin, onCaptureNote, onCaptureLink, onAttachFile, onRemoveFile }: {
+function EditableInlineLabel({ value, className, onSave }: { value: string; className?: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  if (editing) return (
+    <input autoFocus value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={() => { onSave(draft); setEditing(false) }}
+      onKeyDown={e => { if (e.key === 'Enter') { onSave(draft); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
+      className="flex-1 text-sm font-medium bg-transparent border-b border-gold/50 outline-none text-ink" />
+  )
+  return <span className={className} onDoubleClick={() => { setDraft(value); setEditing(true) }} title="Double-click to rename">{value}</span>
+}
+
+function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove, onPin, onRenameLabel, onCaptureNote, onCaptureLink, onAttachFile, onRemoveFile }: {
   item: IncomingMaterial
   overdue: boolean
   captured: boolean
@@ -220,6 +236,7 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
   onUndo: () => void
   onRemove: () => void
   onPin: () => void
+  onRenameLabel: (label: string) => void
   onCaptureNote: (note: string) => void
   onCaptureLink: (link: string) => void
   onAttachFile: (url: string, name: string) => void
@@ -243,9 +260,11 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
           ? <CheckCircle2 size={13} className="text-sage flex-shrink-0" />
           : <Circle size={13} className={`flex-shrink-0 ${overdue ? 'text-red-400' : 'text-ink-200'}`} />
         }
-        <span className={`flex-1 text-sm font-medium truncate ${captured ? 'text-sage' : overdue ? 'text-red-600' : 'text-ink-400'}`}>
-          {item.label}
-        </span>
+        <EditableInlineLabel
+          value={item.label}
+          className={`flex-1 text-sm font-medium truncate ${captured ? 'text-sage' : overdue ? 'text-red-600' : 'text-ink-400'}`}
+          onSave={onRenameLabel}
+        />
         {captured && item.received_at && (
           <span className="text-[10px] text-sage/70 flex-shrink-0">{formatElapsed(item.received_at)}</span>
         )}
@@ -1083,7 +1102,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
     outgoing, incoming, contractRequired, contractSent, contractSigned,
     outgoingDone, incomingDone, contractComplete, outgoingComplete, incomingComplete, briefingComplete,
     toggleOutgoing, removeOutgoing, addCustomOutgoing,
-    addIncoming, toggleIncoming, toggleIncomingPin, removeIncoming, toggleContractFlag,
+    addIncoming, toggleIncoming, toggleIncomingPin, removeIncoming, renameIncoming, toggleContractFlag,
     attachFile, removeFile, captureNote, captureLink,
   } = useProgressState(e, save)
 
@@ -1334,6 +1353,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
                     onUndo={() => toggleIncoming(item.id)}
                     onRemove={() => removeIncoming(item.id)}
                     onPin={() => toggleIncomingPin(item.id)}
+                    onRenameLabel={(label) => renameIncoming(item.id, label)}
                     onCaptureNote={(note) => captureNote(item.id, note)}
                     onCaptureLink={(link) => captureLink(item.id, link)}
                     onAttachFile={(url, name) => attachFile(item.id, url, name)}

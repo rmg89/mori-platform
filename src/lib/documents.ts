@@ -532,19 +532,28 @@ function buildBriefingDoc(client: Client) {
 
     doc.setFontSize(9.5)
     for (const doc_ of keyDocs) {
-      checkPage(22)
-      const href = doc_.link || doc_.file_url || (doc_ as any).url || ''
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(15, 14, 12)
+      const fileHref = doc_.file_url || ''
+      const linkHref = doc_.link || (doc_ as any).url || ''
+      const linkCount = (fileHref ? 1 : 0) + (linkHref ? 1 : 0)
+      checkPage(14 + linkCount * 14 + 6)
+
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
       doc.text(s(doc_.label), 54, y)
-      if (href) {
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(100, 130, 200)
-        doc.textWithLink('Open document →', 54, y + 13, { url: href })
+      let subY = y + 13
+
+      // Use doc.link() + doc.text() separately — textWithLink causes font encoding issues
+      const addClickableLink = (label: string, url: string) => {
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 100, 180)
+        doc.text(label, 54, subY)
+        doc.link(54, subY - 9, doc.getTextWidth(label), 11, { url })
         doc.setTextColor(15, 14, 12)
-        y += 13
+        subY += 13
       }
-      y += 16
+
+      if (fileHref) addClickableLink('View uploaded file', fileHref)
+      if (linkHref) addClickableLink('Open link', linkHref)
+
+      y = subY + 4
     }
   }
 
