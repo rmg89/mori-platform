@@ -455,31 +455,41 @@ function buildBriefingDoc(client: Client) {
     y += 18
 
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
-    for (const row of ros) {
-      // Pre-calculate all column line counts so row height fits the tallest
+    const lineH = 13
+    const maxNoteLines = 4 // cap notes to keep rows compact
+    for (let ri = 0; ri < ros.length; ri++) {
+      const row = ros[ri]
       const timeRange = [row.time, row.end_time].filter(Boolean).join(' – ')
       const timeLabel = [row.date, timeRange].filter(Boolean).join('\n')
-      const timeLines = timeLabel ? doc.splitTextToSize(timeLabel, 130) : []
-      const whatLines = row.what ? doc.splitTextToSize(row.what, 200) : []
-      const noteLines = row.notes ? doc.splitTextToSize(row.notes, 125) : []
-      const lineH = 13
-      const rowH = Math.max(timeLines.length, whatLines.length, noteLines.length, 1) * lineH + 10
+      const timeLines: string[] = timeLabel ? doc.splitTextToSize(timeLabel, 130) : []
+      const whatLines: string[] = row.what ? doc.splitTextToSize(row.what, 195) : []
+      const allNoteLines: string[] = row.notes ? doc.splitTextToSize(row.notes, 120) : []
+      const noteLines = allNoteLines.slice(0, maxNoteLines)
+      if (allNoteLines.length > maxNoteLines) noteLines[maxNoteLines - 1] += '…'
+
+      const rowH = Math.max(timeLines.length, whatLines.length, noteLines.length, 1) * lineH + 12
       checkPage(rowH + 4)
 
+      // Alternating row background
+      if (ri % 2 === 0) {
+        doc.setFillColor(252, 251, 249)
+        doc.rect(50, y - 6, 512, rowH, 'F')
+      }
+
       doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      if (timeLines.length) doc.text(timeLines, 54, y)
+      if (timeLines.length) doc.text(timeLines, 56, y)
 
       doc.setFont('helvetica', 'normal')
       if (whatLines.length) doc.text(whatLines, 200, y)
 
       if (noteLines.length) {
-        doc.setTextColor(100, 97, 90)
+        doc.setTextColor(90, 88, 82)
         doc.text(noteLines, 425, y)
         doc.setTextColor(15, 14, 12)
       }
 
-      doc.setDrawColor(230, 228, 224); doc.setLineWidth(0.3)
-      doc.line(50, y + rowH - 3, 562, y + rowH - 3)
+      doc.setDrawColor(235, 233, 228); doc.setLineWidth(0.2)
+      doc.line(50, y + rowH - 4, 562, y + rowH - 4)
       y += rowH
     }
     y += 8
