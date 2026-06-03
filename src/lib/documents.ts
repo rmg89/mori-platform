@@ -456,26 +456,30 @@ function buildBriefingDoc(client: Client) {
 
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
     for (const row of ros) {
-      checkPage(20)
-      const timeRange = [row.time, row.end_time].filter(Boolean).join('-')
+      // Pre-calculate all column line counts so row height fits the tallest
+      const timeRange = [row.time, row.end_time].filter(Boolean).join(' – ')
       const timeLabel = [row.date, timeRange].filter(Boolean).join('\n')
-      doc.setFont('helvetica', 'bold')
-      if (timeLabel) {
-        const timeLines = doc.splitTextToSize(timeLabel, 135)
-        doc.text(timeLines, 54, y)
-      }
-      doc.setFont('helvetica', 'normal')
+      const timeLines = timeLabel ? doc.splitTextToSize(timeLabel, 130) : []
       const whatLines = row.what ? doc.splitTextToSize(row.what, 200) : []
+      const noteLines = row.notes ? doc.splitTextToSize(row.notes, 125) : []
+      const lineH = 13
+      const rowH = Math.max(timeLines.length, whatLines.length, noteLines.length, 1) * lineH + 10
+      checkPage(rowH + 4)
+
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+      if (timeLines.length) doc.text(timeLines, 54, y)
+
+      doc.setFont('helvetica', 'normal')
       if (whatLines.length) doc.text(whatLines, 200, y)
-      if (row.notes) {
+
+      if (noteLines.length) {
         doc.setTextColor(100, 97, 90)
-        const noteLines = doc.splitTextToSize(row.notes, 130)
-        doc.text(noteLines, 420, y)
+        doc.text(noteLines, 425, y)
         doc.setTextColor(15, 14, 12)
       }
+
       doc.setDrawColor(230, 228, 224); doc.setLineWidth(0.3)
-      const rowH = Math.max(whatLines.length || 1, 1) * 13 + 8
-      doc.line(50, y + rowH - 2, 562, y + rowH - 2)
+      doc.line(50, y + rowH - 3, 562, y + rowH - 3)
       y += rowH
     }
     y += 8
