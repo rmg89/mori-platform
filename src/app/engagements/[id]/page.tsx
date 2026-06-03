@@ -444,56 +444,7 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
         </div>
       </div>
 
-      {/* Notes log */}
-      {/* Open notes first */}
-      {open.length > 0 && (
-        <div className="space-y-1.5 mb-3">
-          {open.map(note => (
-            <div key={note.id} className="group/note flex items-start gap-2">
-              <div className="flex-1 bg-white border border-ink-100 rounded-lg px-3 py-2">
-                <p className="text-xs leading-relaxed text-ink whitespace-pre-line">{note.body}</p>
-                <p className="text-[10px] text-ink-300 mt-1">{formatElapsed(note.created_at)}</p>
-              </div>
-              <div className="flex flex-col gap-1 opacity-0 group-hover/note:opacity-100 transition-all flex-shrink-0 mt-1.5">
-                <button onClick={() => resolveNote(note.id)} className="text-ink-200 hover:text-sage transition-colors" title="Mark resolved">
-                  <Check size={11} />
-                </button>
-                <button onClick={() => removeNote(note.id)} className="text-ink-200 hover:text-red-400 transition-colors" title="Delete">
-                  <X size={11} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Resolved notes — collapsed by default */}
-      {resolved.length > 0 && (
-        <div className="mb-3">
-          <button onClick={() => setShowResolved(v => !v)}
-            className="flex items-center gap-1.5 text-[10px] text-ink-300 hover:text-ink-500 transition-colors mb-1.5 font-medium uppercase tracking-wider">
-            <ChevronDown size={11} className={`transition-transform ${showResolved ? '' : '-rotate-90'}`} />
-            Completed ({resolved.length})
-          </button>
-          {showResolved && (
-            <div className="space-y-1.5">
-              {resolved.map(note => (
-                <div key={note.id} className="group/note flex items-start gap-2 opacity-40">
-                  <div className="flex-1 bg-white border border-ink-100 rounded-lg px-3 py-2">
-                    <p className="text-xs leading-relaxed line-through text-ink-300 whitespace-pre-line">{note.body}</p>
-                    <p className="text-[10px] text-ink-300 mt-0.5">{formatElapsed(note.created_at)}</p>
-                  </div>
-                  <button onClick={() => removeNote(note.id)} className="opacity-0 group-hover/note:opacity-100 mt-1.5 text-ink-200 hover:text-red-400 transition-all">
-                    <X size={11} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Add note input */}
+      {/* Add note input — at top for quick access */}
       <div className="flex items-start gap-2">
         <textarea
           value={draft}
@@ -510,6 +461,45 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
           Add
         </button>
       </div>
+
+      {/* Logged notes — footnote style below input */}
+      {(open.length > 0 || resolved.length > 0) && (
+        <div className="mt-3 pt-3 border-t border-ink-50 space-y-1.5">
+          {open.map(note => (
+            <div key={note.id} className="group/note flex items-start gap-2">
+              <div className="flex-1 bg-parchment/60 rounded-lg px-3 py-2">
+                <p className="text-xs leading-relaxed text-ink-500 whitespace-pre-line">{note.body}</p>
+                <p className="text-[10px] text-ink-300 mt-0.5">{formatElapsed(note.created_at)}</p>
+              </div>
+              <div className="flex flex-col gap-1 opacity-0 group-hover/note:opacity-100 transition-all flex-shrink-0 mt-1.5">
+                <button onClick={() => resolveNote(note.id)} className="text-ink-200 hover:text-sage transition-colors" title="Mark resolved"><Check size={11} /></button>
+                <button onClick={() => removeNote(note.id)} className="text-ink-200 hover:text-red-400 transition-colors" title="Delete"><X size={11} /></button>
+              </div>
+            </div>
+          ))}
+          {resolved.length > 0 && (
+            <div>
+              <button onClick={() => setShowResolved(v => !v)}
+                className="flex items-center gap-1 text-[10px] text-ink-200 hover:text-ink-400 transition-colors mt-1">
+                <ChevronDown size={10} className={`transition-transform ${showResolved ? '' : '-rotate-90'}`} />
+                {resolved.length} resolved
+              </button>
+              {showResolved && (
+                <div className="space-y-1.5 mt-1.5">
+                  {resolved.map(note => (
+                    <div key={note.id} className="group/note flex items-start gap-2 opacity-40">
+                      <div className="flex-1 bg-parchment/40 rounded-lg px-3 py-1.5">
+                        <p className="text-xs line-through text-ink-300 whitespace-pre-line">{note.body}</p>
+                      </div>
+                      <button onClick={() => removeNote(note.id)} className="opacity-0 group-hover/note:opacity-100 mt-1 text-ink-200 hover:text-red-400 transition-all"><X size={11} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   )
@@ -1572,6 +1562,34 @@ function SectionVenue({ e, save, onRemove }: { e: Engagement; save: (p: Partial<
 
 // ─── Flight Card ──────────────────────────────────────────────────────────────
 
+const AIRPORTS: Record<string, string> = {
+  MSY:'New Orleans', CLT:'Charlotte', ALB:'Albany', JFK:'New York (JFK)',
+  LGA:'New York (LGA)', EWR:'Newark', LAX:'Los Angeles', ORD:"Chicago",
+  MDW:'Chicago (Midway)', ATL:'Atlanta', DFW:'Dallas', DEN:'Denver',
+  SFO:'San Francisco', SEA:'Seattle', BOS:'Boston', PHL:'Philadelphia',
+  MIA:'Miami', PHX:'Phoenix', IAH:'Houston', HOU:'Houston (Hobby)',
+  BWI:'Baltimore', DCA:'Washington DC', IAD:'Dulles', MCO:'Orlando',
+  TPA:'Tampa', SAN:'San Diego', PDX:'Portland', STL:'St. Louis',
+  DTW:'Detroit', MSP:'Minneapolis', PIT:'Pittsburgh', BNA:'Nashville',
+  RSW:'Fort Myers', FLL:'Fort Lauderdale', LAS:'Las Vegas', SLC:'Salt Lake City',
+  OAK:'Oakland', SJC:'San Jose', RDU:'Raleigh-Durham', CLE:'Cleveland',
+  CVG:'Cincinnati', MKE:'Milwaukee', BDL:'Hartford', SMF:'Sacramento',
+}
+
+function airportLabel(code: string) {
+  return AIRPORTS[code] ? `${code} · ${AIRPORTS[code]}` : code
+}
+
+// Normalize comma-separated single-line format to newline-separated
+function normalizeFlightDetails(raw: string): string {
+  if (raw.includes('\n')) return raw
+  // Split comma-separated legs: detect "AA NNNN" pattern as leg starts
+  return raw
+    .split(/,\s*(?=(?:[A-Z]{2,3}\s+\d+|connection|return)/i)
+    .join('\n')
+    .trim()
+}
+
 function FlightCard({ details, confirmation, onSaveDetails, onSaveConfirmation }: {
   details?: string
   confirmation?: string
@@ -1581,7 +1599,8 @@ function FlightCard({ details, confirmation, onSaveDetails, onSaveConfirmation }
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(details || '')
 
-  const legs = (details || '').split('\n').filter(l => l.trim())
+  const normalized = normalizeFlightDetails(details || '')
+  const lines = normalized.split('\n').filter(l => l.trim())
 
   function commit() { onSaveDetails(draft); setEditing(false) }
 
@@ -1598,57 +1617,76 @@ function FlightCard({ details, confirmation, onSaveDetails, onSaveConfirmation }
       {editing ? (
         <div className="space-y-2">
           <textarea autoFocus value={draft} onChange={ev => setDraft(ev.target.value)}
-            rows={4}
-            placeholder={"AA 2174 MSY→CLT 4:17 PM–7:28 PM\nConnection: 1h 07m in CLT\nAA 1858 CLT→ALB 8:35 PM–10:35 PM"}
+            rows={5}
+            placeholder={"Thu Jun 4 · AA 2174 MSY→CLT 4:17 PM–7:28 PM\nConnection: 1h 07m in CLT\nThu Jun 4 · AA 1858 CLT→ALB 8:35 PM–10:35 PM"}
             className="w-full text-xs text-ink bg-parchment border border-gold/40 rounded-lg px-3 py-2 focus:outline-none focus:border-gold resize-none font-mono" />
           <div className="flex gap-2">
             <button onClick={commit} className="text-xs font-medium text-sage border border-sage/30 rounded-lg px-3 py-1.5 hover:bg-sage/5 transition-all">Save</button>
             <button onClick={() => setEditing(false)} className="text-xs text-ink-300 hover:text-ink transition-colors px-2">Cancel</button>
           </div>
         </div>
-      ) : legs.length > 0 ? (
+      ) : lines.length > 0 ? (
         <div className="rounded-xl border border-ink-100 overflow-hidden divide-y divide-ink-50">
-          {legs.map((line, i) => {
-            const isConnection = /^connection:/i.test(line.trim())
-            const isBlank = !line.trim()
-            if (isBlank) return null
-            if (isConnection) return (
-              <div key={i} className="px-4 py-2 bg-parchment/60 flex items-center gap-2">
-                <div className="w-px h-4 bg-ink-200 mx-1.5 flex-shrink-0" />
-                <span className="text-xs text-ink-400 italic">{line.trim()}</span>
+          {lines.map((line, i) => {
+            const trimmed = line.trim()
+            if (!trimmed) return null
+
+            // Connection line
+            if (/^connection/i.test(trimmed)) return (
+              <div key={i} className="px-4 py-2 bg-parchment/50 flex items-center gap-2">
+                <div className="w-px h-3 bg-ink-200 mx-2 flex-shrink-0" />
+                <span className="text-[11px] text-ink-400 italic">{trimmed.replace(/^connection:?\s*/i, 'Connection: ')}</span>
               </div>
             )
+
+            // Extract optional date prefix: "Thu Jun 4 · AA 2174 ..."
+            const dateMatch = trimmed.match(/^([A-Za-z]{3} \w+ \d+)\s*[·•|]\s*(.+)/)
+            const date = dateMatch ? dateMatch[1] : null
+            const legStr = dateMatch ? dateMatch[2] : trimmed
+
             // Parse flight leg: AA 2174 MSY→CLT 4:17 PM–7:28 PM
-            const match = line.match(/^([A-Z0-9]{2,3})\s+(\d+)\s+([A-Z]{3})(?:→|->)([A-Z]{3})\s+(.+)/)
-            if (match) {
-              const [, carrier, num, from, to, times] = match
-              const [depart, arrive] = times.split(/[–-]/).map(t => t.trim())
+            const legMatch = legStr.match(/^([A-Z0-9]{2,3})\s+(\d+)\s+([A-Z]{3})(?:→|->)([A-Z]{3})\s+(.+)/)
+            if (legMatch) {
+              const [, carrier, num, from, to, times] = legMatch
+              const timeParts = times.split(/\s*[–-]\s*/).map(t => t.trim()).filter(Boolean)
+              const depart = timeParts[0] || ''
+              const arrive = timeParts[1] || ''
               return (
-                <div key={i} className="px-4 py-3 flex items-center gap-3 bg-white">
-                  <span className="text-[10px] font-bold text-ink-300 w-12 flex-shrink-0">{carrier} {num}</span>
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-ink">{from}</span>
-                    <div className="flex-1 flex items-center gap-1 min-w-0">
-                      <div className="h-px flex-1 bg-ink-200" />
-                      <span className="text-ink-200 text-xs">✈</span>
-                      <div className="h-px flex-1 bg-ink-200" />
+                <div key={i} className="px-4 py-3 bg-white">
+                  {date && <p className="text-[10px] text-ink-300 mb-1.5 font-medium">{date}</p>}
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold text-ink-300 w-14 flex-shrink-0">{carrier} {num}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="text-center flex-shrink-0">
+                          <p className="text-sm font-bold text-ink leading-tight">{from}</p>
+                          <p className="text-[10px] text-ink-400 leading-tight">{AIRPORTS[from] || ''}</p>
+                        </div>
+                        <div className="flex-1 flex items-center gap-1 min-w-0 mx-1">
+                          <div className="h-px flex-1 bg-ink-200" />
+                          <span className="text-ink-300 text-[10px]">✈</span>
+                          <div className="h-px flex-1 bg-ink-200" />
+                        </div>
+                        <div className="text-center flex-shrink-0">
+                          <p className="text-sm font-bold text-ink leading-tight">{to}</p>
+                          <p className="text-[10px] text-ink-400 leading-tight">{AIRPORTS[to] || ''}</p>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-sm font-semibold text-ink">{to}</span>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xs font-medium text-ink">{depart}</p>
-                    {arrive && <p className="text-xs text-ink-400">{arrive}</p>}
+                    <div className="text-right flex-shrink-0">
+                      {depart && <p className="text-xs font-semibold text-ink">{depart}</p>}
+                      {arrive && <p className="text-xs text-ink-400">{arrive}</p>}
+                    </div>
                   </div>
                 </div>
               )
             }
-            // Fallback: raw line
-            return <div key={i} className="px-4 py-2 text-xs text-ink-400">{line}</div>
+            // Fallback
+            return <div key={i} className="px-4 py-2 text-xs text-ink-400">{trimmed}</div>
           })}
         </div>
       ) : (
-        <button onClick={() => setEditing(true)}
-          className="text-sm text-ink-200 italic hover:text-ink-400 transition-colors">
+        <button onClick={() => setEditing(true)} className="text-sm text-ink-200 italic hover:text-ink-400 transition-colors">
           Add flight details…
         </button>
       )}

@@ -198,7 +198,7 @@ const handler = createMcpHandler(
     // ── 9. update_engagement_field ────────────────────────────────────────────
     server.registerTool('update_engagement_field', {
       title: 'Update Engagement Field',
-      description: 'Update any field on an engagement. Field formatting rules: flight_details — one leg per line, format each as "AA 1234 JFK→LAX 8:00 AM–11:30 AM"; include connection info as a separate line "Connection: 1h 15m in CLT"; for return flights add a blank line then the return leg. run_of_show — JSON string: \'[{"date":"Thu Jun 5","time":"9:30 AM","end_time":"11:00 AM","what":"Session title","notes":"Mori\'s role"}]\'. company_id — pass the company UUID. All other fields are plain strings/numbers/booleans.',
+      description: 'Update any field on an engagement. Field formatting rules: flight_details — one leg per line WITH date prefix, format each as "Thu Jun 4 · AA 1234 JFK→LAX 8:00 AM–11:30 AM"; connection on its own line as "Connection: 1h 15m in CLT"; return flights after a blank line. run_of_show — JSON string: \'[{"date":"Thu Jun 5","time":"9:30 AM","end_time":"11:00 AM","what":"Session title","notes":"Mori\'s role"}]\'. company_id — pass the company UUID. All other fields are plain strings/numbers/booleans.',
       inputSchema: {
         engagement_id: z.string(),
         field: z.enum([
@@ -589,7 +589,35 @@ const handler = createMcpHandler(
       return { content: [{ type: 'text' as const, text: 'Company updated.' }] }
     })
 
-    // ── 26. generate_briefing_pdf ─────────────────────────────────────────────
+    // ── 26. get_document_text ─────────────────────────────────────────────────
+    server.registerTool('get_document_text', {
+      title: 'Get Document Text',
+      description: 'Fetch and read the text content of an uploaded document or linked URL. Use this to read PDFs, schedules, agendas, fireside chat questions, or any file attached to an engagement. Pass the file_url or link from a material item returned by get_engagement.',
+      inputSchema: { url: z.string() },
+    }, async ({ url }) => {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) return { content: [{ type: 'text' as const, text: `Failed to fetch: ${res.status}` }] }
+
+        const contentType = res.headers.get('content-type') || ''
+
+        if (contentType.includes('pdf') || url.toLowerCase().endsWith('.pdf')) {
+          const pdfParse = require('pdf-parse')
+          const buffer = Buffer.from(await res.arrayBuffer())
+          const data = await pdfParse(buffer)
+          const text = data.text.trim().slice(0, 20000) // cap at 20k chars
+          return { content: [{ type: 'text' as const, text: `[PDF — ${data.numpages} pages]\n\n${text}` }] }
+        }
+
+        // For HTML/text content
+        const text = await res.text()
+        return { content: [{ type: 'text' as const, text: text.slice(0, 20000) }] }
+      } catch (err: unknown) {
+        return { content: [{ type: 'text' as const, text: `Error reading document: ${err instanceof Error ? err.message : String(err)}` }] }
+      }
+    })
+
+    // ── 27. generate_briefing_pdf ─────────────────────────────────────────────
     server.registerTool('generate_briefing_pdf', {
       title: 'Generate Briefing PDF',
       description: 'Generate the briefing document PDF for an engagement and return a URL you can share directly in chat. Call this whenever asked to produce or send the briefing doc. Pass the engagement_id (get it from list_engagements or get_engagement). Returns a public URL — paste it in your response so the user can open it.',
