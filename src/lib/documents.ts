@@ -546,8 +546,9 @@ export function generateBriefingDoc(client: Client): Blob {
   return buildBriefingDoc(client).output('blob') as Blob
 }
 
-export function generateBriefingDocBytes(client: Client): Uint8Array {
-  return buildBriefingDoc(client).output('uint8array') as Uint8Array
+export function generateBriefingDocBytes(client: Client): Buffer {
+  const ab = buildBriefingDoc(client).output('arraybuffer') as ArrayBuffer
+  return Buffer.from(ab)
 }
 
 // ─── Invoice ──────────────────────────────────────────────────────────────────

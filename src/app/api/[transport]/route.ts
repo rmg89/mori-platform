@@ -620,15 +620,36 @@ const handler = createMcpHandler(
     // ── 27. generate_briefing_pdf ─────────────────────────────────────────────
     server.registerTool('generate_briefing_pdf', {
       title: 'Generate Briefing PDF',
-      description: 'Get the shareable briefing PDF link. PDFs are generated in the browser — if no link exists yet, tell the user to open the engagement page, click "Share" in the Briefing Document section header, then call this tool again to get the URL.',
+      description: 'Generate the briefing document PDF for an engagement, upload it to storage, and return a public URL to share directly in chat. Call this whenever asked to produce or send the briefing doc.',
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
-      const { data: eng, error } = await supabase.from('engagements')
-        .select('id, organization, briefing_pdf_url').eq('id', engagement_id).single()
-      if (error || !eng) return { content: [{ type: 'text' as const, text: 'Engagement not found.' }] }
-      const url = (eng as Record<string, unknown>).briefing_pdf_url as string | null
-      if (url) return { content: [{ type: 'text' as const, text: `Briefing PDF for ${(eng as Record<string, unknown>).organization}: ${url}` }] }
-      return { content: [{ type: 'text' as const, text: `No briefing PDF generated yet for ${(eng as Record<string, unknown>).organization}. Please open the engagement page, click "Share" in the Briefing Document section, then call this tool again.` }] }
+      const [{ data: eng, error: engErr }, { data: contacts }] = await Promise.all([
+        supabase.from('engagements').select('*').eq('id', engagement_id).single(),
+        supabase.from('contacts').select('*').eq('engagement_id', engagement_id),
+      ])
+      if (engErr || !eng) return { content: [{ type: 'text' as const, text: 'Engagement not found.' }] }
+
+      const client = {
+        ...(eng as Record<string, unknown>),
+        contacts: (contacts ?? []).map((c: Record<string, unknown>) => ({ ...c, is_current_point_of_contact: c.is_current_point_of_contact ?? false })),
+        comms: [], calls: [], alerts: [],
+        engagement_flags: [], media_flags: [], post_event_flags: [], post_event_needed: [], post_event_not_needed: [],
+      }
+
+      const { generateBriefingDocBytes } = await import('@/lib/documents')
+      const buffer = generateBriefingDocBytes(client as any)
+
+      const filename = `briefings/${engagement_id}.pdf`
+      const { data: upload, error: uploadErr } = await supabase.storage
+        .from('materials')
+        .upload(filename, buffer, { contentType: 'application/pdf', upsert: true })
+
+      if (uploadErr) return { content: [{ type: 'text' as const, text: `Upload error: ${uploadErr.message}` }] }
+
+      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(upload.path)
+      await supabase.from('engagements').update({ briefing_pdf_url: publicUrl }).eq('id', engagement_id)
+
+      return { content: [{ type: 'text' as const, text: `Briefing PDF for ${(eng as Record<string, unknown>).organization}: ${publicUrl}` }] }
     })
 
   },
