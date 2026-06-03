@@ -522,17 +522,17 @@ function buildBriefingDoc(client: Client) {
 
     doc.setFontSize(9.5)
     for (const doc_ of keyDocs) {
-      checkPage(20)
+      checkPage(22)
       const href = doc_.link || doc_.file_url || (doc_ as any).url || ''
       doc.setFont('helvetica', 'bold')
       doc.setTextColor(15, 14, 12)
       doc.text(s(doc_.label), 54, y)
       if (href) {
         doc.setFont('helvetica', 'normal')
-        doc.setTextColor(100, 97, 90)
-        const shortUrl = href.length > 70 ? href.slice(0, 67) + '...' : href
-        doc.text(shortUrl, 54, y + 12)
-        y += 12
+        doc.setTextColor(100, 130, 200)
+        doc.textWithLink('Open document →', 54, y + 13, { url: href })
+        doc.setTextColor(15, 14, 12)
+        y += 13
       }
       y += 16
     }
