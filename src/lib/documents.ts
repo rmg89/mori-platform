@@ -450,7 +450,7 @@ function buildBriefingDoc(client: Client) {
     doc.text('TIME', 54, y + 5)
     doc.text("WHAT'S HAPPENING", 200, y + 5)
     doc.text('HER ROLE / NOTES', 420, y + 5)
-    y += 18
+    y += 24
 
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
     const lineH = 13
@@ -471,7 +471,7 @@ function buildBriefingDoc(client: Client) {
       // Alternating row background
       if (ri % 2 === 0) {
         doc.setFillColor(252, 251, 249)
-        doc.rect(50, y - 6, 512, rowH, 'F')
+        doc.rect(50, y - 3, 512, rowH, 'F')
       }
 
       doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
