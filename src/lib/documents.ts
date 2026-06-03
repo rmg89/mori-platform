@@ -498,6 +498,38 @@ function buildBriefingDoc(client: Client) {
     if (client.notes) pfWide('Additional Notes', client.notes)
   }
 
+  // ── KEY DOCUMENTS ─────────────────────────────────────────────────────────
+  const incoming: { label: string; link?: string; url?: string; file_url?: string; pinned_to_briefing?: boolean }[] =
+    (client as any).incoming_materials ?? []
+  const keyDocs = incoming.filter(m => m.pinned_to_briefing !== false && (m.link || m.file_url || (m as any).url))
+
+  if (keyDocs.length > 0) {
+    checkPage(50)
+    rule()
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(201, 168, 76)
+    doc.text('KEY DOCUMENTS', 50, y)
+    y += 14
+
+    doc.setFontSize(9.5)
+    for (const doc_ of keyDocs) {
+      checkPage(20)
+      const href = doc_.link || doc_.file_url || (doc_ as any).url || ''
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(15, 14, 12)
+      doc.text(s(doc_.label), 54, y)
+      if (href) {
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(100, 97, 90)
+        const shortUrl = href.length > 70 ? href.slice(0, 67) + '...' : href
+        doc.text(shortUrl, 54, y + 12)
+        y += 12
+      }
+      y += 16
+    }
+  }
+
   addFooter(doc, 1)
   return doc
 }

@@ -592,7 +592,7 @@ const handler = createMcpHandler(
     // ── 26. generate_briefing_pdf ─────────────────────────────────────────────
     server.registerTool('generate_briefing_pdf', {
       title: 'Generate Briefing PDF',
-      description: 'Generate the briefing document PDF for an engagement, upload it to storage, and return a public URL you can share directly in chat.',
+      description: 'Generate the briefing document PDF for an engagement and return a URL you can share directly in chat. Call this whenever asked to produce or send the briefing doc. Pass the engagement_id (get it from list_engagements or get_engagement). Returns a public URL — paste it in your response so the user can open it.',
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
       // Fetch engagement + contacts

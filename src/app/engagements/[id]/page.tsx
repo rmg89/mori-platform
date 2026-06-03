@@ -161,7 +161,7 @@ function useProgressState(e: Engagement, save: (p: Partial<Engagement>) => void)
     save({ outgoing_materials: [...outgoing, { id: `custom_${Date.now()}`, label, done: false, custom: true, added_at: new Date().toISOString() }] })
   }
   function addIncoming(label: string, requested_at?: string) {
-    save({ incoming_materials: [...incoming, { id: `in_${Date.now()}`, label, received: false, added_at: new Date().toISOString(), requested_at }] })
+    save({ incoming_materials: [...incoming, { id: `in_${Date.now()}`, label, received: false, added_at: new Date().toISOString(), requested_at, pinned_to_briefing: true }] })
   }
   function toggleIncoming(id: string) {
     const now = new Date().toISOString()
@@ -252,15 +252,18 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
         {overdue && !captured && (
           <span className="text-[10px] text-red-400 flex-shrink-0">{formatElapsed(item.added_at)} — overdue</span>
         )}
-        {item.pinned_to_briefing && (
-          <span className="text-[10px] text-gold bg-gold/10 px-1.5 py-0.5 rounded font-medium flex-shrink-0">Briefing</span>
-        )}
+        {/* Briefing toggle — always visible, clear state */}
+        <button onClick={onPin}
+          title={item.pinned_to_briefing ? 'In briefing — click to mark as reference only' : 'Reference only — click to include in briefing'}
+          className={`flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors ${
+            item.pinned_to_briefing
+              ? 'text-gold bg-gold/10 hover:bg-red-50 hover:text-red-400'
+              : 'text-ink-300 bg-parchment hover:text-ink-400'
+          }`}>
+          {item.pinned_to_briefing ? 'Briefing' : 'Ref only'}
+        </button>
         {/* Hover actions */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover/in:opacity-100 transition-all flex-shrink-0 ml-1">
-          <button onClick={onPin}
-            className={`p-1.5 rounded transition-colors ${item.pinned_to_briefing ? 'text-gold' : 'text-ink-300 hover:text-gold'}`}>
-            <Pin size={12} />
-          </button>
           {captured && (
             <button onClick={onUndo} className="p-1.5 rounded text-ink-300 hover:text-ink-500 transition-colors text-[10px] font-medium">
               undo
