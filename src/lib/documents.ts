@@ -396,6 +396,10 @@ function buildBriefingDoc(client: Client) {
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
       const flightLines = doc.splitTextToSize(s((client as any).flight_details), 512)
       doc.text(flightLines, 50, y); y += flightLines.length * 13 + 2
+      if ((client as any).flight_confirmation) {
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 97, 90)
+        doc.text(`Conf #: ${s((client as any).flight_confirmation)}`, 50, y); y += 14
+      }
     }
 
     if ((client as any).hotel_name) {

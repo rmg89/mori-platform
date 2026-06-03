@@ -1920,6 +1920,8 @@ function BriefingDocument({ e }: { e: Engagement }) {
   const { updateEngagement } = useStore()
   const [sections, setSections] = useState<SectionKey[]>(() => getDefaultSections(e))
   const [downloading, setDownloading] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | undefined>((e as any).briefing_pdf_url)
 
   const save = useCallback((patch: Partial<Engagement>): void => {
     updateEngagement(e.id, patch)
@@ -1955,6 +1957,26 @@ function BriefingDocument({ e }: { e: Engagement }) {
     }
   }
 
+  async function handleShare() {
+    setSharing(true)
+    try {
+      const { generateBriefingDoc } = await import('@/lib/documents')
+      const { supabase } = await import('@/lib/supabase')
+      const blob = generateBriefingDoc(e)
+      const path = `briefings/${e.id}.pdf`
+      const { data, error } = await supabase.storage
+        .from('materials')
+        .upload(path, blob, { contentType: 'application/pdf', upsert: true })
+      if (error) { alert(`Upload failed: ${error.message}`); return }
+      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
+      setShareUrl(publicUrl)
+      updateEngagement(e.id, { briefing_pdf_url: publicUrl } as any)
+      await navigator.clipboard.writeText(publicUrl).catch(() => {})
+    } finally {
+      setSharing(false)
+    }
+  }
+
   return (
     <div id="briefing" className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
@@ -1963,11 +1985,24 @@ function BriefingDocument({ e }: { e: Engagement }) {
           <span className="text-sm font-semibold text-ink">Briefing Document</span>
           <span className="text-[10px] text-ink-300 font-medium ml-1">— click any field to edit</span>
         </div>
-        <button onClick={handleDownload} disabled={downloading}
-          className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
-          <Download size={12} />
-          {downloading ? 'Generating…' : 'Download PDF'}
-        </button>
+        <div className="flex items-center gap-2">
+          {shareUrl && (
+            <a href={shareUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[10px] text-sage hover:text-sage-dark transition-colors">
+              <ExternalLink size={10} /> Shared link
+            </a>
+          )}
+          <button onClick={handleShare} disabled={sharing}
+            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-gold border border-ink-100 hover:border-gold/40 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+            <ExternalLink size={12} />
+            {sharing ? 'Uploading…' : shareUrl ? 'Refresh link' : 'Share'}
+          </button>
+          <button onClick={handleDownload} disabled={downloading}
+            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+            <Download size={12} />
+            {downloading ? 'Generating…' : 'Download PDF'}
+          </button>
+        </div>
       </div>
 
       <div className="px-6 py-5 space-y-0">
