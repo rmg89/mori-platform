@@ -12,7 +12,7 @@ import {
   Download, FileText, Mic, Radio, Newspaper,
   Clock, Wifi, Hotel, Plane, ExternalLink,
   Pencil, Check, X, Plus, Trash2, GripVertical, ChevronDown,
-  FileCheck, Upload, Pin, PinOff, ArrowDown, Paperclip, Building2,
+  FileCheck, Upload, ArrowDown, Paperclip, Building2,
   Receipt
 } from 'lucide-react'
 import Link from 'next/link'

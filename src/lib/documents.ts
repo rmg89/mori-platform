@@ -1,6 +1,5 @@
 // Document generation using jsPDF
 // Templates are data-merge only — no AI, deterministic output
-// TODO: Replace with more robust templating (e.g., docx → PDF) once templates are finalized
 
 import { Engagement, primaryContact } from '@/types'
 type Client = Engagement
@@ -206,7 +205,6 @@ function buildBriefingDoc(client: Client) {
   const doc = createDoc()
 
   const eventType = (client as any).event_type || 'speaking'
-  const isMedia = ['podcast', 'interview', 'panel', 'livestream'].includes(eventType)
   const isInPerson = client.event_format === 'in_person'
   const isHybrid = client.event_format === 'hybrid'
   const hasPhysical = isInPerson || isHybrid

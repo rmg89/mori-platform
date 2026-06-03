@@ -429,34 +429,6 @@ export async function fetchAllEngagements(): Promise<Engagement[]> {
   )
 }
 
-export async function fetchEngagement(id: string): Promise<Engagement | null> {
-  const [
-    { data: row, error },
-    { data: contactRows },
-    { data: commRows },
-    { data: callRows },
-    { data: materialRows },
-    { data: briefingRows },
-  ] = await Promise.all([
-    supabase.from('engagements').select('*').eq('id', id).single(),
-    supabase.from('contacts').select('*').eq('engagement_id', id),
-    supabase.from('communications').select('*').eq('engagement_id', id).order('date', { ascending: true }),
-    supabase.from('calls').select('*').eq('engagement_id', id),
-    supabase.from('materials').select('*').eq('engagement_id', id),
-    supabase.from('briefing_notes').select('*').eq('engagement_id', id).order('created_at', { ascending: true }),
-  ])
-
-  if (error || !row) return null
-
-  return assembleEngagement(
-    row as EngagementRow,
-    (contactRows as ContactRow[]) ?? [],
-    (commRows as CommRow[]) ?? [],
-    (callRows as CallRow[]) ?? [],
-    (materialRows as MaterialRow[]) ?? [],
-    (briefingRows as BriefingNoteRow[]) ?? [],
-  )
-}
 
 export async function updateEngagementRow(id: string, patch: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.from('engagements').update(patch).eq('id', id)
@@ -507,22 +479,3 @@ export async function upsertCall(call: Partial<CallRow> & { engagement_id: strin
   if (error) throw new Error(`upsertCall: ${error.message}`)
 }
 
-export async function upsertMaterial(material: Partial<MaterialRow> & { engagement_id: string }): Promise<void> {
-  const { error } = await supabase.from('materials').upsert(material)
-  if (error) throw new Error(`upsertMaterial: ${error.message}`)
-}
-
-export async function insertBriefingNote(note: Omit<BriefingNoteRow, 'id' | 'created_at'>): Promise<void> {
-  const { error } = await supabase.from('briefing_notes').insert(note)
-  if (error) throw new Error(`insertBriefingNote: ${error.message}`)
-}
-
-export async function updateBriefingNote(id: string, patch: Partial<BriefingNoteRow>): Promise<void> {
-  const { error } = await supabase.from('briefing_notes').update(patch).eq('id', id)
-  if (error) throw new Error(`updateBriefingNote: ${error.message}`)
-}
-
-export async function archiveEngagement(id: string): Promise<void> {
-  const { error } = await supabase.from('engagements').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id)
-  if (error) throw new Error(`archiveEngagement: ${error.message}`)
-}
