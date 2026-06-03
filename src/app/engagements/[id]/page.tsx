@@ -1585,7 +1585,7 @@ function normalizeFlightDetails(raw: string): string {
   if (raw.includes('\n')) return raw
   // Split comma-separated legs: detect "AA NNNN" pattern as leg starts
   return raw
-    .split(/,\s*(?=(?:[A-Z]{2,3}\s+\d+|connection|return)/i)
+    .split(/,\s*(?=[A-Z]{2}\d|Connection|Return)/i)
     .join('\n')
     .trim()
 }
