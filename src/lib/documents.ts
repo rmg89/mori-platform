@@ -454,14 +454,14 @@ function buildBriefingDoc(client: Client) {
 
     doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
     const lineH = 13
-    const maxNoteLines = 4 // cap notes to keep rows compact
+    const maxNoteLines = 8
     for (let ri = 0; ri < ros.length; ri++) {
       const row = ros[ri]
       const timeRange = [row.time, row.end_time].filter(Boolean).join(' – ')
       const timeLabel = [row.date, timeRange].filter(Boolean).join('\n')
       const timeLines: string[] = timeLabel ? doc.splitTextToSize(timeLabel, 130) : []
       const whatLines: string[] = row.what ? doc.splitTextToSize(row.what, 195) : []
-      const allNoteLines: string[] = row.notes ? doc.splitTextToSize(row.notes, 120) : []
+      const allNoteLines: string[] = row.notes ? doc.splitTextToSize(row.notes, 137) : []
       const noteLines = allNoteLines.slice(0, maxNoteLines)
       if (allNoteLines.length > maxNoteLines) noteLines[maxNoteLines - 1] += '…'
 
