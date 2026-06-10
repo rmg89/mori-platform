@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
-import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem } from '@/types'
+import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
 import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, updateCompanyRow, upsertCall, insertComm, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
@@ -42,7 +42,7 @@ interface StoreActions {
   updatePostEventFollowUpDetails: (id: string, details: string) => void
   updatePostEventNotes: (id: string, notes: string) => void
   updatePostEventItemNote: (id: string, flag: PostEventFlag, note: string) => void
-  addPostEventMedia: (id: string, file: { name: string; url: string }) => void
+  addPostEventMedia: (id: string, item: { type: PostEventMediaType; name: string; url: string }) => void
   removePostEventMedia: (id: string, mediaId: string) => void
   updatePostEventStage: (id: string, stages: Partial<WrapUpFlagStages>) => void
 
@@ -374,10 +374,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const addPostEventMedia = useCallback((id: string, file: { name: string; url: string }) => {
+  const addPostEventMedia = useCallback((id: string, file: { type: PostEventMediaType; name: string; url: string }) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
-      const item: PostEventMediaItem = { id: `media_${Date.now()}`, name: file.name, url: file.url, uploaded_at: new Date().toISOString() }
+      const item: PostEventMediaItem = { id: `media_${Date.now()}`, type: file.type, name: file.name, url: file.url, uploaded_at: new Date().toISOString() }
       const post_event_media = [...(e.post_event_media ?? []), item]
       updateEngagementRow(id, { post_event_media }).catch(console.error)
       return { ...e, post_event_media, updated_at: new Date().toISOString() }

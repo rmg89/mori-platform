@@ -43,8 +43,11 @@ export type WrapUpFlagStages = {
   follow_up?: FollowUpStage
 }
 
+export type PostEventMediaType = 'photo' | 'video' | 'audio' | 'link'
+
 export interface PostEventMediaItem {
   id: string
+  type: PostEventMediaType
   name: string
   url: string
   uploaded_at: string
