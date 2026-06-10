@@ -6,9 +6,10 @@ import { PROSPECT_STEPS, ProspectStep, EngagementCall, CallFormat, CommEntry, pr
 import { formatDate, getInitials } from '@/lib/utils'
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Circle,
-  Phone, Edit3, Check, X, Plus
+  Phone, Edit3, Check, X, Plus, Trash2
 } from 'lucide-react'
 import Link from 'next/link'
+import ConfirmModal from '@/components/ConfirmModal'
 
 function formatDT(iso?: string) {
   if (!iso) return null
@@ -495,9 +496,10 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
 export default function ProspectDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall, confirmProspect, declineProspect } = useStore()
+  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall, confirmProspect, declineProspect, deleteEngagement } = useStore()
   const [showLogComm, setShowLogComm] = useState(false)
   const [showAddCall, setShowAddCall] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
@@ -775,6 +777,30 @@ export default function ProspectDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Delete */}
+      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-red-600">Delete this prospect</p>
+          <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this prospect. This cannot be undone.</p>
+        </div>
+        <button
+          onClick={() => setDeleteModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+          <Trash2 size={13} /> Delete
+        </button>
+      </div>
+
+      <ConfirmModal
+        open={deleteModalOpen}
+        title="Delete permanently?"
+        description={`This will permanently delete "${e.organization}" and all associated contacts, calls, and communications. This cannot be undone.`}
+        confirmLabel="Delete"
+        requireText="DELETE"
+        danger
+        onConfirm={() => { deleteEngagement(e.id); router.push('/prospects') }}
+        onCancel={() => setDeleteModalOpen(false)}
+      />
     </div>
   )
 }

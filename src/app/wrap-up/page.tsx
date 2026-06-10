@@ -142,7 +142,7 @@ function WrapUpReviewCard({ engagement: e, onConfirm }: { engagement: Engagement
 
 export default function WrapUpPage() {
   const { engagements: allEngagements, confirmWrapUpReview } = useStore()
-  const all = allEngagements.filter(e => e.section === 'wrap-up')
+  const all = allEngagements.filter(e => e.section === 'wrap-up' && !e.archived)
   const reviewItems = all.filter(e => e.wrap_up_review_needed)
   const engagements = all.filter(e => !e.wrap_up_review_needed)
   const pendingCount = engagements.filter(e => (e.post_event_needed ?? []).length > 0).length

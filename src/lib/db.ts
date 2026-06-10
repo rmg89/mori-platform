@@ -81,6 +81,8 @@ interface EngagementRow {
   not_needed: string[] | null
   post_event_needed: string[] | null
   post_event_not_needed: string[] | null
+  post_event_item_notes: Record<string, string> | null
+  post_event_media: unknown[] | null
 }
 
 interface ContactRow {
@@ -420,7 +422,7 @@ export async function fetchAllEngagements(): Promise<Engagement[]> {
     { data: materialRows },
     { data: briefingRows },
   ] = await Promise.all([
-    supabase.from('engagements').select('*').eq('archived', false).order('created_at', { ascending: false }),
+    supabase.from('engagements').select('*').order('created_at', { ascending: false }),
     supabase.from('contacts').select('*'),
     supabase.from('communications').select('*').order('date', { ascending: true }),
     supabase.from('calls').select('*'),
@@ -446,6 +448,11 @@ export async function fetchAllEngagements(): Promise<Engagement[]> {
 export async function updateEngagementRow(id: string, patch: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.from('engagements').update(patch).eq('id', id)
   if (error) throw new Error(`updateEngagementRow: ${error.message}`)
+}
+
+export async function deleteEngagementRow(id: string): Promise<void> {
+  const { error } = await supabase.from('engagements').delete().eq('id', id)
+  if (error) throw new Error(`deleteEngagementRow: ${error.message}`)
 }
 
 export async function insertContact(engagement_id: string, contact: Omit<ContactRow, 'id'>): Promise<string | null> {

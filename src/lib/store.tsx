@@ -1,8 +1,8 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
-import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, updateCompanyRow, upsertCall, insertComm, upsertContact, insertContact } from '@/lib/db'
+import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem } from '@/types'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, updateCompanyRow, upsertCall, insertComm, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -28,6 +28,10 @@ interface StoreActions {
   confirmBookingReview: (id: string) => void
   confirmWrapUpReview: (id: string) => void
 
+  // Archive / delete
+  archiveEngagement: (id: string) => void
+  deleteEngagement: (id: string) => void
+
   // Engagement flags
   toggleEngagementFlag: (id: string, flag: EngagementFlag) => void
   toggleMediaFlag: (id: string, flag: MediaFlag) => void
@@ -37,6 +41,9 @@ interface StoreActions {
   resetPostEventFlag: (id: string, flag: PostEventFlag) => void
   updatePostEventFollowUpDetails: (id: string, details: string) => void
   updatePostEventNotes: (id: string, notes: string) => void
+  updatePostEventItemNote: (id: string, flag: PostEventFlag, note: string) => void
+  addPostEventMedia: (id: string, file: { name: string; url: string }) => void
+  removePostEventMedia: (id: string, mediaId: string) => void
   updatePostEventStage: (id: string, stages: Partial<WrapUpFlagStages>) => void
 
   // Proposed dates
@@ -238,6 +245,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateEngagementRow(id, { wrap_up_review_needed: false }).catch(console.error)
   }, [])
 
+  const archiveEngagement = useCallback((id: string) => {
+    const now = new Date().toISOString()
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, archived: true, archived_at: now, updated_at: now } : e
+    ))
+    updateEngagementRow(id, { archived: true, archived_at: now }).catch(console.error)
+  }, [])
+
+  const deleteEngagement = useCallback((id: string) => {
+    setEngagements(prev => prev.filter(e => e.id !== id))
+    deleteEngagementRow(id).catch(console.error)
+  }, [])
+
   const toggleEngagementFlag = useCallback((id: string, flag: EngagementFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -343,6 +363,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       e.id === id ? { ...e, post_event_follow_up_details: details, updated_at: new Date().toISOString() } : e
     ))
     updateEngagementRow(id, { follow_up_details: details }).catch(console.error)
+  }, [])
+
+  const updatePostEventItemNote = useCallback((id: string, flag: PostEventFlag, note: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const post_event_item_notes = { ...(e.post_event_item_notes ?? {}), [flag]: note }
+      updateEngagementRow(id, { post_event_item_notes }).catch(console.error)
+      return { ...e, post_event_item_notes, updated_at: new Date().toISOString() }
+    }))
+  }, [])
+
+  const addPostEventMedia = useCallback((id: string, file: { name: string; url: string }) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const item: PostEventMediaItem = { id: `media_${Date.now()}`, name: file.name, url: file.url, uploaded_at: new Date().toISOString() }
+      const post_event_media = [...(e.post_event_media ?? []), item]
+      updateEngagementRow(id, { post_event_media }).catch(console.error)
+      return { ...e, post_event_media, updated_at: new Date().toISOString() }
+    }))
+  }, [])
+
+  const removePostEventMedia = useCallback((id: string, mediaId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const post_event_media = (e.post_event_media ?? []).filter(m => m.id !== mediaId)
+      updateEngagementRow(id, { post_event_media }).catch(console.error)
+      return { ...e, post_event_media, updated_at: new Date().toISOString() }
+    }))
   }, [])
 
   const updatePostEventNotes = useCallback((id: string, notes: string) => {
@@ -480,9 +528,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       engagements, reviewItems, companies, loading, error,
       updateEngagement, setProspectStep,
       confirmProspect, declineProspect, confirmBookingReview, confirmWrapUpReview,
+      archiveEngagement, deleteEngagement,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
       updatePostEventFollowUpDetails, updatePostEventNotes, updatePostEventStage,
+      updatePostEventItemNote, addPostEventMedia, removePostEventMedia,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm,
       confirmReviewItem, dismissReviewItem,

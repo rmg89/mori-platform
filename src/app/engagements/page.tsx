@@ -239,7 +239,7 @@ function ReviewCard({ engagement: e, onConfirm }: { engagement: Engagement; onCo
 
 export default function EngagementsPage() {
   const { engagements: allEngagements, confirmBookingReview } = useStore()
-  const all = allEngagements.filter(e => e.section === 'engagements')
+  const all = allEngagements.filter(e => e.section === 'engagements' && !e.archived)
   const reviewItems = all.filter(e => e.booking_review_needed)
   const engagements = all.filter(e => !e.booking_review_needed)
   const totalAlerts = engagements.reduce((n, e) => n + e.alerts.length, 0)

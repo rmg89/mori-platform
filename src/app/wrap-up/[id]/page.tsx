@@ -1,10 +1,12 @@
 'use client'
-import { useParams } from 'next/navigation'
+import { useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Paperclip, Image as ImageIcon, UploadCloud, StickyNote } from 'lucide-react'
 import Link from 'next/link'
+import ConfirmModal from '@/components/ConfirmModal'
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -98,6 +100,7 @@ function StagePills({
 
 export default function WrapUpDetailPage() {
   const { id } = useParams()
+  const router = useRouter()
   const {
     engagements: allEngagements,
     setPostEventFlagNeeded,
@@ -106,9 +109,17 @@ export default function WrapUpDetailPage() {
     resetPostEventFlag,
     updatePostEventFollowUpDetails,
     updatePostEventNotes,
+    updatePostEventItemNote,
+    addPostEventMedia,
+    removePostEventMedia,
     updatePostEventStage,
     confirmWrapUpReview,
+    archiveEngagement,
+    deleteEngagement,
   } = useStore()
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [mediaUploading, setMediaUploading] = useState(false)
 
   const e = allEngagements.find(eng => eng.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
@@ -384,6 +395,64 @@ export default function WrapUpDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Archive */}
+      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-ink">Archive this engagement</p>
+          <p className="text-xs text-ink-400 mt-0.5">
+            {allDone
+              ? 'All wrap-up items are complete — archiving moves it out of the active list.'
+              : `${outstandingCount} item${outstandingCount === 1 ? '' : 's'} still outstanding.`}
+          </p>
+        </div>
+        {allDone ? (
+          <button
+            onClick={() => { archiveEngagement(e.id); router.push('/archive') }}
+            className="flex items-center gap-1.5 text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all flex-shrink-0">
+            <FolderArchive size={13} /> Archive
+          </button>
+        ) : (
+          <button
+            onClick={() => setArchiveModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 px-4 py-2 rounded-lg hover:bg-parchment transition-all flex-shrink-0">
+            <FolderArchive size={13} /> Archive Anyway
+          </button>
+        )}
+      </div>
+
+      {/* Delete */}
+      <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-red-600">Delete this engagement</p>
+          <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+        </div>
+        <button
+          onClick={() => setDeleteModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+          <Trash2 size={13} /> Delete
+        </button>
+      </div>
+
+      <ConfirmModal
+        open={archiveModalOpen}
+        title="Archive anyway?"
+        description={`This engagement still has ${outstandingCount} outstanding wrap-up item${outstandingCount === 1 ? '' : 's'}. Archiving will move it out of the active list.`}
+        confirmLabel="Archive Anyway"
+        onConfirm={() => { archiveEngagement(e.id); router.push('/archive') }}
+        onCancel={() => setArchiveModalOpen(false)}
+      />
+
+      <ConfirmModal
+        open={deleteModalOpen}
+        title="Delete permanently?"
+        description={`This will permanently delete "${e.organization}" and all associated contacts, calls, and communications. This cannot be undone.`}
+        confirmLabel="Delete"
+        requireText="DELETE"
+        danger
+        onConfirm={() => { deleteEngagement(e.id); router.push('/wrap-up') }}
+        onCancel={() => setDeleteModalOpen(false)}
+      />
     </div>
   )
 }

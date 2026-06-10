@@ -43,6 +43,13 @@ export type WrapUpFlagStages = {
   follow_up?: FollowUpStage
 }
 
+export interface PostEventMediaItem {
+  id: string
+  name: string
+  url: string
+  uploaded_at: string
+}
+
 export const PROSPECT_STEPS: { id: ProspectStep; label: string; entry?: boolean; terminal?: boolean }[] = [
   { id: 'inquiry',    label: 'Inquiry',    entry: true },
   { id: 'outreach',   label: 'Outreach',   entry: true },
@@ -246,6 +253,8 @@ export interface Engagement {
   post_event_not_needed: PostEventFlag[]     // flags explicitly waived
   post_event_follow_up_details?: string      // what the follow-up means for this engagement
   post_event_notes?: string                  // general wrap-up notes/context
+  post_event_item_notes?: Partial<Record<PostEventFlag, string>>  // per-item notes
+  post_event_media?: PostEventMediaItem[]    // uploaded photos/videos/recordings from the event
   invoice_sent_at?: string
   wrap_up_review_needed?: boolean
   booking_review_needed?: boolean
@@ -272,6 +281,8 @@ export interface Engagement {
   confirmed_at?: string
   declined_at?: string
   cancellation_reason?: string
+  archived?: boolean
+  archived_at?: string
 
   organization: string
   company_id?: string          // links to Company.id

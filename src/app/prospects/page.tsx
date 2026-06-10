@@ -34,7 +34,7 @@ export default function ProspectsPage() {
   const activeSteps = ['inquiry', 'outreach', 'in_contact']
   const { engagements } = useStore()
   const prospects = engagements.filter(e =>
-    e.section === 'prospects' && activeSteps.includes(e.prospect_step ?? '')
+    e.section === 'prospects' && !e.archived && activeSteps.includes(e.prospect_step ?? '')
   )
   const totalAlerts = prospects.reduce((n, e) => n + e.alerts.length, 0)
   const activeProspectSteps = PROSPECT_STEPS.filter(s => !s.terminal)

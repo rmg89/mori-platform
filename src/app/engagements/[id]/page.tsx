@@ -1,6 +1,6 @@
 'use client'
 import React from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useStore } from '@/lib/store'
 import {
@@ -16,6 +16,7 @@ import {
   Receipt
 } from 'lucide-react'
 import Link from 'next/link'
+import ConfirmModal from '@/components/ConfirmModal'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2013,7 +2014,9 @@ function BriefingDocument({ e }: { e: Engagement }) {
 
 export default function EngagementDetailPage() {
   const { id } = useParams()
-  const { engagements: allEngagements, updateEngagement, confirmBookingReview } = useStore()
+  const router = useRouter()
+  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement } = useStore()
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
 
@@ -2102,6 +2105,30 @@ export default function EngagementDetailPage() {
           ))}
         </div>
       </div>
+
+      {/* Delete */}
+      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-red-600">Delete this engagement</p>
+          <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+        </div>
+        <button
+          onClick={() => setDeleteModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+          <Trash2 size={13} /> Delete
+        </button>
+      </div>
+
+      <ConfirmModal
+        open={deleteModalOpen}
+        title="Delete permanently?"
+        description={`This will permanently delete "${e.organization}" and all associated contacts, calls, and communications. This cannot be undone.`}
+        confirmLabel="Delete"
+        requireText="DELETE"
+        danger
+        onConfirm={() => { deleteEngagement(e.id); router.push('/engagements') }}
+        onCancel={() => setDeleteModalOpen(false)}
+      />
 
       {/* Floating briefing CTA */}
       <FloatingBriefingButton e={e} save={save} />

@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, UserSearch, Handshake, Archive,
+  LayoutDashboard, UserSearch, Handshake, Archive, FolderArchive,
   ClipboardCheck, Sparkles, Settings, Building2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ const NAV = [
   { href: '/review',      label: 'Review',      icon: ClipboardCheck },
   { href: '/companies',   label: 'Companies',   icon: Building2 },
   { href: '/ai-tools',    label: 'AI Tools',    icon: Sparkles },
+  { href: '/archive',     label: 'Archive',     icon: FolderArchive },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
