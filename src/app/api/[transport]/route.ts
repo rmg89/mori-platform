@@ -1,6 +1,7 @@
 import { createMcpHandler } from 'mcp-handler'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { scanEngagement } from '@/lib/ai-scan'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -159,7 +160,7 @@ const handler = createMcpHandler(
     // ── 6. update_prospect_stage ──────────────────────────────────────────────
     server.registerTool('update_prospect_stage', {
       title: 'Update Prospect Stage',
-      description: 'Move a prospect to a different pipeline stage: inquiry, outreach, in_contact, declined.',
+      description: 'Move a prospect to a different pipeline stage: inquiry, outreach, in_contact, declined. Declining moves the engagement to Wrap-Up for review and triggers an automatic AI scan of which post-event items still apply.',
       inputSchema: {
         engagement_id: z.string(),
         stage: z.enum(['inquiry','outreach','in_contact','declined']),
@@ -168,31 +169,42 @@ const handler = createMcpHandler(
     }, async ({ engagement_id, stage, reason }) => {
       const patch: Record<string, unknown> = { prospect_step: stage, updated_at: new Date().toISOString() }
       if (reason) patch.cancellation_reason = reason
+      if (stage === 'declined') {
+        patch.section = 'wrap-up'
+        patch.wrap_up_review_needed = true
+        patch.declined_at = new Date().toISOString()
+      }
       const { error } = await supabase.from('engagements').update(patch).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (stage === 'declined') {
+        try { await scanEngagement(supabase, engagement_id, 'declined') } catch (err) { console.error('scanEngagement (declined):', err) }
+        return { content: [{ type: 'text' as const, text: 'Stage updated to "declined". Moved to Wrap-Up for review — an AI scan has flagged which post-event items still apply.' }] }
+      }
       return { content: [{ type: 'text' as const, text: `Stage updated to "${stage}".` }] }
     })
 
     // ── 7. move_to_confirmed ──────────────────────────────────────────────────
     server.registerTool('move_to_confirmed', {
       title: 'Move to Confirmed',
-      description: 'Graduate a prospect to a confirmed engagement when they have been booked.',
+      description: 'Graduate a prospect to a confirmed engagement when they have been booked. Triggers an automatic AI scan that flags whether a contract is required and which prep materials are needed.',
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
-      const { error } = await supabase.from('engagements').update({ section: 'engagements', prospect_step: null, booking_review_needed: true, updated_at: new Date().toISOString() }).eq('id', engagement_id)
+      const { error } = await supabase.from('engagements').update({ section: 'engagements', prospect_step: null, booking_review_needed: true, confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-      return { content: [{ type: 'text' as const, text: 'Moved to confirmed engagements. booking_review_needed is now true — add a briefing note summarising what you know: confirmed date, fee, format, contact, and what still needs to be set up (contract, deposit, materials).' }] }
+      try { await scanEngagement(supabase, engagement_id, 'booking') } catch (err) { console.error('scanEngagement (booking):', err) }
+      return { content: [{ type: 'text' as const, text: 'Moved to confirmed engagements. An AI scan has flagged whether a contract is required and which prep materials are needed — review in the "Needs Review" section.' }] }
     })
 
     // ── 8. move_to_wrapup ─────────────────────────────────────────────────────
     server.registerTool('move_to_wrapup', {
       title: 'Move to Wrap-Up',
-      description: 'Move a confirmed engagement to wrap-up after the event has occurred.',
+      description: 'Move a confirmed engagement to wrap-up after the event has occurred. Triggers an automatic AI scan that flags which post-event items are likely needed.',
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
       const { error } = await supabase.from('engagements').update({ section: 'wrap-up', wrap_up_review_needed: true, updated_at: new Date().toISOString() }).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-      return { content: [{ type: 'text' as const, text: 'Moved to wrap-up. wrap_up_review_needed is now true — add a debrief briefing note summarising what you\'ve set up and what still needs attention.' }] }
+      try { await scanEngagement(supabase, engagement_id, 'wrapup') } catch (err) { console.error('scanEngagement (wrapup):', err) }
+      return { content: [{ type: 'text' as const, text: 'Moved to wrap-up. An AI scan has flagged which post-event items are likely needed — review in the "Needs Review" section.' }] }
     })
 
     // ── 9. update_engagement_field ────────────────────────────────────────────

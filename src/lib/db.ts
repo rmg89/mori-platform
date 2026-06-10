@@ -79,6 +79,8 @@ interface EngagementRow {
   outgoing_not_needed: boolean
   incoming_not_needed: boolean
   not_needed: string[] | null
+  post_event_needed: string[] | null
+  post_event_not_needed: string[] | null
 }
 
 interface ContactRow {
@@ -256,7 +258,7 @@ function derivePostEventFlags(row: EngagementRow): {
   stages: WrapUpFlagStages
 } {
   const done: PostEventFlag[] = []
-  const not_needed: PostEventFlag[] = []
+  const not_needed = new Set<PostEventFlag>(row.post_event_not_needed as PostEventFlag[] ?? [])
   const stages: WrapUpFlagStages = {}
 
   if (row.invoice_sent_at) {
@@ -270,9 +272,11 @@ function derivePostEventFlags(row: EngagementRow): {
     stages.media = row.media_processed ? 'processed' : row.media_uploaded ? 'uploaded' : 'received'
   }
   if (row.social_media_complete) done.push('social_media')
-  if (row.follow_up_required === false && row.section === 'wrap-up') not_needed.push('follow_up')
+  if (row.follow_up_required === false && row.section === 'wrap-up') not_needed.add('follow_up')
 
-  return { done, needed: [], not_needed, stages }
+  const needed = (row.post_event_needed as PostEventFlag[] ?? [])
+
+  return { done, needed, not_needed: Array.from(not_needed), stages }
 }
 
 // Derive alerts from engagement state
@@ -392,12 +396,21 @@ function assembleEngagement(
 export async function fetchAllEngagements(): Promise<Engagement[]> {
   // Auto-transition any confirmed engagement whose event date has passed into wrap-up
   const today = new Date().toISOString().split('T')[0]
-  await supabase
+  const { data: transitioned } = await supabase
     .from('engagements')
     .update({ section: 'wrap-up', wrap_up_review_needed: true })
     .eq('section', 'engagements')
     .eq('archived', false)
     .lt('event_date', today)
+    .select('id')
+
+  ;(transitioned ?? []).forEach((row: { id: string }) => {
+    fetch('/api/ai/scan-engagement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ engagement_id: row.id, scan_type: 'wrapup' }),
+    }).catch(() => {})
+  })
 
   const [
     { data: engRows, error: engError },

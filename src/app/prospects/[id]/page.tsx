@@ -1,5 +1,5 @@
 'use client'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { PROSPECT_STEPS, ProspectStep, EngagementCall, CallFormat, CommEntry, primaryContact } from '@/types'
@@ -494,7 +494,8 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
 
 export default function ProspectDetailPage() {
   const { id } = useParams()
-  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall } = useStore()
+  const router = useRouter()
+  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall, confirmProspect, declineProspect } = useStore()
   const [showLogComm, setShowLogComm] = useState(false)
   const [showAddCall, setShowAddCall] = useState(false)
 
@@ -589,7 +590,11 @@ export default function ProspectDetailPage() {
                   const ts = stepId === 'confirmed' ? e.confirmed_at : stepId === 'declined' ? e.declined_at : undefined
                   return (
                     <div key={stepId} className="flex flex-col items-stretch gap-0.5">
-                      <button onClick={() => { setProspectStep(e.id, stepId as ProspectStep); if (stepId === 'confirmed') updateEngagement(e.id, { confirmed_at: new Date().toISOString() }); if (stepId === 'declined') updateEngagement(e.id, { declined_at: new Date().toISOString() }) }}
+                      <button onClick={() => {
+                          if (stepId === 'confirmed') { confirmProspect(e.id); router.push('/engagements') }
+                          else if (stepId === 'declined') { declineProspect(e.id); router.push('/wrap-up') }
+                          else setProspectStep(e.id, stepId as ProspectStep)
+                        }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all hover:opacity-80 ${stepClass(stepId)}`}>
                         {isActive(stepId) ? <CheckCircle2 size={12} /> : <Circle size={12} />}
                         {step.label}

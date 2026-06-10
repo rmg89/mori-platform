@@ -107,6 +107,7 @@ export default function WrapUpDetailPage() {
     updatePostEventFollowUpDetails,
     updatePostEventNotes,
     updatePostEventStage,
+    confirmWrapUpReview,
   } = useStore()
 
   const e = allEngagements.find(eng => eng.id === id)
@@ -172,6 +173,16 @@ export default function WrapUpDetailPage() {
               <AlertTriangle size={14} />{alert.label}
             </div>
           ))}
+        </div>
+      )}
+
+      {e.wrap_up_review_needed && (
+        <div className="mb-6 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-amber-50 border-amber-200 text-amber-700 text-sm font-medium">
+          <span className="flex items-center gap-2"><AlertTriangle size={14} />AI flagged this engagement for review — confirm to move it into the active list.</span>
+          <button onClick={() => confirmWrapUpReview(e.id)}
+            className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all flex-shrink-0">
+            Confirm
+          </button>
         </div>
       )}
 

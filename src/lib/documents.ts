@@ -203,330 +203,208 @@ export function generateContract(client: Client): Blob {
 
 function buildBriefingDoc(client: Client) {
   const doc = createDoc()
-
-  const eventType = (client as any).event_type || 'speaking'
-  const isInPerson = client.event_format === 'in_person'
-  const isHybrid = client.event_format === 'hybrid'
-  const hasPhysical = isInPerson || isHybrid
-  const isVirtual = !hasPhysical
   const c = pc(client)
+  const eventType = (client as any).event_type || 'speaking'
+  const hasPhysical = client.event_format === 'in_person' || client.event_format === 'hybrid'
+  const isVirtual = !hasPhysical
 
-  const typeLabels: Record<string, string> = {
-    speaking: 'Speaking Engagement', podcast: 'Podcast',
-    interview: 'Interview', panel: 'Panel', livestream: 'Livestream',
-  }
-  const typeLabel = typeLabels[eventType] || 'Engagement'
-  const formatStr = hasPhysical
-    ? `In-Person${client.event_city ? ` — ${client.event_city}` : ''}`
-    : 'Virtual'
+  const L = 50, W = 512
+  let y = 50
+  const PAGE_H = 760
 
-  addHeader(doc, 'Briefing Document')
-
-  let y = 100
-  const L = 50, R = 330
-
-  const PAGE_H = 760 // usable height before footer
   const checkPage = (needed = 40) => {
-    if (y + needed > PAGE_H) {
-      doc.addPage()
-      y = 60
-    }
+    if (y + needed > PAGE_H) { doc.addPage(); y = 50 }
   }
 
-  // Helper: divider rule
   const rule = () => {
-    checkPage(30)
-    doc.setDrawColor(220, 218, 212)
+    checkPage(20)
+    doc.setDrawColor(200, 198, 194)
     doc.setLineWidth(0.4)
-    doc.line(50, y, 562, y)
-    y += 18
+    doc.line(L, y, L + W, y)
+    y += 16
   }
 
-  // Helper: small label + value pair
-  const pf = (label: string, value: string | undefined | null, x: number, bold = false) => {
+  // Bold label at fixed column, normal value wrapping beside it
+  const LABEL_W = 88
+  const field = (label: string, value: string | undefined | null) => {
     if (!value) return
-    doc.setFontSize(7.5)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(140, 138, 132)
-    doc.text(label.toUpperCase(), x, y)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
-    doc.setTextColor(15, 14, 12)
-    doc.text(value, x, y + 13)
-  }
-
-  // Helper: full-width label + value (wrapping)
-  const pfWide = (label: string, value: string | undefined | null) => {
-    if (!value) return
-    const lines = doc.splitTextToSize(String(value), 512)
-    checkPage(20 + lines.length * 13)
-    doc.setFontSize(7.5)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(140, 138, 132)
-    doc.text(label.toUpperCase(), 50, y)
-    y += 13
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(15, 14, 12)
-    doc.text(lines, 50, y)
-    y += lines.length * 13 + 6
-  }
-
-  // ── EVENT / DATE / FORMAT ──────────────────────────────────────────────────
-  const eventName = client.event_name || client.organization
-  const dateTime = [formatDate(client.event_date), client.event_time].filter(Boolean).join(' | ')
-  pf('Event', eventName, L, true)
-  pf('Date / Time', dateTime, R, true)
-  y += 30
-
-  pf('Format', `${typeLabel} — ${formatStr}`, L, true)
-  y += 28
-
-  // ── JOIN LINK block — virtual only ─────────────────────────────────────────
-  if (isVirtual && (client as any).join_link) {
-    doc.setFillColor(254, 249, 235)
-    doc.setDrawColor(201, 168, 76)
-    doc.setLineWidth(0.5)
-    doc.rect(50, y - 4, 512, 54, 'FD')
-    doc.setFontSize(7.5)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(140, 100, 20)
-    doc.text('JOIN LINK', 58, y + 8)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(150, 110, 20)
-    doc.text((client as any).join_link || '', 58, y + 20)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(80, 78, 72)
-    if ((client as any).dial_in_backup) doc.text(`Backup dial-in: ${(client as any).dial_in_backup}`, 58, y + 32)
-    if ((client as any).green_room_time) doc.text(`Green room opens: ${(client as any).green_room_time}`, 58, y + 32 + ((client as any).dial_in_backup ? 12 : 0))
-    if ((client as any).go_live_time) {
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(15, 14, 12)
-      doc.text(`Go live: ${(client as any).go_live_time}`, 300, y + 32)
-    }
-    y += 64
-  }
-
-  rule()
-
-  // ── PRIMARY CONTACT ────────────────────────────────────────────────────────
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(201, 168, 76)
-  doc.text('PRIMARY CONTACT', 50, y)
-  y += 14
-
-  if (c) {
-    const nameTitle = c.title ? `${c.first_name} ${c.last_name}  |  ${c.title}` : `${c.first_name} ${c.last_name}`
+    const lines = doc.splitTextToSize(s(value), W - LABEL_W)
+    checkPage(lines.length * 14 + 4)
     doc.setFontSize(10.5)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(15, 14, 12)
-    doc.text(nameTitle, 50, y)
-    y += 14
-    doc.setFontSize(9.5)
+    doc.text(label, L, y)
     doc.setFont('helvetica', 'normal')
-    doc.setTextColor(60, 58, 54)
-    if (c.phone) { doc.text(c.phone, 50, y); y += 13 }
-    if (c.email) { doc.text(c.email, 50, y); y += 13 }
+    doc.setTextColor(40, 38, 34)
+    doc.text(lines, L + LABEL_W, y)
+    y += Math.max(lines.length, 1) * 14 + 2
   }
-  y += 6
 
+  // ── HEADER ──────────────────────────────────────────────────────────────────
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(15, 14, 12)
+  doc.text('Mori Taheripour', L, y)
+  y += 18
+  doc.setFontSize(11)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Briefing Document', L, y)
+  y += 14
   rule()
 
-  // ── PURPOSE / AUDIENCE / DURATION ─────────────────────────────────────────
-  if ((client as any).purpose) pfWide('Purpose', (client as any).purpose)
+  // ── WHAT ────────────────────────────────────────────────────────────────────
+  const typeLabels: Record<string, string> = {
+    speaking: '', podcast: 'Podcast', interview: 'Interview', panel: 'Panel', livestream: 'Livestream',
+  }
+  const typeLabel = typeLabels[eventType] || ''
+  const eventName = client.event_name || client.organization
+  field('What:', typeLabel ? `${eventName} — ${typeLabel}` : eventName)
+  if (client.topic) field('Topic:', client.topic)
+  if ((client as any).purpose) {
+    const purposeLines = doc.splitTextToSize(s((client as any).purpose), W)
+    checkPage(purposeLines.length * 13 + 4)
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 58, 54)
+    doc.text(purposeLines, L, y)
+    y += purposeLines.length * 13 + 4
+  }
 
+  // ── WHEN ────────────────────────────────────────────────────────────────────
+  const dateTime = [formatDate(client.event_date), client.event_time].filter(Boolean).join(' | ')
+  field('When:', dateTime)
+  if (client.session_length) field('Duration:', `${client.session_length} minutes`)
+
+  // ── WHERE ───────────────────────────────────────────────────────────────────
+  const whereStr = hasPhysical
+    ? [client.event_location, client.event_city].filter(Boolean).join(', ')
+    : 'Virtual'
+  field('Where:', whereStr || '—')
+  if (isVirtual && (client as any).join_link) field('Join Link:', s((client as any).join_link))
+  if (isVirtual && (client as any).dial_in_backup) field('Dial-in:', s((client as any).dial_in_backup))
+  if ((client as any).arrival_time) field('Arrival:', s((client as any).arrival_time))
+  if ((client as any).venue_special_instructions) field('Note:', s((client as any).venue_special_instructions))
+
+  // ── OTHER DETAILS ──────────────────────────────────────────────────────────
   const audienceParts = [
     (client as any).audience_description,
     client.audience_size ? `~${client.audience_size.toLocaleString()} attendees` : null,
   ].filter(Boolean)
-  if (audienceParts.length > 0) pfWide('Audience', audienceParts.join(' · '))
+  if (audienceParts.length) field('Audience:', audienceParts.join(' · '))
 
-  if (client.session_length) {
-    pfWide('Duration (her speaking time only)', `${client.session_length} minutes`)
+  if (c) {
+    const contactStr = [
+      `${c.first_name} ${c.last_name}`,
+      c.title, c.phone, c.email,
+    ].filter(Boolean).join(' | ')
+    field('Contact:', contactStr)
   }
 
-  if ((client as any).purpose || (client as any).audience_description || client.session_length) {
-    y += 4
-    rule()
-  }
+  if ((client as any).moderator_info) field('Moderator:', s((client as any).moderator_info))
+  if ((client as any).panelist_info) field('Co-Panelists:', s((client as any).panelist_info))
+  if ((client as any).vip_info) field('VIPs:', s((client as any).vip_info))
+  if ((client as any).dress_code) field('Dress Code:', s((client as any).dress_code))
 
-  // ── VENUE — in-person / hybrid only ───────────────────────────────────────
-  if (hasPhysical && (client.event_location || (client as any).arrival_time)) {
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(201, 168, 76)
-    doc.text('VENUE', 50, y)
-    y += 14
-
-    if (client.event_location) {
-      doc.setFontSize(10.5)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(15, 14, 12)
-      doc.text(client.event_location, 50, y)
-      y += 14
-    }
-    if ((client as any).arrival_time) {
-      pf('Arrival Time', (client as any).arrival_time, L, true)
-      y += 28
-    }
-    if ((client as any).venue_special_instructions) {
-      pfWide('Special Instructions', (client as any).venue_special_instructions)
-    }
-    y += 4
-    rule()
-  }
-
-  // ── TRAVEL DETAILS ────────────────────────────────────────────────────────
+  // ── TRAVEL ──────────────────────────────────────────────────────────────────
   const hasTravel = (client as any).flight_details || (client as any).hotel_name || (client as any).drive_time
   if (hasTravel) {
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(201, 168, 76)
-    doc.text('TRAVEL DETAILS', 50, y)
-    y += 14
+    y += 4; rule()
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+    doc.text('Travel', L, y); y += 14
 
     if ((client as any).flight_details) {
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
-      doc.text('FLIGHT', 50, y); y += 13
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      const flightLines = doc.splitTextToSize(s((client as any).flight_details), 512)
-      doc.text(flightLines, 50, y); y += flightLines.length * 13 + 2
-      if ((client as any).flight_confirmation) {
-        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 97, 90)
-        doc.text(`Conf #: ${s((client as any).flight_confirmation)}`, 50, y); y += 14
-      }
+      const flightStr = s((client as any).flight_details) +
+        ((client as any).flight_confirmation ? ` — Conf: ${s((client as any).flight_confirmation)}` : '')
+      field('Flight:', flightStr)
     }
-
     if ((client as any).hotel_name) {
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
-      doc.text('HOTEL', 50, y); y += 13
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      doc.text(s((client as any).hotel_name), 50, y); y += 14
-      const hotelMeta = [
+      const hotelStr = [
+        s((client as any).hotel_name),
         (client as any).hotel_checkin ? `Check-in: ${s((client as any).hotel_checkin)}` : null,
         (client as any).hotel_confirmation ? `Conf: ${s((client as any).hotel_confirmation)}` : null,
-      ].filter(Boolean).join('   ')
-      if (hotelMeta) {
-        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 97, 90)
-        doc.text(hotelMeta, 50, y); y += 14
-      }
+      ].filter(Boolean).join(' | ')
+      field('Hotel:', hotelStr)
     }
-
-    if ((client as any).ground_transport) {
-      pfWide('Ground Transport', s((client as any).ground_transport))
-    }
-
-    if ((client as any).drive_time) {
-      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
-      doc.text('DRIVE TIME', 50, y); y += 13
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      doc.text(s((client as any).drive_time), 50, y); y += 14
-    }
-
-    if ((client as any).parking_details) pfWide('Parking', s((client as any).parking_details))
-
-    y += 4
-    rule()
+    if ((client as any).ground_transport) field('Transport:', s((client as any).ground_transport))
+    if ((client as any).drive_time) field('Drive Time:', s((client as any).drive_time))
+    if ((client as any).parking_details) field('Parking:', s((client as any).parking_details))
   }
 
-  // ── SCHEDULE / RUN OF SHOW ────────────────────────────────────────────────
+  // ── RUN OF SHOW ──────────────────────────────────────────────────────────────
   const rosRaw = (client as any).run_of_show as Record<string, unknown>[] | undefined
   if (rosRaw && rosRaw.length > 0) {
     const ros = rosRaw.map(normalizeRosForPdf)
+    y += 4; rule()
     checkPage(60)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(201, 168, 76)
-    doc.text('SCHEDULE / RUN OF SHOW', 50, y)
-    y += 14
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+    doc.text('Run of Show', L, y); y += 16
 
-    // Table header
-    doc.setFillColor(247, 246, 243)
-    doc.rect(50, y - 6, 512, 18, 'F')
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(140, 138, 132)
-    doc.text('TIME', 54, y + 5)
-    doc.text("WHAT'S HAPPENING", 200, y + 5)
-    doc.text('HER ROLE / NOTES', 420, y + 5)
-    y += 24
+    doc.setFillColor(245, 244, 242)
+    doc.rect(L, y - 5, W, 18, 'F')
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 78, 72)
+    doc.text('TIME', L + 4, y + 6)
+    doc.text('ACTIVITY', L + 150, y + 6)
+    doc.text('NOTES', L + 365, y + 6)
+    y += 20
 
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
+    doc.setFontSize(9.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(15, 14, 12)
     const lineH = 13
-    const maxNoteLines = 8
+    const maxNoteLines = 4
     for (let ri = 0; ri < ros.length; ri++) {
-      const row = ros[ri]
-      const timeRange = [row.time, row.end_time].filter(Boolean).join(' – ')
-      const timeLabel = [row.date, timeRange].filter(Boolean).join('\n')
+      const r = ros[ri]
+      const timeRange = [r.time, r.end_time].filter(Boolean).join(' – ')
+      const timeLabel = [r.date, timeRange].filter(Boolean).join('\n')
       const timeLines: string[] = timeLabel ? doc.splitTextToSize(timeLabel, 130) : []
-      const whatLines: string[] = row.what ? doc.splitTextToSize(row.what, 195) : []
-      const allNoteLines: string[] = row.notes ? doc.splitTextToSize(row.notes, 137) : []
+      const whatLines: string[] = r.what ? doc.splitTextToSize(r.what, 195) : []
+      const allNoteLines: string[] = r.notes ? doc.splitTextToSize(r.notes, 130) : []
       const noteLines = allNoteLines.slice(0, maxNoteLines)
-      if (allNoteLines.length > maxNoteLines) noteLines[maxNoteLines - 1] += '…'
-
-      const rowH = Math.max(timeLines.length, whatLines.length, noteLines.length, 1) * lineH + 12
+      if (allNoteLines.length > maxNoteLines) noteLines[maxNoteLines - 1] += '...'
+      const rowH = Math.max(timeLines.length, whatLines.length, noteLines.length, 1) * lineH + 10
       checkPage(rowH + 4)
 
-      // Alternating row background
       if (ri % 2 === 0) {
-        doc.setFillColor(252, 251, 249)
-        doc.rect(50, y - 3, 512, rowH, 'F')
+        doc.setFillColor(251, 250, 248)
+        doc.rect(L, y - 3, W, rowH, 'F')
       }
 
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      if (timeLines.length) doc.text(timeLines, 56, y)
-
+      doc.setFont('helvetica', 'bold')
+      if (timeLines.length) doc.text(timeLines, L + 4, y)
       doc.setFont('helvetica', 'normal')
-      if (whatLines.length) doc.text(whatLines, 200, y)
-
+      if (whatLines.length) doc.text(whatLines, L + 150, y)
       if (noteLines.length) {
-        doc.setTextColor(90, 88, 82)
-        doc.text(noteLines, 425, y)
+        doc.setTextColor(80, 78, 72)
+        doc.text(noteLines, L + 365, y)
         doc.setTextColor(15, 14, 12)
       }
 
-      doc.setDrawColor(235, 233, 228); doc.setLineWidth(0.2)
-      doc.line(50, y + rowH - 4, 562, y + rowH - 4)
+      doc.setDrawColor(225, 223, 218); doc.setLineWidth(0.2)
+      doc.line(L, y + rowH - 3, L + W, y + rowH - 3)
       y += rowH
     }
-    y += 8
-    rule()
   }
 
-  // ── PREP NOTES ────────────────────────────────────────────────────────────
-  const hasPrep = client.topic || (client as any).moderator_info || (client as any).panelist_info ||
-    (client as any).vip_info || (client as any).dress_code || (client as any).post_event_notes || client.notes
-
-  if (hasPrep) {
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(201, 168, 76)
-    doc.text('PREP NOTES', 50, y)
-    y += 14
-
-    if (client.topic) pfWide('Topics / Questions', client.topic)
-    if ((client as any).moderator_info) pfWide('Moderator / Co-Panelists', (client as any).moderator_info)
-    if ((client as any).panelist_info) pfWide('Co-Panelists', (client as any).panelist_info)
-    if ((client as any).vip_info) pfWide('VIPs', (client as any).vip_info)
-    if ((client as any).dress_code) pfWide('Dress Code / Vibe', (client as any).dress_code)
-    if ((client as any).post_event_notes) pfWide('Post-Event', (client as any).post_event_notes)
-    if (client.notes) pfWide('Additional Notes', client.notes)
+  // ── NOTES ──────────────────────────────────────────────────────────────────
+  const hasNotes = client.notes || (client as any).post_event_notes
+  if (hasNotes) {
+    y += 4; rule()
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+    doc.text('Notes', L, y); y += 14
+    if (client.notes) {
+      const lines = doc.splitTextToSize(s(client.notes), W)
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 38, 34)
+      doc.text(lines, L, y); y += lines.length * 13 + 6
+    }
+    if ((client as any).post_event_notes) field('Post-Event:', s((client as any).post_event_notes))
   }
 
-  // ── KEY DOCUMENTS ─────────────────────────────────────────────────────────
+  // ── KEY DOCUMENTS ──────────────────────────────────────────────────────────
   const incoming: { label: string; link?: string; url?: string; file_url?: string; pinned_to_briefing?: boolean }[] =
     (client as any).incoming_materials ?? []
   const keyDocs = incoming.filter(m => m.pinned_to_briefing !== false && (m.link || m.file_url || (m as any).url))
 
   if (keyDocs.length > 0) {
+    y += 4; rule()
     checkPage(50)
-    rule()
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(201, 168, 76)
-    doc.text('KEY DOCUMENTS', 50, y)
-    y += 14
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
+    doc.text('Key Documents', L, y); y += 14
 
     doc.setFontSize(9.5)
     for (const doc_ of keyDocs) {
@@ -536,14 +414,14 @@ function buildBriefingDoc(client: Client) {
       checkPage(14 + linkCount * 14 + 6)
 
       doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
-      doc.text(s(doc_.label), 54, y)
+      doc.text(s(doc_.label), L, y)
       let subY = y + 13
 
       // Use doc.link() + doc.text() separately — textWithLink causes font encoding issues
       const addClickableLink = (label: string, url: string) => {
         doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 100, 180)
-        doc.text(label, 54, subY)
-        doc.link(54, subY - 9, doc.getTextWidth(label), 11, { url })
+        doc.text(label, L, subY)
+        doc.link(L, subY - 9, doc.getTextWidth(label), 11, { url })
         doc.setTextColor(15, 14, 12)
         subY += 13
       }
@@ -555,7 +433,11 @@ function buildBriefingDoc(client: Client) {
     }
   }
 
-  addFooter(doc, 1)
+  // ── FOOTER ────────────────────────────────────────────────────────────────
+  doc.setFontSize(8)
+  doc.setTextColor(150, 148, 144)
+  doc.text('Page 1', L + W, 760, { align: 'right' })
+
   return doc
 }
 

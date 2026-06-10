@@ -22,6 +22,12 @@ interface StoreActions {
   // Prospect step
   setProspectStep: (id: string, step: ProspectStep) => void
 
+  // Pipeline transitions (confirmed/declined → review sections)
+  confirmProspect: (id: string) => void
+  declineProspect: (id: string) => void
+  confirmBookingReview: (id: string) => void
+  confirmWrapUpReview: (id: string) => void
+
   // Engagement flags
   toggleEngagementFlag: (id: string, flag: EngagementFlag) => void
   toggleMediaFlag: (id: string, flag: MediaFlag) => void
@@ -174,6 +180,64 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateEngagementRow(id, { prospect_step: step }).catch(console.error)
   }, [])
 
+  const runScan = useCallback((id: string, scanType: 'booking' | 'declined' | 'wrapup') => {
+    fetch('/api/ai/scan-engagement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ engagement_id: id, scan_type: scanType }),
+    })
+      .then(res => res.json())
+      .then((result: { patch?: Record<string, unknown>; summary?: string }) => {
+        const { patch, summary } = result
+        setEngagements(prev => prev.map(e => {
+          if (e.id !== id) return e
+          const next: Engagement = { ...e, ...(patch ?? {}), updated_at: new Date().toISOString() }
+          if (summary) {
+            next.briefing_notes = [...(e.briefing_notes ?? []), {
+              id: `tmp_${Date.now()}`,
+              body: summary,
+              resolved: false,
+              created_at: new Date().toISOString(),
+            }]
+          }
+          return next
+        }))
+      })
+      .catch(console.error)
+  }, [])
+
+  const confirmProspect = useCallback((id: string) => {
+    const now = new Date().toISOString()
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, section: 'engagements', prospect_step: undefined, booking_review_needed: true, confirmed_at: now, updated_at: now } : e
+    ))
+    updateEngagementRow(id, { section: 'engagements', prospect_step: null, booking_review_needed: true, confirmed_at: now }).catch(console.error)
+    runScan(id, 'booking')
+  }, [runScan])
+
+  const declineProspect = useCallback((id: string) => {
+    const now = new Date().toISOString()
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, section: 'wrap-up', prospect_step: 'declined', wrap_up_review_needed: true, declined_at: now, updated_at: now } : e
+    ))
+    updateEngagementRow(id, { section: 'wrap-up', prospect_step: 'declined', wrap_up_review_needed: true, declined_at: now }).catch(console.error)
+    runScan(id, 'declined')
+  }, [runScan])
+
+  const confirmBookingReview = useCallback((id: string) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, booking_review_needed: false, updated_at: new Date().toISOString() } : e
+    ))
+    updateEngagementRow(id, { booking_review_needed: false }).catch(console.error)
+  }, [])
+
+  const confirmWrapUpReview = useCallback((id: string) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, wrap_up_review_needed: false, updated_at: new Date().toISOString() } : e
+    ))
+    updateEngagementRow(id, { wrap_up_review_needed: false }).catch(console.error)
+  }, [])
+
   const toggleEngagementFlag = useCallback((id: string, flag: EngagementFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -203,10 +267,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setPostEventFlagNeeded = useCallback((id: string, flag: PostEventFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
+      const post_event_needed = [...(e.post_event_needed ?? []).filter(f => f !== flag), flag]
+      const post_event_not_needed = (e.post_event_not_needed ?? []).filter(f => f !== flag)
+      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(console.error)
       return {
         ...e,
-        post_event_needed: [...(e.post_event_needed ?? []).filter(f => f !== flag), flag],
-        post_event_not_needed: (e.post_event_not_needed ?? []).filter(f => f !== flag),
+        post_event_needed,
+        post_event_not_needed,
         post_event_flags: (e.post_event_flags ?? []).filter(f => f !== flag),
         updated_at: new Date().toISOString(),
       }
@@ -225,12 +292,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         social_media: { social_media_complete: true },
         follow_up:    { follow_up_required: true },
       }
-      if (colMap[flag]) updateEngagementRow(id, colMap[flag]!).catch(console.error)
+      const post_event_needed = (e.post_event_needed ?? []).filter(f => f !== flag)
+      const post_event_not_needed = (e.post_event_not_needed ?? []).filter(f => f !== flag)
+      const dbPatch = { post_event_needed, post_event_not_needed, ...(colMap[flag] ?? {}) }
+      updateEngagementRow(id, dbPatch).catch(console.error)
       return {
         ...e,
         post_event_flags: [...(e.post_event_flags ?? []).filter(f => f !== flag), flag],
-        post_event_needed: (e.post_event_needed ?? []).filter(f => f !== flag),
-        post_event_not_needed: (e.post_event_not_needed ?? []).filter(f => f !== flag),
+        post_event_needed,
+        post_event_not_needed,
         updated_at: new Date().toISOString(),
       }
     }))
@@ -239,10 +309,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setPostEventFlagNotNeeded = useCallback((id: string, flag: PostEventFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
+      const post_event_not_needed = [...(e.post_event_not_needed ?? []).filter(f => f !== flag), flag]
+      const post_event_needed = (e.post_event_needed ?? []).filter(f => f !== flag)
+      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(console.error)
       return {
         ...e,
-        post_event_not_needed: [...(e.post_event_not_needed ?? []).filter(f => f !== flag), flag],
-        post_event_needed: (e.post_event_needed ?? []).filter(f => f !== flag),
+        post_event_not_needed,
+        post_event_needed,
         post_event_flags: (e.post_event_flags ?? []).filter(f => f !== flag),
         updated_at: new Date().toISOString(),
       }
@@ -252,11 +325,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const resetPostEventFlag = useCallback((id: string, flag: PostEventFlag) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
+      const post_event_needed = (e.post_event_needed ?? []).filter(f => f !== flag)
+      const post_event_not_needed = (e.post_event_not_needed ?? []).filter(f => f !== flag)
+      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(console.error)
       return {
         ...e,
         post_event_flags: (e.post_event_flags ?? []).filter(f => f !== flag),
-        post_event_needed: (e.post_event_needed ?? []).filter(f => f !== flag),
-        post_event_not_needed: (e.post_event_not_needed ?? []).filter(f => f !== flag),
+        post_event_needed,
+        post_event_not_needed,
         updated_at: new Date().toISOString(),
       }
     }))
@@ -403,6 +479,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       engagements, reviewItems, companies, loading, error,
       updateEngagement, setProspectStep,
+      confirmProspect, declineProspect, confirmBookingReview, confirmWrapUpReview,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
       updatePostEventFollowUpDetails, updatePostEventNotes, updatePostEventStage,

@@ -2013,7 +2013,7 @@ function BriefingDocument({ e }: { e: Engagement }) {
 
 export default function EngagementDetailPage() {
   const { id } = useParams()
-  const { engagements: allEngagements, updateEngagement } = useStore()
+  const { engagements: allEngagements, updateEngagement, confirmBookingReview } = useStore()
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
 
@@ -2054,6 +2054,16 @@ export default function EngagementDetailPage() {
               <AlertTriangle size={14} />{alert.label}
             </div>
           ))}
+        </div>
+      )}
+
+      {e.booking_review_needed && (
+        <div className="mb-6 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-amber-50 border-amber-200 text-amber-700 text-sm font-medium">
+          <span className="flex items-center gap-2"><AlertTriangle size={14} />AI flagged this booking for review — confirm to move it into the active list.</span>
+          <button onClick={() => confirmBookingReview(e.id)}
+            className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all flex-shrink-0">
+            Confirm
+          </button>
         </div>
       )}
 

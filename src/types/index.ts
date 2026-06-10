@@ -271,6 +271,7 @@ export interface Engagement {
   human_confirmed?: boolean
   confirmed_at?: string
   declined_at?: string
+  cancellation_reason?: string
 
   organization: string
   company_id?: string          // links to Company.id

@@ -173,9 +173,75 @@ function EngagementCard({ engagement: e }: { engagement: Engagement; key?: strin
   )
 }
 
+function ReviewCard({ engagement: e, onConfirm }: { engagement: Engagement; onConfirm: () => void }) {
+  const pc = primaryContact(e)
+  const lastNote = e.briefing_notes && e.briefing_notes.length > 0 ? e.briefing_notes[e.briefing_notes.length - 1] : undefined
+  const outgoing = e.outgoing_materials ?? []
+  const incoming = e.incoming_materials ?? []
+
+  return (
+    <div className="bg-amber-50/40 border border-amber-200 rounded-2xl p-5">
+      <div className="flex items-start gap-4">
+        {e.event_date && <CalendarTile dateStr={e.event_date} />}
+
+        <div className="flex-1 min-w-0">
+          <Link href={`/engagements/${e.id}`} className="block group">
+            <div className="flex items-center gap-2.5 min-w-0 mb-1">
+              {pc && (
+                <div className="w-7 h-7 rounded-full bg-ink-800 flex items-center justify-center text-xs font-bold text-gold flex-shrink-0">
+                  {getInitials(pc.first_name, pc.last_name)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-ink truncate group-hover:text-gold transition-all">{e.organization}</p>
+                <p className="text-sm text-ink-400 truncate">{e.event_name || e.topic}</p>
+              </div>
+            </div>
+          </Link>
+
+          <div className="flex items-center flex-wrap gap-2 mt-3">
+            {e.contract_required === true && (
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-amber-50 border-amber-100 text-amber-700">Contract required</span>
+            )}
+            {e.contract_required === false && (
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-sage/8 border-sage/20 text-sage-dark">No contract needed</span>
+            )}
+            {e.outgoing_not_needed ? (
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-sage/8 border-sage/20 text-sage-dark">No materials to send</span>
+            ) : outgoing.length > 0 ? (
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-amber-50 border-amber-100 text-amber-700">{outgoing.length} material{outgoing.length === 1 ? '' : 's'} to send</span>
+            ) : null}
+            {e.incoming_not_needed ? (
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-sage/8 border-sage/20 text-sage-dark">Nothing needed from client</span>
+            ) : incoming.length > 0 ? (
+              <span className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-amber-50 border-amber-100 text-amber-700">{incoming.length} item{incoming.length === 1 ? '' : 's'} needed from client</span>
+            ) : null}
+          </div>
+
+          {lastNote && (
+            <p className="text-xs text-ink-400 mt-3 line-clamp-2">{lastNote.body}</p>
+          )}
+
+          <div className="mt-4 flex items-center justify-between">
+            <Link href={`/engagements/${e.id}`} className="text-xs text-ink-400 hover:text-ink flex items-center gap-1 transition-all">
+              View details <ArrowRight size={11} />
+            </Link>
+            <button onClick={onConfirm}
+              className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all">
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function EngagementsPage() {
-  const { engagements: allEngagements } = useStore()
-  const engagements = allEngagements.filter(e => e.section === 'engagements')
+  const { engagements: allEngagements, confirmBookingReview } = useStore()
+  const all = allEngagements.filter(e => e.section === 'engagements')
+  const reviewItems = all.filter(e => e.booking_review_needed)
+  const engagements = all.filter(e => !e.booking_review_needed)
   const totalAlerts = engagements.reduce((n, e) => n + e.alerts.length, 0)
 
   return (
@@ -184,12 +250,29 @@ export default function EngagementsPage() {
         <h1 className="font-display text-3xl font-semibold text-ink">Engagements</h1>
         <p className="text-ink-400 text-sm mt-1">
           {engagements.length} active
+          {reviewItems.length > 0 && (
+            <span className="text-amber-600 font-medium ml-2">· {reviewItems.length} need{reviewItems.length === 1 ? 's' : ''} review</span>
+          )}
           {totalAlerts > 0 && (
             <span className="text-red-500 font-medium ml-2">· {totalAlerts} need{totalAlerts === 1 ? 's' : ''} attention</span>
           )}
         </p>
         <div className="accent-line mt-3 w-24" />
       </div>
+
+      {reviewItems.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={14} className="text-amber-500" />
+            <h2 className="text-sm font-semibold text-ink uppercase tracking-widest">Needs Review</h2>
+          </div>
+          <div className="space-y-3">
+            {reviewItems.map(e => (
+              <ReviewCard key={e.id} engagement={e} onConfirm={() => confirmBookingReview(e.id)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {engagements.length === 0 ? (
         <p className="text-sm text-ink-400">No active engagements.</p>

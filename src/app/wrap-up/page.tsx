@@ -75,9 +75,76 @@ function WrapUpCard({ engagement: e }: { engagement: Engagement }) {
   )
 }
 
+function WrapUpReviewCard({ engagement: e, onConfirm }: { engagement: Engagement; onConfirm: () => void }) {
+  const pc = primaryContact(e)
+  const needed = e.post_event_needed ?? []
+  const notNeeded = e.post_event_not_needed ?? []
+  const lastNote = e.briefing_notes && e.briefing_notes.length > 0 ? e.briefing_notes[e.briefing_notes.length - 1] : undefined
+  const isDeclined = e.prospect_step === 'declined'
+
+  return (
+    <div className="bg-amber-50/40 border border-amber-200 rounded-2xl p-5">
+      <div className="flex items-start gap-4">
+        {pc && (
+          <div className="w-10 h-10 rounded-full bg-ink-800 flex items-center justify-center text-sm font-bold text-gold flex-shrink-0 mt-0.5">
+            {getInitials(pc.first_name, pc.last_name)}
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <Link href={`/wrap-up/${e.id}`} className="block group">
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-base font-semibold text-ink truncate group-hover:text-gold transition-all">{e.organization}</p>
+              {isDeclined && (
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-ink-50 border-ink-100 text-ink-400 flex-shrink-0">Declined</span>
+              )}
+            </div>
+            <p className="text-sm text-ink-400 truncate">{e.event_name || e.topic}</p>
+          </Link>
+
+          <div className="flex items-center gap-4 text-xs text-ink-400 my-3">
+            {e.event_date && <span className="flex items-center gap-1"><Calendar size={11} />{formatDate(e.event_date)}</span>}
+            {e.event_city && <span className="flex items-center gap-1"><MapPin size={11} />{e.event_city}</span>}
+          </div>
+
+          <div className="flex items-center flex-wrap gap-2">
+            {needed.map(flag => {
+              const label = POST_EVENT_FLAGS.find(f => f.id === flag)?.label ?? flag
+              return (
+                <span key={flag} className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-amber-50 border-amber-100 text-amber-700">{label}</span>
+              )
+            })}
+            {notNeeded.map(flag => {
+              const label = POST_EVENT_FLAGS.find(f => f.id === flag)?.label ?? flag
+              return (
+                <span key={flag} className="text-[11px] font-medium px-2.5 py-1 rounded-full border bg-parchment border-ink-100 text-ink-300 line-through">{label}</span>
+              )
+            })}
+          </div>
+
+          {lastNote && (
+            <p className="text-xs text-ink-400 mt-3 line-clamp-2">{lastNote.body}</p>
+          )}
+
+          <div className="mt-4 flex items-center justify-between">
+            <Link href={`/wrap-up/${e.id}`} className="text-xs text-ink-400 hover:text-ink flex items-center gap-1 transition-all">
+              View details <ArrowRight size={11} />
+            </Link>
+            <button onClick={onConfirm}
+              className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all">
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function WrapUpPage() {
-  const { engagements: allEngagements } = useStore()
-  const engagements = allEngagements.filter(e => e.section === 'wrap-up')
+  const { engagements: allEngagements, confirmWrapUpReview } = useStore()
+  const all = allEngagements.filter(e => e.section === 'wrap-up')
+  const reviewItems = all.filter(e => e.wrap_up_review_needed)
+  const engagements = all.filter(e => !e.wrap_up_review_needed)
   const pendingCount = engagements.filter(e => (e.post_event_needed ?? []).length > 0).length
 
   return (
@@ -86,12 +153,29 @@ export default function WrapUpPage() {
         <h1 className="font-display text-3xl font-semibold text-ink">Wrap-Up</h1>
         <p className="text-ink-400 text-sm mt-1">
           {engagements.length} total
+          {reviewItems.length > 0 && (
+            <span className="text-amber-600 font-medium ml-2">· {reviewItems.length} need{reviewItems.length === 1 ? 's' : ''} review</span>
+          )}
           {pendingCount > 0 && (
             <span className="text-amber-600 font-medium ml-2">· {pendingCount} with open items</span>
           )}
         </p>
         <div className="accent-line mt-3 w-24" />
       </div>
+
+      {reviewItems.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle size={14} className="text-amber-500" />
+            <h2 className="text-sm font-semibold text-ink uppercase tracking-widest">Needs Review</h2>
+          </div>
+          <div className="space-y-3">
+            {reviewItems.map(e => (
+              <WrapUpReviewCard key={e.id} engagement={e} onConfirm={() => confirmWrapUpReview(e.id)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {engagements.length === 0 ? (
         <p className="text-sm text-ink-400">No engagements in wrap-up.</p>
