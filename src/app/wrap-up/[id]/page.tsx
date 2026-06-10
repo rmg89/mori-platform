@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Paperclip, Image as ImageIcon, UploadCloud, StickyNote } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 
@@ -245,6 +245,77 @@ export default function WrapUpDetailPage() {
                         placeholder="Follow-up details..."
                         className="mt-2 w-full text-xs bg-parchment/60 border border-ink-100 rounded-lg px-3 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-300"
                       />
+                    )}
+
+                    <div className="mt-2 flex items-start gap-1.5">
+                      <StickyNote size={12} className="text-ink-200 mt-1.5 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={e.post_event_item_notes?.[flagId] ?? ''}
+                        onChange={ev => updatePostEventItemNote(engagementId, flagId, ev.target.value)}
+                        placeholder="Add a note..."
+                        className="w-full text-xs bg-transparent border-b border-transparent hover:border-ink-100 focus:border-ink-200 px-1 py-1 text-ink-500 placeholder:text-ink-300 focus:outline-none transition-colors"
+                      />
+                    </div>
+
+                    {flagId === 'media' && (
+                      <div className="mt-2.5 pt-2.5 border-t border-dashed border-ink-100">
+                        {(e.post_event_media ?? []).length > 0 && (
+                          <div className="space-y-1.5 mb-2">
+                            {(e.post_event_media ?? []).map(m => (
+                              <div key={m.id} className="flex items-center gap-2 text-xs bg-parchment/50 border border-ink-100 rounded-lg px-2.5 py-1.5">
+                                <ImageIcon size={12} className="text-ink-300 flex-shrink-0" />
+                                <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-ink-500 hover:text-ink hover:underline truncate flex-1 min-w-0">
+                                  {m.name}
+                                </a>
+                                <button
+                                  onClick={() => removePostEventMedia(engagementId, m.id)}
+                                  className="text-ink-200 hover:text-ink-400 transition-colors flex-shrink-0"
+                                  title="Remove"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <label className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-ink-100 bg-white hover:border-ink-200 cursor-pointer transition-all w-fit ${mediaUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {mediaUploading ? (
+                            <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                          ) : (
+                            <UploadCloud size={12} className="text-ink-300" />
+                          )}
+                          <span className="text-ink-400">{mediaUploading ? 'Uploading...' : 'Upload photo, video, or recording'}</span>
+                          <input
+                            type="file"
+                            accept="image/*,video/*,audio/*"
+                            className="hidden"
+                            disabled={mediaUploading}
+                            onChange={async (ev: React.ChangeEvent<HTMLInputElement>) => {
+                              const file = ev.target.files?.[0]
+                              if (!file) return
+                              setMediaUploading(true)
+                              try {
+                                const { supabase } = await import('@/lib/supabase')
+                                const path = `${engagementId}/wrapup/${Date.now()}-${file.name}`
+                                const { data, error } = await supabase.storage
+                                  .from('materials')
+                                  .upload(path, file, { contentType: file.type })
+                                if (!error && data) {
+                                  const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
+                                  addPostEventMedia(engagementId, { name: file.name, url: publicUrl })
+                                }
+                              } finally {
+                                setMediaUploading(false)
+                                ev.target.value = ''
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
                     )}
                   </div>
 
