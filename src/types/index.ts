@@ -50,6 +50,7 @@ export interface PostEventMediaItem {
   type: PostEventMediaType
   name: string
   url: string
+  description?: string
   uploaded_at: string
 }
 
@@ -255,9 +256,12 @@ export interface Engagement {
   post_event_needed: PostEventFlag[]         // flags marked as "needed" (but not yet done)
   post_event_not_needed: PostEventFlag[]     // flags explicitly waived
   post_event_follow_up_details?: string      // what the follow-up means for this engagement
+  post_event_follow_up_date?: string         // planned date for the follow-up (ISO date)
   post_event_notes?: string                  // general wrap-up notes/context
   post_event_item_notes?: Partial<Record<PostEventFlag, string>>  // per-item notes
   post_event_media?: PostEventMediaItem[]    // uploaded photos/videos/recordings from the event
+  post_event_testimonial_link?: string       // link to a testimonial (video, review, etc.)
+  post_event_testimonial_text?: string       // testimonial text pasted directly
   invoice_sent_at?: string
   wrap_up_review_needed?: boolean
   booking_review_needed?: boolean

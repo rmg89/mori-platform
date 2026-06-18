@@ -40,10 +40,14 @@ interface StoreActions {
   setPostEventFlagNotNeeded: (id: string, flag: PostEventFlag) => void
   resetPostEventFlag: (id: string, flag: PostEventFlag) => void
   updatePostEventFollowUpDetails: (id: string, details: string) => void
+  updatePostEventFollowUpDate: (id: string, date: string) => void
+  updatePostEventTestimonialLink: (id: string, link: string) => void
+  updatePostEventTestimonialText: (id: string, text: string) => void
   updatePostEventNotes: (id: string, notes: string) => void
   updatePostEventItemNote: (id: string, flag: PostEventFlag, note: string) => void
-  addPostEventMedia: (id: string, item: { type: PostEventMediaType; name: string; url: string }) => void
+  addPostEventMedia: (id: string, item: { type: PostEventMediaType; name: string; url: string; description?: string }) => void
   removePostEventMedia: (id: string, mediaId: string) => void
+  updatePostEventMediaDescription: (id: string, mediaId: string, description: string) => void
   updatePostEventStage: (id: string, stages: Partial<WrapUpFlagStages>) => void
 
   // Proposed dates
@@ -365,6 +369,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateEngagementRow(id, { follow_up_details: details }).catch(console.error)
   }, [])
 
+  const updatePostEventFollowUpDate = useCallback((id: string, date: string) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, post_event_follow_up_date: date || undefined, updated_at: new Date().toISOString() } : e
+    ))
+    updateEngagementRow(id, { post_event_follow_up_date: date || null }).catch(console.error)
+  }, [])
+
+  const updatePostEventTestimonialLink = useCallback((id: string, link: string) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, post_event_testimonial_link: link, updated_at: new Date().toISOString() } : e
+    ))
+    updateEngagementRow(id, { post_event_testimonial_link: link }).catch(console.error)
+  }, [])
+
+  const updatePostEventTestimonialText = useCallback((id: string, text: string) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, post_event_testimonial_text: text, updated_at: new Date().toISOString() } : e
+    ))
+    updateEngagementRow(id, { post_event_testimonial_text: text }).catch(console.error)
+  }, [])
+
   const updatePostEventItemNote = useCallback((id: string, flag: PostEventFlag, note: string) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -374,10 +399,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const addPostEventMedia = useCallback((id: string, file: { type: PostEventMediaType; name: string; url: string }) => {
+  const addPostEventMedia = useCallback((id: string, file: { type: PostEventMediaType; name: string; url: string; description?: string }) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
-      const item: PostEventMediaItem = { id: `media_${Date.now()}`, type: file.type, name: file.name, url: file.url, uploaded_at: new Date().toISOString() }
+      const item: PostEventMediaItem = { id: `media_${Date.now()}`, type: file.type, name: file.name, url: file.url, description: file.description, uploaded_at: new Date().toISOString() }
       const post_event_media = [...(e.post_event_media ?? []), item]
       updateEngagementRow(id, { post_event_media }).catch(console.error)
       return { ...e, post_event_media, updated_at: new Date().toISOString() }
@@ -388,6 +413,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
       const post_event_media = (e.post_event_media ?? []).filter(m => m.id !== mediaId)
+      updateEngagementRow(id, { post_event_media }).catch(console.error)
+      return { ...e, post_event_media, updated_at: new Date().toISOString() }
+    }))
+  }, [])
+
+  const updatePostEventMediaDescription = useCallback((id: string, mediaId: string, description: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const post_event_media = (e.post_event_media ?? []).map(m => m.id === mediaId ? { ...m, description } : m)
       updateEngagementRow(id, { post_event_media }).catch(console.error)
       return { ...e, post_event_media, updated_at: new Date().toISOString() }
     }))
@@ -531,8 +565,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       archiveEngagement, deleteEngagement,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
-      updatePostEventFollowUpDetails, updatePostEventNotes, updatePostEventStage,
-      updatePostEventItemNote, addPostEventMedia, removePostEventMedia,
+      updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, updatePostEventStage,
+      updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm,
       confirmReviewItem, dismissReviewItem,

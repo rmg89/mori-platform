@@ -83,6 +83,9 @@ interface EngagementRow {
   post_event_not_needed: string[] | null
   post_event_item_notes: Record<string, string> | null
   post_event_media: unknown[] | null
+  post_event_testimonial_link: string | null
+  post_event_testimonial_text: string | null
+  post_event_follow_up_date: string | null
 }
 
 interface ContactRow {

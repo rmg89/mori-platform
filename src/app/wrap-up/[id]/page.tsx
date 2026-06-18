@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, PostEventMediaType, primaryContact } from '@/types'
-import { formatDate, getInitials } from '@/lib/utils'
+import { formatDate, getInitials, formatRelativeDue } from '@/lib/utils'
 import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
@@ -13,6 +13,13 @@ function daysSince(dateStr: string): number {
   const start = new Date(y, m - 1, d)
   const today = new Date(); today.setHours(0, 0, 0, 0)
   return Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function isFollowUpOverdue(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return date.getTime() < today.getTime()
 }
 
 function elapsed(dateStr: string): string {
@@ -125,10 +132,14 @@ export default function WrapUpDetailPage() {
     setPostEventFlagNotNeeded,
     resetPostEventFlag,
     updatePostEventFollowUpDetails,
+    updatePostEventFollowUpDate,
+    updatePostEventTestimonialLink,
+    updatePostEventTestimonialText,
     updatePostEventNotes,
     updatePostEventItemNote,
     addPostEventMedia,
     removePostEventMedia,
+    updatePostEventMediaDescription,
     updatePostEventStage,
     confirmWrapUpReview,
     archiveEngagement,
@@ -137,8 +148,9 @@ export default function WrapUpDetailPage() {
   const [archiveModalOpen, setArchiveModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [mediaUploading, setMediaUploading] = useState(false)
-  const [linkType, setLinkType] = useState<PostEventMediaType>('video')
+  const [addingMediaType, setAddingMediaType] = useState<PostEventMediaType | null>(null)
   const [linkUrl, setLinkUrl] = useState('')
+  const [linkDescription, setLinkDescription] = useState('')
 
   const e = allEngagements.find(eng => eng.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
@@ -257,13 +269,29 @@ export default function WrapUpDetailPage() {
                       isDone={isDone}
                     />
                     {isFollowUp && (
-                      <input
-                        type="text"
-                        value={e.post_event_follow_up_details ?? ''}
-                        onChange={ev => updatePostEventFollowUpDetails(engagementId, ev.target.value)}
-                        placeholder="Follow-up details..."
-                        className="mt-2 w-full text-xs bg-parchment/60 border border-ink-100 rounded-lg px-3 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-300"
-                      />
+                      <div className="mt-2 space-y-1.5">
+                        <input
+                          type="text"
+                          value={e.post_event_follow_up_details ?? ''}
+                          onChange={ev => updatePostEventFollowUpDetails(engagementId, ev.target.value)}
+                          placeholder="Follow-up details..."
+                          className="w-full text-xs bg-parchment/60 border border-ink-100 rounded-lg px-3 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-300"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Calendar size={12} className="text-ink-300 flex-shrink-0" />
+                          <input
+                            type="date"
+                            value={e.post_event_follow_up_date ?? ''}
+                            onChange={ev => updatePostEventFollowUpDate(engagementId, ev.target.value)}
+                            className="text-xs bg-parchment/60 border border-ink-100 rounded-lg px-2.5 py-1.5 text-ink focus:outline-none focus:border-ink-300"
+                          />
+                          {e.post_event_follow_up_date && (
+                            <span className={`text-xs ${isDone ? 'text-ink-300' : isFollowUpOverdue(e.post_event_follow_up_date) ? 'text-red-500 font-medium' : 'text-ink-400'}`}>
+                              {formatRelativeDue(e.post_event_follow_up_date)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     )}
 
                     <div className="mt-2 flex items-start gap-1.5">
@@ -277,6 +305,25 @@ export default function WrapUpDetailPage() {
                       />
                     </div>
 
+                    {flagId === 'testimonial' && (
+                      <div className="mt-2.5 pt-2.5 border-t border-dashed border-ink-100 space-y-1.5">
+                        <input
+                          type="url"
+                          value={e.post_event_testimonial_link ?? ''}
+                          onChange={ev => updatePostEventTestimonialLink(engagementId, ev.target.value)}
+                          placeholder="Link to testimonial (video, review, etc.)..."
+                          className="w-full text-xs bg-parchment/60 border border-ink-100 rounded-lg px-3 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-300"
+                        />
+                        <textarea
+                          value={e.post_event_testimonial_text ?? ''}
+                          onChange={ev => updatePostEventTestimonialText(engagementId, ev.target.value)}
+                          placeholder="Or paste the testimonial text..."
+                          rows={2}
+                          className="w-full text-xs bg-parchment/60 border border-ink-100 rounded-lg px-3 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-300 resize-none"
+                        />
+                      </div>
+                    )}
+
                     {flagId === 'media' && (
                       <div className="mt-2.5 pt-2.5 border-t border-dashed border-ink-100">
                         {(e.post_event_media ?? []).length > 0 && (
@@ -284,14 +331,23 @@ export default function WrapUpDetailPage() {
                             {(e.post_event_media ?? []).map(m => {
                               const Icon = MEDIA_TYPE_ICONS[m.type] ?? Link2
                               return (
-                                <div key={m.id} className="flex items-center gap-2 text-xs bg-parchment/50 border border-ink-100 rounded-lg px-2.5 py-1.5">
-                                  <Icon size={12} className="text-ink-300 flex-shrink-0" />
-                                  <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-ink-500 hover:text-ink hover:underline truncate flex-1 min-w-0">
-                                    {m.name}
-                                  </a>
+                                <div key={m.id} className="flex items-start gap-2 text-xs bg-parchment/50 border border-ink-100 rounded-lg px-2.5 py-1.5">
+                                  <Icon size={12} className="text-ink-300 flex-shrink-0 mt-0.5" />
+                                  <div className="flex-1 min-w-0">
+                                    <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-ink-500 hover:text-ink hover:underline truncate block">
+                                      {m.name}
+                                    </a>
+                                    <input
+                                      type="text"
+                                      value={m.description ?? ''}
+                                      onChange={ev => updatePostEventMediaDescription(engagementId, m.id, ev.target.value)}
+                                      placeholder="Add description..."
+                                      className="mt-0.5 w-full text-[11px] bg-transparent text-ink-400 placeholder:text-ink-200 focus:outline-none"
+                                    />
+                                  </div>
                                   <button
                                     onClick={() => removePostEventMedia(engagementId, m.id)}
-                                    className="text-ink-200 hover:text-ink-400 transition-colors flex-shrink-0"
+                                    className="text-ink-200 hover:text-ink-400 transition-colors flex-shrink-0 mt-0.5"
                                     title="Remove"
                                   >
                                     <X size={12} />
@@ -312,25 +368,28 @@ export default function WrapUpDetailPage() {
                             ) : (
                               <UploadCloud size={12} className="text-ink-300" />
                             )}
-                            <span className="text-ink-400">{mediaUploading ? 'Uploading...' : 'Upload photo'}</span>
+                            <span className="text-ink-400">{mediaUploading ? 'Uploading...' : 'Upload photos'}</span>
                             <input
                               type="file"
                               accept="image/*"
+                              multiple
                               className="hidden"
                               disabled={mediaUploading}
                               onChange={async (ev: React.ChangeEvent<HTMLInputElement>) => {
-                                const file = ev.target.files?.[0]
-                                if (!file) return
+                                const files = Array.from(ev.target.files ?? [])
+                                if (files.length === 0) return
                                 setMediaUploading(true)
                                 try {
                                   const { supabase } = await import('@/lib/supabase')
-                                  const path = `${engagementId}/wrapup/${Date.now()}-${file.name}`
-                                  const { data, error } = await supabase.storage
-                                    .from('materials')
-                                    .upload(path, file, { contentType: file.type })
-                                  if (!error && data) {
-                                    const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
-                                    addPostEventMedia(engagementId, { type: 'photo', name: file.name, url: publicUrl })
+                                  for (const file of files) {
+                                    const path = `${engagementId}/wrapup/${Date.now()}-${file.name}`
+                                    const { data, error } = await supabase.storage
+                                      .from('materials')
+                                      .upload(path, file, { contentType: file.type })
+                                    if (!error && data) {
+                                      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
+                                      addPostEventMedia(engagementId, { type: 'photo', name: file.name, url: publicUrl })
+                                    }
                                   }
                                 } finally {
                                   setMediaUploading(false)
@@ -340,34 +399,71 @@ export default function WrapUpDetailPage() {
                             />
                           </label>
 
-                          <select
-                            value={linkType}
-                            onChange={ev => setLinkType(ev.target.value as PostEventMediaType)}
-                            className="text-xs bg-white border border-ink-100 rounded-lg px-2 py-1.5 text-ink-400 focus:outline-none focus:border-ink-200"
-                          >
-                            <option value="video">Video</option>
-                            <option value="audio">Audio</option>
-                            <option value="link">Link</option>
-                          </select>
-                          <input
-                            type="url"
-                            value={linkUrl}
-                            onChange={ev => setLinkUrl(ev.target.value)}
-                            placeholder="Paste a link..."
-                            className="flex-1 min-w-[140px] text-xs bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-200"
-                          />
                           <button
-                            onClick={() => {
-                              const url = linkUrl.trim()
-                              if (!url) return
-                              addPostEventMedia(engagementId, { type: linkType, name: mediaDefaultName(linkType, url), url })
-                              setLinkUrl('')
-                            }}
-                            className="text-xs font-medium text-ink-400 hover:text-ink bg-white border border-ink-100 hover:border-ink-200 px-2.5 py-1.5 rounded-lg transition-all"
+                            onClick={() => { setAddingMediaType('video'); setLinkUrl(''); setLinkDescription('') }}
+                            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink bg-white border border-ink-100 hover:border-ink-200 px-2.5 py-1.5 rounded-lg transition-all"
                           >
-                            Add
+                            <Film size={12} className="text-ink-300" />Link video
+                          </button>
+                          <button
+                            onClick={() => { setAddingMediaType('audio'); setLinkUrl(''); setLinkDescription('') }}
+                            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink bg-white border border-ink-100 hover:border-ink-200 px-2.5 py-1.5 rounded-lg transition-all"
+                          >
+                            <Music size={12} className="text-ink-300" />Link audio
+                          </button>
+                          <button
+                            onClick={() => { setAddingMediaType('link'); setLinkUrl(''); setLinkDescription('') }}
+                            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink bg-white border border-ink-100 hover:border-ink-200 px-2.5 py-1.5 rounded-lg transition-all"
+                          >
+                            <Link2 size={12} className="text-ink-300" />Addtl links
                           </button>
                         </div>
+
+                        {addingMediaType && (
+                          <div className="mt-2 flex flex-col gap-1.5 bg-parchment/30 border border-ink-100 rounded-lg p-2">
+                            <input
+                              type="url"
+                              autoFocus
+                              value={linkUrl}
+                              onChange={ev => setLinkUrl(ev.target.value)}
+                              placeholder="Paste a link..."
+                              className="w-full text-xs bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-200"
+                            />
+                            <input
+                              type="text"
+                              value={linkDescription}
+                              onChange={ev => setLinkDescription(ev.target.value)}
+                              placeholder="Description (optional)..."
+                              className="w-full text-xs bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-200"
+                            />
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setAddingMediaType(null)}
+                                className="text-xs font-medium text-ink-300 hover:text-ink-500 px-2.5 py-1.5 rounded-lg transition-all"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const url = linkUrl.trim()
+                                  if (!url) return
+                                  addPostEventMedia(engagementId, {
+                                    type: addingMediaType,
+                                    name: mediaDefaultName(addingMediaType, url),
+                                    url,
+                                    description: linkDescription.trim() || undefined,
+                                  })
+                                  setAddingMediaType(null)
+                                  setLinkUrl('')
+                                  setLinkDescription('')
+                                }}
+                                className="text-xs font-medium text-white bg-ink px-2.5 py-1.5 rounded-lg hover:bg-ink-700 transition-all"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

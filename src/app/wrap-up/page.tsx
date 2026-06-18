@@ -1,8 +1,8 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, Engagement, primaryContact } from '@/types'
-import { formatDate, getInitials } from '@/lib/utils'
-import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, Circle, MapPin } from 'lucide-react'
+import { formatDate, getInitials, formatRelativeDue } from '@/lib/utils'
+import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, Circle, MapPin, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 function WrapUpCard({ engagement: e }: { engagement: Engagement }) {
@@ -140,12 +140,48 @@ function WrapUpReviewCard({ engagement: e, onConfirm }: { engagement: Engagement
   )
 }
 
+function FollowUpCard({ engagement: e }: { engagement: Engagement }) {
+  const overdue = (() => {
+    if (!e.post_event_follow_up_date) return false
+    const [y, m, d] = e.post_event_follow_up_date.split('-').map(Number)
+    const date = new Date(y, m - 1, d)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return date.getTime() < today.getTime()
+  })()
+
+  return (
+    <Link href={`/wrap-up/${e.id}`}
+      className="flex items-center justify-between gap-4 bg-white border border-ink-100 rounded-xl px-4 py-3 hover:border-gold/20 hover:shadow-sm transition-all group">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink truncate">{e.organization}</p>
+        {e.post_event_follow_up_details ? (
+          <p className="text-xs text-ink-400 truncate mt-0.5">{e.post_event_follow_up_details}</p>
+        ) : (
+          <p className="text-xs text-ink-300 truncate mt-0.5">{e.event_name || e.topic}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
+          overdue ? 'bg-red-50 border-red-100 text-red-500' : 'bg-amber-50 border-amber-100 text-amber-700'
+        }`}>
+          <Clock size={11} />
+          {formatRelativeDue(e.post_event_follow_up_date!)}
+        </span>
+        <ArrowRight size={13} className="text-ink-200 group-hover:text-gold transition-all" />
+      </div>
+    </Link>
+  )
+}
+
 export default function WrapUpPage() {
   const { engagements: allEngagements, confirmWrapUpReview } = useStore()
   const all = allEngagements.filter(e => e.section === 'wrap-up' && !e.archived)
   const reviewItems = all.filter(e => e.wrap_up_review_needed)
   const engagements = all.filter(e => !e.wrap_up_review_needed)
   const pendingCount = engagements.filter(e => (e.post_event_needed ?? []).length > 0).length
+  const followUps = all
+    .filter(e => e.post_event_follow_up_date && !(e.post_event_flags ?? []).includes('follow_up'))
+    .sort((a, b) => (a.post_event_follow_up_date! < b.post_event_follow_up_date! ? -1 : 1))
 
   return (
     <div className="p-8 max-w-5xl mx-auto animate-fade-in">
@@ -185,6 +221,18 @@ export default function WrapUpPage() {
             .sort((a, b) => (a.event_date ?? '') > (b.event_date ?? '') ? -1 : 1)
             .map(e => <WrapUpCard key={e.id} engagement={e} />)
           }
+        </div>
+      )}
+
+      {followUps.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={14} className="text-ink-300" />
+            <h2 className="text-sm font-semibold text-ink uppercase tracking-widest">Upcoming Follow-Ups</h2>
+          </div>
+          <div className="space-y-2">
+            {followUps.map(e => <FollowUpCard key={e.id} engagement={e} />)}
+          </div>
         </div>
       )}
     </div>

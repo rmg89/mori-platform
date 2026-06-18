@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, formatDistanceToNow, isPast } from 'date-fns'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -18,6 +18,14 @@ export function formatCurrency(amount: number | undefined) {
 
 export function getInitials(first: string, last: string) {
   return `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase()
+}
+
+export function formatRelativeDue(dateStr: string) {
+  try {
+    const date = parseISO(dateStr)
+    const distance = formatDistanceToNow(date, { addSuffix: true })
+    return isPast(date) && distance.endsWith('ago') ? `overdue · ${distance}` : distance
+  } catch { return dateStr }
 }
 
 export function relativeTime(dateStr: string) {
