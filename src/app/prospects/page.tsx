@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Engagement, PROSPECT_STEPS, primaryContact, getProspectStepLabel } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-import { Plus, AlertTriangle, Calendar, ArrowRight, Users, CheckCircle2, XCircle, ChevronDown, ChevronUp, Phone, Video } from 'lucide-react'
+import { Plus, AlertTriangle, Calendar, ArrowRight, Users, CheckCircle2, XCircle, ChevronDown, ChevronUp, Phone, Flag } from 'lucide-react'
 import Link from 'next/link'
 import { EngagementCall } from '@/types'
 
@@ -172,29 +172,86 @@ export default function ProspectsPage() {
         })}
       </div>
 
-      {/* Middle steps stacked */}
-      <div className="space-y-8">
-        {(['in_contact'] as const).map(stepId => {
-          const step = PROSPECT_STEPS.find(s => s.id === stepId)!
-          const items = prospects.filter(e => e.prospect_step === stepId)
-          if (items.length === 0) return null
-          const color = STEP_COLORS[stepId]
-          return (
-            <div key={stepId}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                <h2 className="font-display text-lg font-semibold text-ink">{step.label}</h2>
-                <span className="text-sm text-ink-400">{items.length}</span>
+      {/* In Contact — split into Needs Action / On Radar */}
+      {(() => {
+        const inContact = prospects.filter(e => e.prospect_step === 'in_contact')
+        if (inContact.length === 0) return null
+        const color = STEP_COLORS['in_contact']
+
+        const needsAction = inContact.filter(e => {
+          if (e.alerts.length > 0) return true
+          if (e.comms?.some(c => c.needs_response)) return true
+          // Active next steps due within 48h
+          const now = Date.now()
+          if (e.comms?.some(c => c.next_step && !c.next_step_cleared &&
+            (!c.next_step_snoozed_until || new Date(c.next_step_snoozed_until).getTime() < now) &&
+            c.next_step_due_at && new Date(c.next_step_due_at).getTime() < now + 48 * 3600 * 1000)) return true
+          return false
+        })
+        const onRadar = inContact.filter(e => !needsAction.includes(e))
+
+        return (
+          <div className="space-y-8">
+            {needsAction.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  <h2 className="font-display text-lg font-semibold text-ink">In Contact</h2>
+                  <span className="text-sm text-ink-400">{needsAction.length}</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {needsAction.map(e => <ProspectCard key={e.id} engagement={e} color={color} />)}
+                </div>
               </div>
-              <div className="grid grid-cols-1 gap-2">
-                {items.map(e => <ProspectCard key={e.id} engagement={e} color={color} />)}
+            )}
+            {onRadar.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-ink-200" />
+                  <h2 className="font-display text-lg font-semibold text-ink-400">On Radar</h2>
+                  <span className="text-sm text-ink-300">{onRadar.length}</span>
+                  <span className="text-xs text-ink-300 italic ml-1">— no immediate action needed</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {onRadar.map(e => <ProspectCard key={e.id} engagement={e} color="#9CA3AF" />)}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
+}
+
+function prospectStatusLine(e: Engagement): { text: string; urgent: boolean; isNextStep?: boolean } | null {
+  // Active next steps
+  const now = Date.now()
+  const activeNextStep = e.comms?.find(c =>
+    c.next_step && !c.next_step_cleared &&
+    (!c.next_step_snoozed_until || new Date(c.next_step_snoozed_until).getTime() < now)
+  )
+  if (activeNextStep?.next_step) {
+    const due = activeNextStep.next_step_due_at ? new Date(activeNextStep.next_step_due_at) : null
+    const overdue = due && due.getTime() < now
+    const daysUntil = due ? Math.ceil((due.getTime() - now) / 86400000) : null
+    const suffix = overdue ? ' — overdue' : daysUntil !== null ? (daysUntil <= 0 ? ' — due today' : ` — due in ${daysUntil}d`) : ''
+    return { text: activeNextStep.next_step + suffix, urgent: !!overdue, isNextStep: true }
+  }
+  // Alerts
+  if (e.alerts.length > 0) return { text: e.alerts[0].label, urgent: e.alerts[0].severity === 'high' }
+  // Last comm
+  const comms = e.comms ?? []
+  if (comms.length > 0) {
+    const last = comms[comms.length - 1]
+    const age = Math.floor((Date.now() - new Date(last.date).getTime()) / 86400000)
+    const ageStr = age === 0 ? 'today' : age === 1 ? 'yesterday' : `${age}d ago`
+    if (last.type === 'email_inbound') return { text: `Inbound from ${last.from_name || 'them'} — ${ageStr}`, urgent: false }
+    if (last.type === 'email_outbound') return { text: `${last.subject ?? 'Email sent'} — ${ageStr}`, urgent: false }
+    if (last.type === 'call') return { text: `${last.subject ?? 'Call'} — ${ageStr}`, urgent: false }
+    if (last.type === 'note') return { text: `Note logged — ${ageStr}`, urgent: false }
+  }
+  return null
 }
 
 function callStatusIcon(status: EngagementCall['status']) {
@@ -219,6 +276,7 @@ function ProspectCard({ engagement: e, color }: { engagement: Engagement, color:
   const stepLabel = getProspectStepLabel(e.prospect_step!)
   const eventType = (e as any).event_type as string | undefined
   const isMedia = eventType && eventType !== 'speaking'
+  const statusLine = prospectStatusLine(e)
 
   const formatTag = e.event_format === 'in_person' ? 'In Person'
     : e.event_format === 'virtual' ? 'Virtual'
@@ -290,13 +348,14 @@ function ProspectCard({ engagement: e, color }: { engagement: Engagement, color:
           )}
         </div>
 
-        {e.alerts.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {e.alerts.map((alert, i) => (
-              <span key={i} className={`flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md border ${alert.severity === 'high' ? 'text-red-500 bg-red-50 border-red-100' : 'text-gold bg-gold/8 border-gold/20'}`}>
-                <AlertTriangle size={9} />{alert.label}
-              </span>
-            ))}
+        {/* One-liner status */}
+        {statusLine && (
+          <div className={`flex items-center gap-1.5 mt-2 text-[10px] font-medium truncate ${
+            statusLine.urgent ? 'text-red-500' : statusLine.isNextStep ? 'text-gold-dark' : 'text-ink-400'
+          }`}>
+            {statusLine.isNextStep && <Flag size={9} className="flex-shrink-0" />}
+            {statusLine.urgent && !statusLine.isNextStep && <AlertTriangle size={9} className="flex-shrink-0" />}
+            <span className="truncate">{statusLine.text}</span>
           </div>
         )}
 

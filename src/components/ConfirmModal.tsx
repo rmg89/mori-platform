@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 
 interface ConfirmModalProps {
@@ -17,6 +17,10 @@ export default function ConfirmModal({
   open, title, description, confirmLabel, requireText, danger, onConfirm, onCancel,
 }: ConfirmModalProps) {
   const [input, setInput] = useState('')
+
+  // Reset the input field every time the modal opens
+  useEffect(() => { if (open) setInput('') }, [open])
+
   if (!open) return null
 
   const canConfirm = !requireText || input === requireText

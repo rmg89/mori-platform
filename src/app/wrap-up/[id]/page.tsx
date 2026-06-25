@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, PostEventMediaType, primaryContact } from '@/types'
 import { formatDate, getInitials, formatRelativeDue } from '@/lib/utils'
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2 } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2, History, ChevronDown, ChevronUp, Flag, Bell, BellOff } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 
@@ -118,6 +118,290 @@ function StagePills({
           </button>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Snapshot Panel ───────────────────────────────────────────────────────────
+
+const SNAPSHOT_LABELS: Record<string, string> = {
+  prospect_step: 'Pipeline Step', source: 'Source', notes: 'Notes',
+  event_date: 'Target Date', event_city: 'City', fee: 'Fee',
+  topic: 'Topic', audience_size: 'Audience', event_format: 'Format',
+  contract_required: 'Contract Required', contract_sent_at: 'Contract Sent',
+  contract_signed_at: 'Contract Signed', briefing_complete: 'Briefing Complete',
+  deposit_amount: 'Deposit', join_link: 'Join Link',
+  arrival_time: 'Arrival Time', hotel_name: 'Hotel',
+  flight_details: 'Flight Details',
+}
+const SKIP_KEYS = new Set(['calls', 'comms', 'contacts', 'proposed_dates', 'outgoing_materials', 'incoming_materials', 'briefing_notes', 'run_of_show'])
+
+function fmtVal(key: string, val: unknown): string | null {
+  if (val === null || val === undefined || val === '' || val === false) return null
+  if (Array.isArray(val)) return val.length > 0 ? `${val.length} items` : null
+  if (typeof val === 'object') return null
+  if (key.endsWith('_at') || key.endsWith('_date')) {
+    try { return new Date(val as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return String(val) }
+  }
+  if (key === 'fee' || key === 'deposit_amount') return `$${Number(val).toLocaleString()}`
+  if (key === 'audience_size') return `${Number(val).toLocaleString()} attendees`
+  return String(val)
+}
+
+function WrapUpSnapshotPanel({ label = 'Engagement Stage History', snapshot }: { label?: string; snapshot: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false)
+  const entries = Object.entries(snapshot).filter(([k, v]) => !SKIP_KEYS.has(k) && fmtVal(k, v) !== null)
+  if (entries.length === 0) return null
+  return (
+    <div className="border border-ink-100 rounded-xl overflow-hidden mt-3">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-5 py-3 bg-parchment/60 hover:bg-parchment transition-colors text-left">
+        <History size={13} className="text-ink-300 flex-shrink-0" />
+        <span className="text-xs font-semibold text-ink-400 uppercase tracking-widest flex-1">{label}</span>
+        <span className="text-[10px] text-ink-300 mr-1">{entries.length} fields</span>
+        {open ? <ChevronUp size={13} className="text-ink-300" /> : <ChevronDown size={13} className="text-ink-300" />}
+      </button>
+      {open && (
+        <div className="bg-white px-5 py-4">
+          <p className="text-[10px] text-ink-300 italic mb-3">Read-only snapshot from the previous stage — for reference only.</p>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+            {entries.map(([k, v]) => {
+              const display = fmtVal(k, v)
+              if (!display) return null
+              const lbl = SNAPSHOT_LABELS[k] ?? k.replace(/_/g, ' ')
+              return (
+                <div key={k} className="flex items-start gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300 w-28 flex-shrink-0 mt-0.5 truncate">{lbl}</span>
+                  <span className="text-xs text-ink-500 flex-1">{display}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Timeline Panel ───────────────────────────────────────────────────────────
+
+function WrapUpNextStepBadge({ comm, engagementId }: { comm: import('@/types').CommEntry; engagementId: string }) {
+  const { updateComm } = useStore()
+  const [snoozePicking, setSnoozePicking] = useState(false)
+  const [snoozeDate, setSnoozeDate] = useState('')
+  if (!comm.next_step) return null
+  if (comm.next_step_cleared) return (
+    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-ink-200 line-through">
+      <span>✓</span> {comm.next_step}
+    </div>
+  )
+  const now = new Date()
+  const snoozed = comm.next_step_snoozed_until && new Date(comm.next_step_snoozed_until) > now
+  const due = comm.next_step_due_at ? new Date(comm.next_step_due_at) : null
+  const overdue = !snoozed && due && due < now
+  if (snoozed) return (
+    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-ink-300">
+      <BellOff size={9} />
+      <span className="italic">{comm.next_step} — snoozed until {new Date(comm.next_step_snoozed_until!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+      <button onClick={() => updateComm(engagementId, comm.id, { next_step_snoozed_until: undefined })} className="text-ink-200 hover:text-ink-400">wake</button>
+    </div>
+  )
+  return (
+    <div className={`mt-1.5 rounded-lg px-2.5 py-1.5 border flex items-start gap-2 ${overdue ? 'bg-red-50 border-red-100' : 'bg-gold/6 border-gold/20'}`}>
+      <Flag size={9} className={`flex-shrink-0 mt-0.5 ${overdue ? 'text-red-400' : 'text-gold'}`} />
+      <div className="flex-1 min-w-0">
+        <p className={`text-[10px] font-medium ${overdue ? 'text-red-600' : 'text-gold-dark'}`}>{comm.next_step}</p>
+        {due && <p className={`text-[9px] mt-0.5 ${overdue ? 'text-red-400' : 'text-gold/70'}`}>{overdue ? 'Overdue — ' : 'Due '}{due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>}
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {!snoozePicking ? (
+          <button onClick={() => setSnoozePicking(true)} title="Snooze" className="text-ink-300 hover:text-ink-500 p-0.5"><Bell size={9} /></button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <input type="date" value={snoozeDate} onChange={e => setSnoozeDate(e.target.value)}
+              className="text-[10px] border border-ink-100 rounded px-1 py-0.5 focus:outline-none focus:border-gold/50 bg-white" />
+            <button onClick={() => { if (snoozeDate) updateComm(engagementId, comm.id, { next_step_snoozed_until: new Date(snoozeDate + 'T09:00:00').toISOString() }); setSnoozePicking(false); setSnoozeDate('') }} className="text-sage hover:text-sage-dark p-0.5">✓</button>
+            <button onClick={() => { setSnoozePicking(false); setSnoozeDate('') }} className="text-ink-300 p-0.5">✕</button>
+          </div>
+        )}
+        <button onClick={() => updateComm(engagementId, comm.id, { next_step_cleared: true })} title="Mark done" className="text-ink-300 hover:text-sage p-0.5">✓</button>
+      </div>
+    </div>
+  )
+}
+
+function WrapUpLogCommPanel({ engagementId, onClose }: { engagementId: string; onClose: () => void }) {
+  const { addComm } = useStore()
+  const [type, setType] = useState<'note' | 'call' | 'email_outbound'>('note')
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [nextStep, setNextStep] = useState('')
+  const [nextStepDue, setNextStepDue] = useState('')
+  const submit = () => {
+    if (!body.trim()) return
+    const now = new Date().toISOString()
+    const defaultDue = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
+    addComm(engagementId, {
+      id: `cm_${Date.now()}`, type, date: now,
+      subject: subject || undefined, body,
+      from_name: "Mori's Team", staff_name: 'Ryan G.', needs_response: false,
+      next_step: nextStep || undefined,
+      next_step_due_at: nextStep ? (nextStepDue ? new Date(nextStepDue + 'T09:00:00').toISOString() : defaultDue) : undefined,
+    })
+    onClose()
+  }
+  return (
+    <div className="bg-parchment/60 border border-ink-100 rounded-xl p-4 mt-4 space-y-3">
+      <div className="flex gap-2">
+        {(['note', 'call', 'email_outbound'] as const).map(t => (
+          <button key={t} onClick={() => setType(t)}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${type === t ? 'bg-ink text-cream border-ink' : 'bg-white text-ink-400 border-ink-100 hover:border-ink-300'}`}>
+            {t === 'note' ? 'Note' : t === 'call' ? 'Call' : 'Email Sent'}
+          </button>
+        ))}
+      </div>
+      <input type="text" placeholder="Subject (optional)" value={subject} onChange={e => setSubject(e.target.value)}
+        className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold bg-white" />
+      <textarea placeholder="Notes…" value={body} onChange={e => setBody(e.target.value)} rows={3}
+        className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold resize-none bg-white" />
+      <div className="border-t border-ink-50 pt-3 space-y-2">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-300">Next Step (optional)</p>
+        <input type="text" placeholder="What needs to happen next?" value={nextStep} onChange={e => setNextStep(e.target.value)}
+          className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold bg-white" />
+        {nextStep && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-300 flex-shrink-0">Due by:</span>
+            <input type="date" value={nextStepDue} onChange={e => setNextStepDue(e.target.value)}
+              className="text-xs border border-ink-100 rounded-lg px-2.5 py-1.5 outline-none focus:border-gold bg-white" />
+            {!nextStepDue && <span className="text-xs text-ink-300 italic">default: 48 hours</span>}
+          </div>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={submit} className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all">Log</button>
+        <button onClick={onClose} className="text-xs font-medium text-ink-400 px-4 py-2 rounded-lg hover:text-ink transition-all">Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Field Status Panel ───────────────────────────────────────────────────────
+
+const WRAPUP_TRACKABLE_FIELDS = [
+  { key: 'fee',              label: 'Fee' },
+  { key: 'payment_notes',    label: 'Payment Notes' },
+  { key: 'event_date',       label: 'Event Date' },
+  { key: 'event_city',       label: 'Location' },
+  { key: 'topic',            label: 'Topic' },
+]
+
+function WrapUpFieldStatusPanel({ e }: { e: import('@/types').Engagement }) {
+  const { setFieldStatus } = useStore()
+  const [open, setOpen] = useState(false)
+
+  const pending = WRAPUP_TRACKABLE_FIELDS.filter(({ key }) => {
+    const val = (e as unknown as Record<string, unknown>)[key]
+    const filled = val !== undefined && val !== null && val !== ''
+    return e.field_statuses?.[key] === 'needed' && !filled
+  })
+
+  return (
+    <div className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-parchment/40 transition-colors text-left">
+        <Flag size={13} className={`flex-shrink-0 ${pending.length > 0 ? 'text-amber-400' : 'text-ink-200'}`} />
+        <span className="text-xs font-semibold uppercase tracking-widest text-ink-400 flex-1">Data Tracking</span>
+        {pending.length > 0 && (
+          <span className="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+            {pending.length} needed
+          </span>
+        )}
+        {open ? <ChevronUp size={13} className="text-ink-300" /> : <ChevronDown size={13} className="text-ink-300" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-ink-100 px-5 py-4">
+          <p className="text-[10px] text-ink-300 mb-3">
+            Flag fields you still expect to fill in, or mark as N/A. Flagged-but-empty fields surface on the dashboard.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {WRAPUP_TRACKABLE_FIELDS.map(({ key, label }) => {
+              const val = (e as unknown as Record<string, unknown>)[key]
+              const filled = val !== undefined && val !== null && val !== ''
+              const status = e.field_statuses?.[key]
+
+              const bg = status === 'needed' && !filled ? 'bg-amber-50 border-amber-200'
+                : status === 'not_needed' ? 'bg-parchment border-ink-100'
+                : filled ? 'bg-sage/5 border-sage/20'
+                : 'bg-white border-ink-100'
+
+              return (
+                <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${bg}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-300 truncate">{label}</p>
+                    <p className={`text-xs truncate mt-0.5 ${
+                      filled ? 'text-ink'
+                      : status === 'not_needed' ? 'text-ink-200 italic'
+                      : status === 'needed' ? 'text-amber-500 italic'
+                      : 'text-ink-200 italic'
+                    }`}>
+                      {filled
+                        ? (typeof val === 'number' ? val.toLocaleString() : String(val).split('\n')[0].slice(0, 28))
+                        : status === 'not_needed' ? 'N/A' : status === 'needed' ? 'needed' : '—'}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-0.5 flex-shrink-0">
+                    <button onClick={() => setFieldStatus(e.id, key, status === 'needed' ? null : 'needed')}
+                      title="Flag as needed"
+                      className={`p-0.5 rounded transition-colors ${status === 'needed' ? 'text-amber-500' : 'text-ink-200 hover:text-amber-400'}`}>
+                      <Flag size={9} />
+                    </button>
+                    <button onClick={() => setFieldStatus(e.id, key, status === 'not_needed' ? null : 'not_needed')}
+                      title="Mark as N/A"
+                      className={`p-0.5 rounded transition-colors ${status === 'not_needed' ? 'text-ink-400' : 'text-ink-200 hover:text-ink-400'}`}>
+                      <X size={9} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WrapUpTimelinePanel({ engagementId, comms }: { engagementId: string; comms: import('@/types').CommEntry[] }) {
+  const [showLog, setShowLog] = useState(false)
+  const sorted = [...comms].sort((a, b) => a.date > b.date ? 1 : -1)
+  return (
+    <div className="bg-white border border-ink-100 rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs text-ink-400 uppercase tracking-widest font-medium">Timeline</p>
+        <button onClick={() => setShowLog(v => !v)}
+          className="flex items-center gap-1 text-xs font-medium text-gold hover:text-gold-dark transition-all">
+          <Plus size={12} /> Log Activity
+        </button>
+      </div>
+      {showLog && <WrapUpLogCommPanel engagementId={engagementId} onClose={() => setShowLog(false)} />}
+      <div className="space-y-4 mt-2">
+        {sorted.map(comm => (
+          <div key={comm.id} className={`flex gap-3 ${comm.type === 'email_outbound' ? 'flex-row-reverse' : ''}`}>
+            <div className={`text-xs px-3 py-2 rounded-xl max-w-lg w-full ${
+              comm.type === 'email_outbound' ? 'bg-ink text-cream ml-auto'
+              : comm.type === 'stage_change' ? 'bg-parchment text-ink-400 italic'
+              : 'bg-parchment text-ink'
+            }`}>
+              {comm.subject && <p className="font-semibold mb-1">{comm.subject}</p>}
+              <p className="whitespace-pre-line">{comm.body}</p>
+              <p className="text-[10px] opacity-60 mt-1">{comm.from_name} · {formatDate(comm.date, 'MMM d, h:mm a')}</p>
+              <WrapUpNextStepBadge comm={comm} engagementId={engagementId} />
+            </div>
+          </div>
+        ))}
+        {sorted.length === 0 && <p className="text-xs text-ink-300 italic">No activity logged yet.</p>}
+      </div>
     </div>
   )
 }
@@ -596,25 +880,16 @@ export default function WrapUpDetailPage() {
         </div>
       </div>
 
+      {/* Data Tracking */}
+      <WrapUpFieldStatusPanel e={e} />
+
       {/* Timeline */}
-      <div className="bg-white border border-ink-100 rounded-xl p-5">
-        <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Timeline</p>
-        <div className="space-y-4">
-          {e.comms.map(comm => (
-            <div key={comm.id} className={`flex gap-3 ${comm.type === 'email_outbound' ? 'flex-row-reverse' : ''}`}>
-              <div className={`text-xs px-3 py-2 rounded-xl max-w-lg ${
-                comm.type === 'email_outbound' ? 'bg-ink text-cream ml-auto'
-                : comm.type === 'stage_change' ? 'bg-parchment text-ink-400 italic'
-                : 'bg-parchment text-ink'
-              }`}>
-                {comm.subject && <p className="font-semibold mb-1">{comm.subject}</p>}
-                <p className="whitespace-pre-line">{comm.body}</p>
-                <p className="text-[10px] opacity-60 mt-1">{comm.from_name} · {formatDate(comm.date, 'MMM d, h:mm a')}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <WrapUpTimelinePanel engagementId={e.id} comms={e.comms} />
+
+      {/* Engagement history snapshot */}
+      {e.engagement_snapshot && <WrapUpSnapshotPanel snapshot={e.engagement_snapshot} />}
+      {/* Prospect history snapshot (if this went directly from prospect → wrap-up via decline) */}
+      {e.prospect_snapshot && !e.engagement_snapshot && <WrapUpSnapshotPanel label="Prospect Stage History" snapshot={e.prospect_snapshot} />}
 
       {/* Archive */}
       <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">

@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { Engagement, primaryContact } from '@/types'
-import { formatDate, getInitials } from '@/lib/utils'
+import { Engagement, CommEntry } from '@/types'
+import { formatDate } from '@/lib/utils'
 import {
   AlertTriangle, ArrowRight, Bell, ChevronRight, ChevronLeft,
-  Users, Zap, CheckCircle2, Circle, FileText
+  Users, Zap, CheckCircle2, Circle, FileText, Flag, Database
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -281,6 +281,137 @@ function BriefingDocCarousel({ events }: { events: Engagement[] }) {
   )
 }
 
+// ─── Next Steps ──────────────────────────────────────────────────────────────
+
+type NextStepItem = { comm: CommEntry; engagement: Engagement; isOverdue: boolean }
+
+function buildNextSteps(allEngagements: Engagement[]): NextStepItem[] {
+  const now = new Date()
+  const items: NextStepItem[] = []
+  for (const e of allEngagements) {
+    for (const c of e.comms ?? []) {
+      if (!c.next_step) continue
+      if (c.next_step_cleared) continue
+      if (c.next_step_snoozed_until && new Date(c.next_step_snoozed_until) > now) continue
+      items.push({
+        comm: c,
+        engagement: e,
+        isOverdue: c.next_step_due_at ? new Date(c.next_step_due_at) < now : false,
+      })
+    }
+  }
+  return items.sort((a, b) => {
+    const da = a.comm.next_step_due_at ? new Date(a.comm.next_step_due_at).getTime() : Infinity
+    const db = b.comm.next_step_due_at ? new Date(b.comm.next_step_due_at).getTime() : Infinity
+    return da - db
+  })
+}
+
+function engagementHref(e: Engagement) {
+  if (e.section === 'prospects') return `/prospects/${e.id}`
+  if (e.section === 'wrap-up') return `/wrap-up/${e.id}`
+  return `/engagements/${e.id}`
+}
+
+function NextStepsSection({ items }: { items: NextStepItem[] }) {
+  if (items.length === 0) return null
+  const overdueCount = items.filter(i => i.isOverdue).length
+  return (
+    <div className="bg-white border border-ink-100 rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
+        <Flag size={13} className="text-gold flex-shrink-0" />
+        <h2 className="font-display text-xl font-semibold text-ink">Next Steps</h2>
+        <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{items.length}</span>
+        {overdueCount > 0 && (
+          <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full ml-auto">
+            {overdueCount} overdue
+          </span>
+        )}
+      </div>
+      <div className="divide-y divide-ink-50">
+        {items.map((item, idx) => {
+          const due = item.comm.next_step_due_at ? new Date(item.comm.next_step_due_at) : null
+          const dueStr = due ? due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+          return (
+            <Link key={idx} href={engagementHref(item.engagement)}
+              className="flex items-center gap-4 px-6 py-3.5 hover:bg-parchment/40 transition-all group">
+              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.isOverdue ? 'bg-red-500' : 'bg-gold'}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-ink-400 truncate">{item.engagement.organization}</p>
+                <p className={`text-sm truncate ${item.isOverdue ? 'text-red-600' : 'text-ink'}`}>{item.comm.next_step}</p>
+              </div>
+              {dueStr && (
+                <span className={`text-[11px] font-medium flex-shrink-0 ${item.isOverdue ? 'text-red-500' : 'text-ink-400'}`}>
+                  {item.isOverdue ? 'Overdue · ' : ''}{dueStr}
+                </span>
+              )}
+              <ArrowRight size={11} className="text-ink-100 group-hover:text-gold/60 transition-all flex-shrink-0" />
+            </Link>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Outstanding Data ─────────────────────────────────────────────────────────
+
+const FIELD_LABELS: Record<string, string> = {
+  fee: 'Fee',
+  event_date: 'Event Date',
+  event_city: 'Event City',
+  event_name: 'Event Name',
+  topic: 'Topic',
+  venue_name: 'Venue',
+  travel_notes: 'Travel Notes',
+  hotel_notes: 'Hotel Notes',
+  av_notes: 'A/V Notes',
+  payment_notes: 'Payment Notes',
+}
+
+type OutstandingDataItem = { engagement: Engagement; neededFields: string[] }
+
+function buildOutstandingData(allEngagements: Engagement[]): OutstandingDataItem[] {
+  const items: OutstandingDataItem[] = []
+  for (const e of allEngagements) {
+    if (!e.field_statuses) continue
+    const needed = Object.entries(e.field_statuses)
+      .filter(([, status]) => status === 'needed')
+      .filter(([field]) => {
+        const val = (e as unknown as Record<string, unknown>)[field]
+        return val === undefined || val === null || val === ''
+      })
+      .map(([field]) => FIELD_LABELS[field] ?? field)
+    if (needed.length > 0) items.push({ engagement: e, neededFields: needed })
+  }
+  return items
+}
+
+function OutstandingDataSection({ items }: { items: OutstandingDataItem[] }) {
+  if (items.length === 0) return null
+  return (
+    <div className="bg-white border border-ink-100 rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
+        <Database size={13} className="text-ink-400 flex-shrink-0" />
+        <h2 className="font-display text-xl font-semibold text-ink">Outstanding Data</h2>
+        <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{items.length}</span>
+      </div>
+      <div className="divide-y divide-ink-50">
+        {items.map((item, idx) => (
+          <Link key={idx} href={engagementHref(item.engagement)}
+            className="flex items-center gap-4 px-6 py-3.5 hover:bg-parchment/40 transition-all group">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-ink truncate">{item.engagement.organization}</p>
+              <p className="text-xs text-ink-400 truncate mt-0.5">Needed: {item.neededFields.join(', ')}</p>
+            </div>
+            <ArrowRight size={11} className="text-ink-100 group-hover:text-gold/60 transition-all flex-shrink-0" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Alert Panel ──────────────────────────────────────────────────────────────
 
 function AlertPanel({ groups }: { groups: AlertGroup[] }) {
@@ -366,6 +497,8 @@ export default function DashboardPage() {
   const alertGroups = buildAlerts(prospects, active, postEvent)
   const reviewCount = reviewItems.filter(r => !r.confirmed_by).length
   const needsResponseCount = allEngagements.filter(e => e.comms?.some(c => c.needs_response)).length
+  const nextStepItems = buildNextSteps(allEngagements)
+  const outstandingDataItems = buildOutstandingData(allEngagements)
 
   return (
     <div>
@@ -476,6 +609,14 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ── Next Steps + Outstanding Data ── */}
+        {(nextStepItems.length > 0 || outstandingDataItems.length > 0) && (
+          <div className={`mb-6 grid gap-5 ${nextStepItems.length > 0 && outstandingDataItems.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <NextStepsSection items={nextStepItems} />
+            <OutstandingDataSection items={outstandingDataItems} />
           </div>
         )}
 

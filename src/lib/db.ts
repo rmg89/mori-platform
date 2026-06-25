@@ -117,6 +117,10 @@ interface CommRow {
   staff_name: string | null
   needs_response: boolean
   response_due_by: string | null
+  next_step: string | null
+  next_step_due_at: string | null
+  next_step_snoozed_until: string | null
+  next_step_cleared: boolean | null
 }
 
 interface CallRow {
@@ -186,6 +190,10 @@ function mapComm(row: CommRow): CommEntry {
     channel: row.channel ?? undefined,
     needs_response: row.needs_response,
     response_due_by: row.response_due_by ?? undefined,
+    next_step: row.next_step ?? undefined,
+    next_step_due_at: row.next_step_due_at ?? undefined,
+    next_step_snoozed_until: row.next_step_snoozed_until ?? undefined,
+    next_step_cleared: row.next_step_cleared ?? undefined,
   }
 }
 
@@ -495,6 +503,11 @@ export async function updateCompanyRow(id: string, patch: Record<string, unknown
 export async function insertComm(comm: Omit<CommRow, 'id'>): Promise<void> {
   const { error } = await supabase.from('communications').insert(comm)
   if (error) throw new Error(`insertComm: ${error.message}`)
+}
+
+export async function updateCommRow(id: string, patch: Partial<CommRow>): Promise<void> {
+  const { error } = await supabase.from('communications').update(patch).eq('id', id)
+  if (error) throw new Error(`updateCommRow: ${error.message}`)
 }
 
 export async function upsertCall(call: Partial<CallRow> & { engagement_id: string }): Promise<void> {

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, updateCompanyRow, upsertCall, insertComm, upsertContact, insertContact } from '@/lib/db'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, updateCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -25,6 +25,7 @@ interface StoreActions {
   // Pipeline transitions (confirmed/declined → review sections)
   confirmProspect: (id: string) => void
   declineProspect: (id: string) => void
+  moveToWrapUp: (id: string) => void
   confirmBookingReview: (id: string) => void
   confirmWrapUpReview: (id: string) => void
 
@@ -63,6 +64,10 @@ interface StoreActions {
 
   // Comms
   addComm: (engagementId: string, comm: CommEntry) => void
+  updateComm: (engagementId: string, commId: string, patch: Partial<CommEntry>) => void
+
+  // Field statuses
+  setFieldStatus: (id: string, field: string, status: 'needed' | 'not_needed' | null) => void
 
   // Review
   confirmReviewItem: (id: string, confirmedBy: string) => void
@@ -219,21 +224,80 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const confirmProspect = useCallback((id: string) => {
     const now = new Date().toISOString()
-    setEngagements(prev => prev.map(e =>
-      e.id === id ? { ...e, section: 'engagements', prospect_step: undefined, booking_review_needed: true, confirmed_at: now, updated_at: now } : e
-    ))
-    updateEngagementRow(id, { section: 'engagements', prospect_step: null, booking_review_needed: true, confirmed_at: now }).catch(console.error)
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      // Snapshot the prospect-stage fields before moving to engagement
+      const prospect_snapshot: Record<string, unknown> = {
+        prospect_step: e.prospect_step,
+        source: e.source,
+        notes: e.notes,
+        proposed_dates: e.proposed_dates,
+        calls: e.calls,
+        comms: e.comms,
+        contacts: e.contacts,
+        event_date: e.event_date,
+        event_city: e.event_city,
+        fee: e.fee,
+        topic: e.topic,
+        audience_size: e.audience_size,
+        event_format: e.event_format,
+      }
+      updateEngagementRow(id, { section: 'engagements', prospect_step: null, booking_review_needed: true, confirmed_at: now, prospect_snapshot }).catch(console.error)
+      return { ...e, section: 'engagements' as const, prospect_step: undefined, booking_review_needed: true, confirmed_at: now, prospect_snapshot, updated_at: now }
+    }))
     runScan(id, 'booking')
   }, [runScan])
 
   const declineProspect = useCallback((id: string) => {
     const now = new Date().toISOString()
-    setEngagements(prev => prev.map(e =>
-      e.id === id ? { ...e, section: 'wrap-up', prospect_step: 'declined', wrap_up_review_needed: true, declined_at: now, updated_at: now } : e
-    ))
-    updateEngagementRow(id, { section: 'wrap-up', prospect_step: 'declined', wrap_up_review_needed: true, declined_at: now }).catch(console.error)
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const prospect_snapshot: Record<string, unknown> = {
+        prospect_step: e.prospect_step,
+        source: e.source,
+        notes: e.notes,
+        proposed_dates: e.proposed_dates,
+        calls: e.calls,
+        comms: e.comms,
+        contacts: e.contacts,
+      }
+      updateEngagementRow(id, { section: 'wrap-up', prospect_step: 'declined', wrap_up_review_needed: true, declined_at: now, prospect_snapshot }).catch(console.error)
+      return { ...e, section: 'wrap-up' as const, prospect_step: 'declined' as const, wrap_up_review_needed: true, declined_at: now, prospect_snapshot, updated_at: now }
+    }))
     runScan(id, 'declined')
   }, [runScan])
+
+  const moveToWrapUp = useCallback((id: string) => {
+    const now = new Date().toISOString()
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      // Snapshot the engagement-stage fields before moving to wrap-up
+      const engagement_snapshot: Record<string, unknown> = {
+        engagement_flags: e.engagement_flags,
+        media_flags: e.media_flags,
+        contract_required: e.contract_required,
+        contract_sent_at: e.contract_sent_at,
+        contract_signed_at: e.contract_signed_at,
+        outgoing_materials: e.outgoing_materials,
+        incoming_materials: e.incoming_materials,
+        briefing_complete: e.briefing_complete,
+        briefing_notes: e.briefing_notes,
+        deposit_amount: e.deposit_amount,
+        deposit_invoice_sent_at: e.deposit_invoice_sent_at,
+        deposit_received_at: e.deposit_received_at,
+        run_of_show: (e as any).run_of_show,
+        purpose: (e as any).purpose,
+        audience_description: (e as any).audience_description,
+        join_link: e.join_link,
+        arrival_time: e.arrival_time,
+        venue_maps_link: e.venue_maps_link,
+        flight_details: e.flight_details,
+        hotel_name: e.hotel_name,
+      }
+      updateEngagementRow(id, { section: 'wrap-up', wrap_up_review_needed: true, engagement_snapshot }).catch(console.error)
+      return { ...e, section: 'wrap-up' as const, wrap_up_review_needed: true, engagement_snapshot, updated_at: now }
+    }))
+  }, [])
 
   const confirmBookingReview = useCallback((id: string) => {
     setEngagements(prev => prev.map(e =>
@@ -544,7 +608,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       staff_name: comm.staff_name ?? null,
       needs_response: comm.needs_response ?? false,
       response_due_by: comm.response_due_by ?? null,
+      next_step: comm.next_step ?? null,
+      next_step_due_at: comm.next_step_due_at ?? null,
+      next_step_snoozed_until: comm.next_step_snoozed_until ?? null,
+      next_step_cleared: comm.next_step_cleared ?? null,
     }).catch(console.error)
+  }, [])
+
+  const updateComm = useCallback((engagementId: string, commId: string, patch: Partial<CommEntry>) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        comms: e.comms.map(c => c.id === commId ? { ...c, ...patch } : c),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    updateCommRow(commId, {
+      next_step: patch.next_step ?? undefined,
+      next_step_due_at: patch.next_step_due_at ?? undefined,
+      next_step_snoozed_until: patch.next_step_snoozed_until ?? undefined,
+      next_step_cleared: patch.next_step_cleared ?? undefined,
+    } as Parameters<typeof updateCommRow>[1]).catch(console.error)
+  }, [])
+
+  const setFieldStatus = useCallback((id: string, field: string, status: 'needed' | 'not_needed' | null) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const field_statuses = { ...(e.field_statuses ?? {}) }
+      if (status === null) { delete field_statuses[field] } else { field_statuses[field] = status }
+      updateEngagementRow(id, { field_statuses }).catch(console.error)
+      return { ...e, field_statuses, updated_at: new Date().toISOString() }
+    }))
   }, [])
 
   const confirmReviewItem = useCallback((id: string, confirmedBy: string) => {
@@ -561,14 +656,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       engagements, reviewItems, companies, loading, error,
       updateEngagement, setProspectStep,
-      confirmProspect, declineProspect, confirmBookingReview, confirmWrapUpReview,
+      confirmProspect, declineProspect, moveToWrapUp, confirmBookingReview, confirmWrapUpReview,
       archiveEngagement, deleteEngagement,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
       updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, updatePostEventStage,
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
-      addCall, updateCall, addComm,
+      addCall, updateCall, addComm, updateComm,
+      setFieldStatus,
       confirmReviewItem, dismissReviewItem,
       updateCompany, updateContact,
     }}>

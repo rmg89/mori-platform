@@ -303,12 +303,18 @@ function LogCommPanel({ engagementId, onClose }: { engagementId: string; onClose
   const [type, setType] = useState<'note' | 'call' | 'email_outbound'>('note')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const [nextStep, setNextStep] = useState('')
+  const [nextStepDue, setNextStepDue] = useState('')
   const submit = () => {
     if (!body.trim()) return
+    const now = new Date().toISOString()
+    const defaultDue = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
     addComm(engagementId, {
-      id: `cm_${Date.now()}`, type, date: new Date().toISOString(),
+      id: `cm_${Date.now()}`, type, date: now,
       subject: subject || undefined, body,
       from_name: "Mori's Team", staff_name: 'Ryan G.', needs_response: false,
+      next_step: nextStep || undefined,
+      next_step_due_at: nextStep ? (nextStepDue ? new Date(nextStepDue + 'T09:00:00').toISOString() : defaultDue) : undefined,
     })
     onClose()
   }
@@ -324,8 +330,21 @@ function LogCommPanel({ engagementId, onClose }: { engagementId: string; onClose
       </div>
       <input type="text" placeholder="Subject (optional)" value={subject} onChange={e => setSubject(e.target.value)}
         className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold bg-white" />
-      <textarea placeholder="Notes..." value={body} onChange={e => setBody(e.target.value)} rows={3}
+      <textarea placeholder="Notes…" value={body} onChange={e => setBody(e.target.value)} rows={3}
         className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold resize-none bg-white" />
+      <div className="border-t border-ink-50 pt-3 space-y-2">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-300">Next Step (optional)</p>
+        <input type="text" placeholder="What needs to happen next?" value={nextStep} onChange={e => setNextStep(e.target.value)}
+          className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold bg-white" />
+        {nextStep && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-300 flex-shrink-0">Due by:</span>
+            <input type="date" value={nextStepDue} onChange={e => setNextStepDue(e.target.value)}
+              className="text-xs border border-ink-100 rounded-lg px-2.5 py-1.5 outline-none focus:border-gold bg-white" />
+            {!nextStepDue && <span className="text-xs text-ink-300 italic">default: 48 hours</span>}
+          </div>
+        )}
+      </div>
       <div className="flex gap-2">
         <button onClick={submit} className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all">Log</button>
         <button onClick={onClose} className="text-xs font-medium text-ink-400 px-4 py-2 rounded-lg hover:text-ink transition-all">Cancel</button>
@@ -343,6 +362,9 @@ function CallRow({ call, engagementId, label }: {
   const [schedTime, setSchedTime] = useState('')
   const [format, setFormat] = useState<'phone' | 'video' | 'in_person'>('video')
   const [details, setDetails] = useState(call.details ?? '')
+  const [requestedDate, setRequestedDate] = useState(
+    call.requested_at ? call.requested_at.slice(0, 10) : ''
+  )
 
   const saveSchedule = () => {
     const scheduled_at = schedDate ? `${schedDate}T${schedTime || '00:00'}:00Z` : undefined
@@ -387,8 +409,26 @@ function CallRow({ call, engagementId, label }: {
       </div>
 
       {/* Timestamps */}
-      <div className="flex gap-4 text-[10px] text-ink-300 pl-5">
-        {call.requested_at && (
+      <div className="flex flex-wrap gap-4 text-[10px] text-ink-300 pl-5">
+        {call.status === 'requested' && (
+          <span className="flex items-center gap-1.5">
+            <span>Requested:</span>
+            <input
+              type="date"
+              value={requestedDate}
+              onChange={e => {
+                setRequestedDate(e.target.value)
+                if (e.target.value) {
+                  updateCall(engagementId, call.id, {
+                    requested_at: new Date(e.target.value + 'T00:00:00').toISOString(),
+                  })
+                }
+              }}
+              className="text-[10px] border border-ink-100 rounded-md px-1.5 py-0.5 outline-none focus:border-gold bg-white text-ink-500"
+            />
+          </span>
+        )}
+        {call.requested_at && call.status !== 'requested' && (
           <span>Requested: <span className="text-ink-500">{formatDT(call.requested_at)}</span></span>
         )}
         {call.scheduled_at && (

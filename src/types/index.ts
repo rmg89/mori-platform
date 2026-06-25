@@ -147,6 +147,11 @@ export interface CommEntry {
   needs_response?: boolean
   response_due_by?: string
   tagged_manually?: boolean
+  // Next step tracking
+  next_step?: string                  // what needs to happen next
+  next_step_due_at?: string           // ISO datetime (default 48h from date)
+  next_step_snoozed_until?: string    // ISO datetime — snooze until this time
+  next_step_cleared?: boolean         // manually marked done
 }
 
 // ─── Alert ────────────────────────────────────────────────────────────────────
@@ -281,6 +286,14 @@ export interface Engagement {
   briefing_complete?: boolean
   briefing_complete_at?: string
   briefing_notes?: BriefingNote[]
+
+  // Stage history snapshots (read-only reference to prior stage data)
+  prospect_snapshot?: Record<string, unknown>    // saved when prospect → engagement
+  engagement_snapshot?: Record<string, unknown>  // saved when engagement → wrap-up
+
+  // Field statuses: which blank fields are actively needed vs explicitly not needed
+  // e.g. { "fee": "needed", "event_city": "not_needed" }
+  field_statuses?: Record<string, 'needed' | 'not_needed'>
 
   // AI confirmation status (for auto-sorted items)
   ai_created?: boolean
