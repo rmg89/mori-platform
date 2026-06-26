@@ -395,9 +395,8 @@ function ToDoColumn({ readyToProgress, overdueSteps, redAlerts, allEngagements }
   allEngagements: Engagement[]
 }) {
   const needsResponse = allEngagements.filter(e => e.comms?.some(c => c.needs_response))
-  const outstandingData = buildOutstandingData(allEngagements)
-  const isEmpty = readyToProgress.length === 0 && overdueSteps.length === 0 && redAlerts.length === 0 && needsResponse.length === 0 && outstandingData.length === 0
-  const total = readyToProgress.length + overdueSteps.length + redAlerts.length + needsResponse.length + outstandingData.length
+  const isEmpty = readyToProgress.length === 0 && overdueSteps.length === 0 && redAlerts.length === 0 && needsResponse.length === 0
+  const total = readyToProgress.length + overdueSteps.length + redAlerts.length + needsResponse.length
 
   return (
     <div className="bg-white border border-ink-100 rounded-2xl overflow-hidden flex flex-col">
@@ -457,16 +456,6 @@ function ToDoColumn({ readyToProgress, overdueSteps, redAlerts, allEngagements }
                     severity="red" />
                 )
               })}
-            </ColumnSection>
-          )}
-          {outstandingData.length > 0 && (
-            <ColumnSection title="Fill In">
-              {outstandingData.map((item, idx) => (
-                <ActionRow key={idx} href={engagementHref(item.engagement)}
-                  label={item.engagement.organization}
-                  sub={`Missing: ${item.neededFields.slice(0, 3).join(', ')}${item.neededFields.length > 3 ? ` +${item.neededFields.length - 3}` : ''}`}
-                  severity="amber" />
-              ))}
             </ColumnSection>
           )}
         </>

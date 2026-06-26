@@ -44,6 +44,7 @@ function eventTypeLabel(type: string) {
 type BriefingFieldCtx = {
   fieldStatuses: Record<string, 'needed' | 'not_needed'>
   onStatusChange: (key: string, status: 'needed' | 'not_needed' | null) => void
+  showHidden: boolean
 }
 const BriefingFieldContext = createContext<BriefingFieldCtx | null>(null)
 
@@ -65,6 +66,21 @@ function EditableField({
   const ctx = useContext(BriefingFieldContext)
   const status = fieldKey && ctx ? ctx.fieldStatuses[fieldKey] : undefined
 
+  // Hidden field: show restore row if showHidden, otherwise render nothing
+  if (status === 'not_needed') {
+    if (!ctx?.showHidden) return null
+    return (
+      <div className="group flex items-center gap-2 py-0.5 opacity-30 hover:opacity-70 transition-opacity">
+        {label && <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-200">{label}</p>}
+        <span className="text-[10px] text-ink-200">— hidden</span>
+        <button onClick={ev => { ev.stopPropagation(); ctx.onStatusChange(fieldKey!, null) }}
+          className="text-[10px] text-ink-300 hover:text-ink transition-colors opacity-0 group-hover:opacity-100 ml-1">
+          restore
+        </button>
+      </div>
+    )
+  }
+
   function commit() { onSave(draft); setEditing(false) }
   function cancel() { setDraft(value || ''); setEditing(false) }
   const displayPlaceholder = placeholder || `Add ${label.toLowerCase()}…`
@@ -77,7 +93,7 @@ function EditableField({
   function toggleNotNeeded(ev: React.MouseEvent) {
     ev.stopPropagation()
     if (!fieldKey || !ctx) return
-    ctx.onStatusChange(fieldKey, status === 'not_needed' ? null : 'not_needed')
+    ctx.onStatusChange(fieldKey, 'not_needed')
   }
 
   return (
@@ -86,7 +102,6 @@ function EditableField({
         <div className="flex items-center gap-1.5">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">{label}</p>
           {status === 'needed' && <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
-          {status === 'not_needed' && <span className="text-[9px] text-ink-200 uppercase tracking-widest font-medium">N/A</span>}
         </div>
       )}
       {editing ? (
@@ -135,9 +150,7 @@ function EditableField({
                 <Flag size={10} />
               </button>
               <button onClick={toggleNotNeeded} title="Mark as N/A"
-                className={`p-1 rounded transition-colors ${
-                  status === 'not_needed' ? 'text-ink-400 bg-parchment' : 'text-ink-200 hover:text-ink-400'
-                }`}>
+                className="p-1 rounded transition-colors text-ink-200 hover:text-ink-400">
                 <Minus size={10} />
               </button>
             </div>
@@ -1991,6 +2004,8 @@ function BriefingDocument({ e }: { e: Engagement }) {
   const { updateEngagement, setFieldStatus } = useStore()
   const [sections, setSections] = useState<SectionKey[]>(() => getDefaultSections(e))
   const [downloading, setDownloading] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
+  const hiddenCount = Object.values(e.field_statuses ?? {}).filter(s => s === 'not_needed').length
 
   const save = useCallback((patch: Partial<Engagement>): void => {
     updateEngagement(e.id, patch)
@@ -2044,6 +2059,7 @@ function BriefingDocument({ e }: { e: Engagement }) {
       <BriefingFieldContext.Provider value={{
         fieldStatuses: e.field_statuses ?? {},
         onStatusChange: (key, status) => setFieldStatus(e.id, key, status),
+        showHidden,
       }}>
         <div className="px-6 py-5 space-y-0">
           {sections.map((key: SectionKey) => {
@@ -2056,8 +2072,14 @@ function BriefingDocument({ e }: { e: Engagement }) {
             if (key === 'prepnotes') return <React.Fragment key="prepnotes"><SectionPrepNotes e={e} save={save} /></React.Fragment>
             return null
           })}
-          <div className="mt-6">
+          <div className="mt-6 flex items-center gap-4">
             <AddSectionMenu available={available} onAdd={addSection} />
+            {hiddenCount > 0 && (
+              <button onClick={() => setShowHidden(h => !h)}
+                className="text-xs text-ink-200 hover:text-ink-400 transition-colors flex-shrink-0">
+                {showHidden ? 'hide dismissed' : `${hiddenCount} field${hiddenCount !== 1 ? 's' : ''} dismissed`}
+              </button>
+            )}
           </div>
         </div>
       </BriefingFieldContext.Provider>
