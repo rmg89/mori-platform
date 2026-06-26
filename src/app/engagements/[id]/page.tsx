@@ -45,6 +45,7 @@ type BriefingFieldCtx = {
   fieldStatuses: Record<string, 'needed' | 'not_needed'>
   onStatusChange: (key: string, status: 'needed' | 'not_needed' | null) => void
   showHidden: boolean
+  toggleShowHidden: () => void
 }
 const BriefingFieldContext = createContext<BriefingFieldCtx | null>(null)
 
@@ -96,30 +97,34 @@ function EditableField({
     ctx.onStatusChange(fieldKey, 'not_needed')
   }
 
+  const fieldControls = fieldKey && ctx ? (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <button onClick={toggleNeeded} title="Flag as needed"
+        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors border ${
+          status === 'needed'
+            ? 'text-amber-600 bg-amber-50 border-amber-200'
+            : 'text-ink-400 border-ink-200 hover:text-amber-500 hover:border-amber-200 hover:bg-amber-50/40'
+        }`}>
+        <Flag size={9} />
+        {status === 'needed' && <span>needed</span>}
+      </button>
+      <button onClick={toggleNotNeeded} title="Dismiss field"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors border text-ink-400 border-ink-200 hover:text-red-400 hover:border-red-200 hover:bg-red-50/40">
+        <Minus size={9} />
+      </button>
+    </div>
+  ) : null
+
   return (
     <div className="flex flex-col gap-1.5">
-      {label && (
+      {label ? (
         <div className="flex items-center gap-1.5">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300 flex-1">{label}</p>
-          {fieldKey && ctx && (
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <button onClick={toggleNeeded} title="Flag as needed"
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors border ${
-                  status === 'needed'
-                    ? 'text-amber-600 bg-amber-50 border-amber-200'
-                    : 'text-ink-200 border-ink-100 hover:text-amber-500 hover:border-amber-200 hover:bg-amber-50/40'
-                }`}>
-                <Flag size={9} />
-                {status === 'needed' && <span>needed</span>}
-              </button>
-              <button onClick={toggleNotNeeded} title="Dismiss field"
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors border text-ink-200 border-ink-100 hover:text-red-400 hover:border-red-200 hover:bg-red-50/40">
-                <Minus size={9} />
-              </button>
-            </div>
-          )}
+          {fieldControls}
         </div>
-      )}
+      ) : fieldControls ? (
+        <div className="flex justify-end">{fieldControls}</div>
+      ) : null}
       {editing ? (
         <div className="flex items-start gap-2">
           {multiline ? (
@@ -697,12 +702,12 @@ function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engage
             <Calendar size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
             <div className="flex items-center gap-1.5 flex-1">
               <EditableField label="" value={e.event_date ? formatDate(e.event_date) : undefined}
-                placeholder="Start date" onSave={v => save({ event_date: v })} />
+                placeholder="Start date" onSave={v => save({ event_date: v })} fieldKey="event_date" />
               {(e as any).event_end_date && (
                 <>
                   <span className="text-ink-300 text-xs">–</span>
                   <EditableField label="" value={formatDate((e as any).event_end_date)}
-                    placeholder="End date" onSave={v => save({ event_end_date: v } as any)} />
+                    placeholder="End date" onSave={v => save({ event_end_date: v } as any)} fieldKey="event_end_date" />
                 </>
               )}
               {!(e as any).event_end_date && (
@@ -714,22 +719,22 @@ function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engage
           <div className="flex items-start gap-2.5">
             <Clock size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
             <EditableField label="" value={(e as any).event_time}
-              placeholder="Time" onSave={v => save({ event_time: v } as any)} />
+              placeholder="Time" onSave={v => save({ event_time: v } as any)} fieldKey="event_time" />
           </div>
           <div className="flex items-start gap-2.5">
             <MapPin size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
             <EditableField label="" value={e.event_city}
-              placeholder="Location" onSave={v => save({ event_city: v })} />
+              placeholder="Location" onSave={v => save({ event_city: v })} fieldKey="event_city" />
           </div>
           <div className="flex items-start gap-2.5">
             <Clock size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
             <EditableField label="" value={e.session_length ? `${e.session_length} min` : undefined}
-              placeholder="Duration" onSave={v => save({ session_length: parseInt(v) || undefined })} />
+              placeholder="Duration" onSave={v => save({ session_length: parseInt(v) || undefined })} fieldKey="session_length" />
           </div>
           <div className="flex items-start gap-2.5">
             <Users size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
             <EditableField label="" value={e.audience_size ? `${e.audience_size.toLocaleString()} attendees` : undefined}
-              placeholder="Audience size" onSave={v => save({ audience_size: parseInt(v.replace(/\D/g, '')) || undefined })} />
+              placeholder="Audience size" onSave={v => save({ audience_size: parseInt(v.replace(/\D/g, '')) || undefined })} fieldKey="audience_size" />
           </div>
         </div>
       </div>
@@ -1093,6 +1098,7 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
             placeholder="e.g. travel stipend not speaking fee, net 30, split payment…"
             multiline
             onSave={v => save({ payment_notes: v } as any)}
+            fieldKey="payment_notes"
           />
 
           {/* Sent / received timestamps */}
@@ -2006,10 +2012,10 @@ function AddSectionMenu({ available, onAdd }: { available: { key: SectionKey; la
 }
 
 function BriefingDocument({ e }: { e: Engagement }) {
-  const { updateEngagement, setFieldStatus } = useStore()
+  const { updateEngagement } = useStore()
+  const ctx = useContext(BriefingFieldContext)
   const [sections, setSections] = useState<SectionKey[]>(() => getDefaultSections(e))
   const [downloading, setDownloading] = useState(false)
-  const [showHidden, setShowHidden] = useState(false)
   const hiddenCount = Object.values(e.field_statuses ?? {}).filter(s => s === 'not_needed').length
 
   const save = useCallback((patch: Partial<Engagement>): void => {
@@ -2061,11 +2067,6 @@ function BriefingDocument({ e }: { e: Engagement }) {
         </button>
       </div>
 
-      <BriefingFieldContext.Provider value={{
-        fieldStatuses: e.field_statuses ?? {},
-        onStatusChange: (key, status) => setFieldStatus(e.id, key, status),
-        showHidden,
-      }}>
         <div className="px-6 py-5 space-y-0">
           {sections.map((key: SectionKey) => {
             if (key === 'header')    return <React.Fragment key="header"><SectionHeader e={e} save={save} /></React.Fragment>
@@ -2080,14 +2081,13 @@ function BriefingDocument({ e }: { e: Engagement }) {
           <div className="mt-6 flex items-center gap-4">
             <AddSectionMenu available={available} onAdd={addSection} />
             {hiddenCount > 0 && (
-              <button onClick={() => setShowHidden(h => !h)}
-                className="text-xs text-ink-200 hover:text-ink-400 transition-colors flex-shrink-0">
-                {showHidden ? 'hide dismissed' : `${hiddenCount} field${hiddenCount !== 1 ? 's' : ''} dismissed`}
+              <button onClick={() => ctx?.toggleShowHidden()}
+                className="text-xs text-ink-300 hover:text-ink-500 transition-colors flex-shrink-0">
+                {ctx?.showHidden ? 'hide dismissed' : `${hiddenCount} field${hiddenCount !== 1 ? 's' : ''} dismissed`}
               </button>
             )}
           </div>
         </div>
-      </BriefingFieldContext.Provider>
     </div>
   )
 }
@@ -2313,8 +2313,9 @@ function TimelinePanel({ e }: { e: Engagement }) {
 export default function EngagementDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement } = useStore()
+  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement, setFieldStatus } = useStore()
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
   const [, startTransition] = useTransition()
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
@@ -2326,6 +2327,12 @@ export default function EngagementDetailPage() {
   }, [e.id, updateEngagement])
 
   return (
+    <BriefingFieldContext.Provider value={{
+      fieldStatuses: e.field_statuses ?? {},
+      onStatusChange: (key, status) => setFieldStatus(e.id, key, status),
+      showHidden,
+      toggleShowHidden: () => setShowHidden(h => !h),
+    }}>
     <div className="p-8 max-w-4xl mx-auto animate-fade-in">
       <Link href="/engagements" className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink mb-6 transition-all">
         <ArrowLeft size={14} /> Back to Engagements
@@ -2418,5 +2425,6 @@ export default function EngagementDetailPage() {
       {/* Floating briefing CTA */}
       <FloatingBriefingButton e={e} save={save} />
     </div>
+    </BriefingFieldContext.Provider>
   )
 }
