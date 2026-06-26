@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, PostEventMediaType, primaryContact } from '@/types'
@@ -431,6 +431,7 @@ export default function WrapUpDetailPage() {
   } = useStore()
   const [archiveModalOpen, setArchiveModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [, startTransition] = useTransition()
   const [mediaUploading, setMediaUploading] = useState(false)
   const [addingMediaType, setAddingMediaType] = useState<PostEventMediaType | null>(null)
   const [linkUrl, setLinkUrl] = useState('')
@@ -945,7 +946,7 @@ export default function WrapUpDetailPage() {
         confirmLabel="Delete"
         requireText="DELETE"
         danger
-        onConfirm={() => { deleteEngagement(e.id); router.push('/wrap-up') }}
+        onConfirm={() => { deleteEngagement(e.id); startTransition(() => router.push('/wrap-up')) }}
         onCancel={() => setDeleteModalOpen(false)}
       />
     </div>

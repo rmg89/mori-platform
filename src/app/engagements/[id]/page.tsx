@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import { useStore } from '@/lib/store'
 import {
   Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact
@@ -2324,6 +2324,7 @@ export default function EngagementDetailPage() {
   const router = useRouter()
   const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement } = useStore()
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [, startTransition] = useTransition()
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
 
@@ -2422,7 +2423,7 @@ export default function EngagementDetailPage() {
         confirmLabel="Delete"
         requireText="DELETE"
         danger
-        onConfirm={() => { deleteEngagement(e.id); router.push('/engagements') }}
+        onConfirm={() => { deleteEngagement(e.id); startTransition(() => router.push('/engagements')) }}
         onCancel={() => setDeleteModalOpen(false)}
       />
 

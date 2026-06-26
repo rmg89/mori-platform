@@ -1,6 +1,6 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { useStore } from '@/lib/store'
 import { PROSPECT_STEPS, ProspectStep, EngagementCall, CallFormat, CommEntry, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
@@ -540,6 +540,7 @@ export default function ProspectDetailPage() {
   const [showLogComm, setShowLogComm] = useState(false)
   const [showAddCall, setShowAddCall] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [, startTransition] = useTransition()
 
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
@@ -838,7 +839,7 @@ export default function ProspectDetailPage() {
         confirmLabel="Delete"
         requireText="DELETE"
         danger
-        onConfirm={() => { deleteEngagement(e.id); router.push('/prospects') }}
+        onConfirm={() => { deleteEngagement(e.id); startTransition(() => router.push('/prospects')) }}
         onCancel={() => setDeleteModalOpen(false)}
       />
     </div>
