@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
+import { useState, useCallback, useEffect, useRef, useTransition, createContext, useContext } from 'react'
 import { useStore } from '@/lib/store'
 import {
   Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact
@@ -11,7 +11,7 @@ import {
   ArrowLeft, Calendar, MapPin, Users, AlertTriangle, CheckCircle2, Circle,
   Download, FileText, Mic, Radio, Newspaper,
   Clock, Wifi, Hotel, Plane, ExternalLink,
-  Pencil, Check, X, Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
+  Pencil, Check, X, Plus, Minus, Trash2, GripVertical, ChevronDown, ChevronUp,
   FileCheck, Upload, ArrowDown, Paperclip, Building2,
   Receipt, History, Flag, Bell, BellOff
 } from 'lucide-react'
@@ -39,10 +39,18 @@ function eventTypeLabel(type: string) {
   return map[type] || 'Engagement'
 }
 
+// ─── Briefing field-status context ───────────────────────────────────────────
+
+type BriefingFieldCtx = {
+  fieldStatuses: Record<string, 'needed' | 'not_needed'>
+  onStatusChange: (key: string, status: 'needed' | 'not_needed' | null) => void
+}
+const BriefingFieldContext = createContext<BriefingFieldCtx | null>(null)
+
 // ─── Inline edit primitives ───────────────────────────────────────────────────
 
 function EditableField({
-  label, value, placeholder, onSave, multiline, link
+  label, value, placeholder, onSave, multiline, link, fieldKey
 }: {
   label: string
   value?: string | null
@@ -50,17 +58,37 @@ function EditableField({
   onSave: (v: string) => void
   multiline?: boolean
   link?: string
+  fieldKey?: string
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value || '')
+  const ctx = useContext(BriefingFieldContext)
+  const status = fieldKey && ctx ? ctx.fieldStatuses[fieldKey] : undefined
 
   function commit() { onSave(draft); setEditing(false) }
   function cancel() { setDraft(value || ''); setEditing(false) }
   const displayPlaceholder = placeholder || `Add ${label.toLowerCase()}…`
 
+  function toggleNeeded(ev: React.MouseEvent) {
+    ev.stopPropagation()
+    if (!fieldKey || !ctx) return
+    ctx.onStatusChange(fieldKey, status === 'needed' ? null : 'needed')
+  }
+  function toggleNotNeeded(ev: React.MouseEvent) {
+    ev.stopPropagation()
+    if (!fieldKey || !ctx) return
+    ctx.onStatusChange(fieldKey, status === 'not_needed' ? null : 'not_needed')
+  }
+
   return (
     <div className="group flex flex-col gap-1.5">
-      {label && <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">{label}</p>}
+      {label && (
+        <div className="flex items-center gap-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">{label}</p>
+          {status === 'needed' && <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
+          {status === 'not_needed' && <span className="text-[9px] text-ink-200 uppercase tracking-widest font-medium">N/A</span>}
+        </div>
+      )}
       {editing ? (
         <div className="flex items-start gap-2">
           {multiline ? (
@@ -78,21 +106,43 @@ function EditableField({
           <button onClick={cancel} className="p-1 text-ink-300 hover:text-ink mt-0.5 flex-shrink-0"><X size={13} /></button>
         </div>
       ) : (
-        <button onClick={() => { setDraft(value || ''); setEditing(true) }} className="text-left">
-          {value ? (
-            link ? (
-              <span className="text-sm font-semibold text-gold hover:text-gold-dark inline-flex items-center gap-1">
-                {value} <ExternalLink size={10} />
-              </span>
+        <div className="flex items-center gap-1 min-w-0">
+          <button onClick={() => { setDraft(value || ''); setEditing(true) }} className="text-left flex-1 min-w-0">
+            {value ? (
+              link ? (
+                <span className="text-sm font-semibold text-gold hover:text-gold-dark inline-flex items-center gap-1">
+                  {value} <ExternalLink size={10} />
+                </span>
+              ) : (
+                <span className="text-sm text-ink leading-snug group-hover:underline decoration-dashed decoration-ink-200 underline-offset-2">{value}</span>
+              )
             ) : (
-              <span className="text-sm text-ink leading-snug group-hover:underline decoration-dashed decoration-ink-200 underline-offset-2">{value}</span>
-            )
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs text-ink-300 border border-dashed border-ink-200 rounded px-2 py-0.5 hover:border-gold/40 hover:text-gold/70 transition-colors">
-              <Plus size={9} className="flex-shrink-0" />{displayPlaceholder}
-            </span>
+              <span className={`inline-flex items-center gap-1.5 text-xs border border-dashed rounded px-2 py-0.5 transition-colors ${
+                status === 'needed'
+                  ? 'border-amber-300/70 bg-amber-50/50 text-amber-600 hover:border-amber-400'
+                  : 'text-ink-300 border-ink-200 hover:border-gold/40 hover:text-gold/70'
+              }`}>
+                <Plus size={9} className="flex-shrink-0" />{displayPlaceholder}
+              </span>
+            )}
+          </button>
+          {fieldKey && ctx && (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1">
+              <button onClick={toggleNeeded} title="Flag as needed"
+                className={`p-1 rounded transition-colors ${
+                  status === 'needed' ? 'text-amber-500 bg-amber-50' : 'text-ink-200 hover:text-amber-400'
+                }`}>
+                <Flag size={10} />
+              </button>
+              <button onClick={toggleNotNeeded} title="Mark as N/A"
+                className={`p-1 rounded transition-colors ${
+                  status === 'not_needed' ? 'text-ink-400 bg-parchment' : 'text-ink-200 hover:text-ink-400'
+                }`}>
+                <Minus size={10} />
+              </button>
+            </div>
           )}
-        </button>
+        </div>
       )}
     </div>
   )
@@ -1497,10 +1547,10 @@ function SectionHeader({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
   return (
     <div className="space-y-4">
       <BTwoCol>
-        <EditableField label="Event" value={e.event_name || e.organization} onSave={v => save({ event_name: v })} />
+        <EditableField label="Event" value={e.event_name || e.organization} onSave={v => save({ event_name: v })} fieldKey="event_name" />
         <EditableField label="Date / Time"
           value={[formatDate(e.event_date), e.event_time].filter(Boolean).join(' | ')}
-          placeholder="Date and time" onSave={v => save({ event_time: v })} />
+          placeholder="Date and time" onSave={v => save({ event_time: v })} fieldKey="event_date" />
       </BTwoCol>
       <EditableField label="Format" value={`${eventTypeLabel(eventType)} — ${formatStr}`}
         placeholder="Format and location" onSave={v => save({ event_city: v })} />
@@ -1553,13 +1603,13 @@ function SectionDetails({ e, save }: { e: Engagement; save: (p: Partial<Engageme
     <div className="space-y-5">
       <BSectionHeader>Event Details</BSectionHeader>
       <EditableField label="Purpose" value={(e as any).purpose}
-        placeholder="What is this event / engagement for?" multiline onSave={v => save({ purpose: v } as any)} />
+        placeholder="What is this event / engagement for?" multiline onSave={v => save({ purpose: v } as any)} fieldKey="purpose" />
       <EditableField label="Audience" value={(e as any).audience_description || (e.audience_size ? `~${e.audience_size.toLocaleString()} attendees` : '')}
-        placeholder="Who is she speaking to/with?" onSave={v => save({ audience_description: v } as any)} />
+        placeholder="Who is she speaking to/with?" onSave={v => save({ audience_description: v } as any)} fieldKey="audience_description" />
       <EditableField
         label="Duration (her speaking time only)"
         value={e.session_length ? `${e.session_length} minutes` : ''}
-        placeholder="Duration in minutes" onSave={v => save({ session_length: parseInt(v) || undefined })} />
+        placeholder="Duration in minutes" onSave={v => save({ session_length: parseInt(v) || undefined })} fieldKey="session_length" />
     </div>
   )
 }
@@ -1569,13 +1619,13 @@ function SectionVenue({ e, save, onRemove }: { e: Engagement; save: (p: Partial<
     <div className="space-y-4">
       <BDivider />
       <BSectionHeader onRemove={onRemove}>Venue</BSectionHeader>
-      <EditableField label="Venue Name" value={e.event_location} placeholder="Venue name" onSave={v => save({ event_location: v })} />
+      <EditableField label="Venue Name" value={e.event_location} placeholder="Venue name" onSave={v => save({ event_location: v })} fieldKey="event_location" />
       <EditableField label="Full Address (Google Maps link)" value={(e as any).venue_maps_link}
-        placeholder="Google Maps link" onSave={v => save({ venue_maps_link: v } as any)} />
+        placeholder="Google Maps link" onSave={v => save({ venue_maps_link: v } as any)} fieldKey="venue_maps_link" />
       <BTwoCol>
-        <EditableField label="Arrival Time" value={(e as any).arrival_time} placeholder="Arrival time" onSave={v => save({ arrival_time: v } as any)} />
+        <EditableField label="Arrival Time" value={(e as any).arrival_time} placeholder="Arrival time" onSave={v => save({ arrival_time: v } as any)} fieldKey="arrival_time" />
         <EditableField label="Special Instructions" value={(e as any).venue_special_instructions}
-          placeholder="Special instructions" onSave={v => save({ venue_special_instructions: v } as any)} />
+          placeholder="Special instructions" onSave={v => save({ venue_special_instructions: v } as any)} fieldKey="venue_special_instructions" />
       </BTwoCol>
     </div>
   )
@@ -1754,26 +1804,26 @@ function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial
           />
           <div className="space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Hotel</p>
-            <EditableField label="Hotel Name" value={(e as any).hotel_name} placeholder="Hotel name" onSave={v => save({ hotel_name: v } as any)} />
+            <EditableField label="Hotel Name" value={(e as any).hotel_name} placeholder="Hotel name" onSave={v => save({ hotel_name: v } as any)} fieldKey="hotel_name" />
             <BTwoCol>
-              <EditableField label="Check-In Date" value={(e as any).hotel_checkin} placeholder="Check-in date" onSave={v => save({ hotel_checkin: v } as any)} />
-              <EditableField label="Confirmation #" value={(e as any).hotel_confirmation} placeholder="Confirmation number" onSave={v => save({ hotel_confirmation: v } as any)} />
+              <EditableField label="Check-In Date" value={(e as any).hotel_checkin} placeholder="Check-in date" onSave={v => save({ hotel_checkin: v } as any)} fieldKey="hotel_checkin" />
+              <EditableField label="Confirmation #" value={(e as any).hotel_confirmation} placeholder="Confirmation number" onSave={v => save({ hotel_confirmation: v } as any)} fieldKey="hotel_confirmation" />
             </BTwoCol>
             <EditableField label="Hotel Address (Google Maps link)" value={(e as any).hotel_maps_link}
-              placeholder="Google Maps link" onSave={v => save({ hotel_maps_link: v } as any)} />
+              placeholder="Google Maps link" onSave={v => save({ hotel_maps_link: v } as any)} fieldKey="hotel_maps_link" />
           </div>
           <div className="space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-ink-400">Ground</p>
             <EditableField label="Airport → Hotel → Venue" value={(e as any).ground_transport}
-              placeholder="How she gets from airport to hotel to venue" multiline onSave={v => save({ ground_transport: v } as any)} />
+              placeholder="How she gets from airport to hotel to venue" multiline onSave={v => save({ ground_transport: v } as any)} fieldKey="ground_transport" />
           </div>
         </div>
       ) : (
         <div className="space-y-4">
           <EditableField label="Drive Time from Her Location" value={(e as any).drive_time}
-            placeholder="Drive time from her location" onSave={v => save({ drive_time: v } as any)} />
+            placeholder="Drive time from her location" onSave={v => save({ drive_time: v } as any)} fieldKey="drive_time" />
           <EditableField label="Route (Google Maps link with departure time)" value={(e as any).drive_route_link}
-            placeholder="Google Maps link" onSave={v => save({ drive_route_link: v } as any)} />
+            placeholder="Google Maps link" onSave={v => save({ drive_route_link: v } as any)} fieldKey="drive_route_link" />
           <EditableField label="Parking" value={(e as any).parking_details}
             placeholder="Parking details" onSave={v => save({ parking_details: v } as any)} />
         </div>
@@ -1895,17 +1945,17 @@ function SectionPrepNotes({ e, save }: { e: Engagement; save: (p: Partial<Engage
       <BDivider />
       <BSectionHeader>Prep Notes</BSectionHeader>
       <EditableField label="Topics / Questions" value={e.topic}
-        placeholder="What will she be discussing or asked about?" multiline onSave={v => save({ topic: v })} />
+        placeholder="What will she be discussing or asked about?" multiline onSave={v => save({ topic: v })} fieldKey="topic" />
       <EditableField label="Moderator" value={(e as any).moderator_info}
-        placeholder="Moderator name and research link" onSave={v => save({ moderator_info: v } as any)} />
+        placeholder="Moderator name and research link" onSave={v => save({ moderator_info: v } as any)} fieldKey="moderator_info" />
       <EditableField label="Co-Panelists" value={(e as any).panelist_info}
-        placeholder="Panelist names and research" multiline onSave={v => save({ panelist_info: v } as any)} />
+        placeholder="Panelist names and research" multiline onSave={v => save({ panelist_info: v } as any)} fieldKey="panelist_info" />
       <EditableField label="VIPs" value={(e as any).vip_info}
-        placeholder="VIPs or key attendees" onSave={v => save({ vip_info: v } as any)} />
+        placeholder="VIPs or key attendees" onSave={v => save({ vip_info: v } as any)} fieldKey="vip_info" />
       <EditableField label="Dress Code / Vibe" value={(e as any).dress_code}
-        placeholder="Dress code or vibe" onSave={v => save({ dress_code: v } as any)} />
+        placeholder="Dress code or vibe" onSave={v => save({ dress_code: v } as any)} fieldKey="dress_code" />
       <EditableField label="Post-Event" value={(e as any).post_event_notes}
-        placeholder="Post-event plans" onSave={v => save({ post_event_notes: v } as any)} />
+        placeholder="Post-event plans" onSave={v => save({ post_event_notes: v } as any)} fieldKey="post_event_notes" />
       {e.notes && (
         <EditableField label="Additional Notes" value={e.notes} multiline onSave={v => save({ notes: v })} />
       )}
@@ -1938,7 +1988,7 @@ function AddSectionMenu({ available, onAdd }: { available: { key: SectionKey; la
 }
 
 function BriefingDocument({ e }: { e: Engagement }) {
-  const { updateEngagement } = useStore()
+  const { updateEngagement, setFieldStatus } = useStore()
   const [sections, setSections] = useState<SectionKey[]>(() => getDefaultSections(e))
   const [downloading, setDownloading] = useState(false)
 
@@ -1991,21 +2041,26 @@ function BriefingDocument({ e }: { e: Engagement }) {
         </button>
       </div>
 
-      <div className="px-6 py-5 space-y-0">
-        {sections.map((key: SectionKey) => {
-          if (key === 'header')    return <React.Fragment key="header"><SectionHeader e={e} save={save} /></React.Fragment>
-          if (key === 'contact')   return <React.Fragment key="contact"><SectionContact e={e} save={save} /></React.Fragment>
-          if (key === 'details')   return <React.Fragment key="details"><BDivider /><SectionDetails e={e} save={save} /></React.Fragment>
-          if (key === 'venue')     return <React.Fragment key="venue"><SectionVenue e={e} save={save} onRemove={() => removeSection('venue')} /></React.Fragment>
-          if (key === 'travel')    return <React.Fragment key="travel"><SectionTravel e={e} save={save} onRemove={() => removeSection('travel')} /></React.Fragment>
-          if (key === 'runofshow') return <React.Fragment key="runofshow"><SectionRunOfShow e={e} save={save} onRemove={() => removeSection('runofshow')} /></React.Fragment>
-          if (key === 'prepnotes') return <React.Fragment key="prepnotes"><SectionPrepNotes e={e} save={save} /></React.Fragment>
-          return null
-        })}
-        <div className="mt-6">
-          <AddSectionMenu available={available} onAdd={addSection} />
+      <BriefingFieldContext.Provider value={{
+        fieldStatuses: e.field_statuses ?? {},
+        onStatusChange: (key, status) => setFieldStatus(e.id, key, status),
+      }}>
+        <div className="px-6 py-5 space-y-0">
+          {sections.map((key: SectionKey) => {
+            if (key === 'header')    return <React.Fragment key="header"><SectionHeader e={e} save={save} /></React.Fragment>
+            if (key === 'contact')   return <React.Fragment key="contact"><SectionContact e={e} save={save} /></React.Fragment>
+            if (key === 'details')   return <React.Fragment key="details"><BDivider /><SectionDetails e={e} save={save} /></React.Fragment>
+            if (key === 'venue')     return <React.Fragment key="venue"><SectionVenue e={e} save={save} onRemove={() => removeSection('venue')} /></React.Fragment>
+            if (key === 'travel')    return <React.Fragment key="travel"><SectionTravel e={e} save={save} onRemove={() => removeSection('travel')} /></React.Fragment>
+            if (key === 'runofshow') return <React.Fragment key="runofshow"><SectionRunOfShow e={e} save={save} onRemove={() => removeSection('runofshow')} /></React.Fragment>
+            if (key === 'prepnotes') return <React.Fragment key="prepnotes"><SectionPrepNotes e={e} save={save} /></React.Fragment>
+            return null
+          })}
+          <div className="mt-6">
+            <AddSectionMenu available={available} onAdd={addSection} />
+          </div>
         </div>
-      </div>
+      </BriefingFieldContext.Provider>
     </div>
   )
 }

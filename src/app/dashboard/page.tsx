@@ -5,8 +5,8 @@ import { useStore } from '@/lib/store'
 import { Engagement, CommEntry } from '@/types'
 import { formatDate } from '@/lib/utils'
 import {
-  AlertTriangle, ArrowRight, Bell, ChevronRight, ChevronLeft,
-  Users, Zap, CheckCircle2, Circle, FileText, Flag, Database
+  ArrowRight, Bell, ChevronRight, ChevronLeft,
+  Zap, CheckCircle2, Circle, FileText
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -132,21 +132,16 @@ function buildAlerts(prospects: Engagement[], active: Engagement[], postEvent: E
   return groups
 }
 
-// ─── Prospect one-liner ───────────────────────────────────────────────────────
+// ─── Field readiness ─────────────────────────────────────────────────────────
 
-function prospectOneLiner(e: Engagement): { text: string; urgent: boolean } {
-  if (e.alerts.length > 0) return { text: e.alerts[0].label, urgent: e.alerts[0].severity === 'high' }
-  const comms = e.comms ?? []
-  if (comms.length > 0) {
-    const last = comms[comms.length - 1]
-    const age = daysSince(last.date)
-    const ageStr = age === 0 ? 'today' : age === 1 ? 'yesterday' : `${age}d ago`
-    if (last.type === 'email_inbound') return { text: `Inbound from ${last.from_name} — ${ageStr}`, urgent: false }
-    if (last.type === 'email_outbound') return { text: `${last.subject ?? 'Email sent'} — ${ageStr}`, urgent: false }
-    if (last.type === 'call') return { text: `${last.subject ?? 'Call'} — ${ageStr}`, urgent: false }
-  }
-  if (e.notes) return { text: e.notes.split('.')[0], urgent: false }
-  return { text: 'No recent activity', urgent: false }
+function fieldReadiness(e: Engagement): { filled: number; total: number } {
+  if (!e.field_statuses) return { filled: 0, total: 0 }
+  const entries = Object.entries(e.field_statuses).filter(([, s]) => s === 'needed')
+  const filled = entries.filter(([f]) => {
+    const val = (e as unknown as Record<string, unknown>)[f]
+    return val !== undefined && val !== null && val !== ''
+  }).length
+  return { filled, total: entries.length }
 }
 
 // ─── Briefing Document Carousel ───────────────────────────────────────────────────
@@ -217,12 +212,44 @@ function BriefingDocCard({ engagement: e }: { engagement: Engagement }) {
           })}
         </div>
 
-        {/* Status */}
-        <span className={`text-[11px] font-semibold ${
-          isComplete ? 'text-sage-dark' : isUrgent ? 'text-red-500' : isWarning ? 'text-amber-600' : 'text-ink-400'
-        }`}>
-          {isComplete ? '✓ Ready' : isUrgent ? 'Needs attention' : 'In progress'}
-        </span>
+        {/* Field readiness */}
+        {(() => {
+          const { filled, total } = fieldReadiness(e)
+          if (total === 0) return null
+          const pct = Math.round((filled / total) * 100)
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-ink-300">Fields ready</span>
+                <span className={`text-[10px] font-semibold ${filled === total ? 'text-sage-dark' : pct >= 70 ? 'text-amber-600' : 'text-red-500'}`}>
+                  {filled}/{total}
+                </span>
+              </div>
+              <div className="h-1 rounded-full bg-ink-100 overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${filled === total ? 'bg-sage' : pct >= 70 ? 'bg-amber-400' : 'bg-red-400'}`}
+                  style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Action flags */}
+        {(() => {
+          const now = new Date()
+          const overdueStep = e.comms?.some(c =>
+            c.next_step && !c.next_step_cleared &&
+            (!c.next_step_snoozed_until || new Date(c.next_step_snoozed_until) <= now) &&
+            c.next_step_due_at && new Date(c.next_step_due_at) < now
+          ) ?? false
+          const needsReply = e.comms?.some(c => c.needs_response) ?? false
+          if (!overdueStep && !needsReply) return null
+          return (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {needsReply && <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">Reply needed</span>}
+              {overdueStep && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">Overdue step</span>}
+            </div>
+          )
+        })()}
       </Link>
 
       {/* Briefing Document button — full width, prominent */}
@@ -281,7 +308,7 @@ function BriefingDocCarousel({ events }: { events: Engagement[] }) {
   )
 }
 
-// ─── Next Steps ──────────────────────────────────────────────────────────────
+// ─── Action Columns ──────────────────────────────────────────────────────────
 
 type NextStepItem = { comm: CommEntry; engagement: Engagement; isOverdue: boolean }
 
@@ -290,14 +317,10 @@ function buildNextSteps(allEngagements: Engagement[]): NextStepItem[] {
   const items: NextStepItem[] = []
   for (const e of allEngagements) {
     for (const c of e.comms ?? []) {
-      if (!c.next_step) continue
-      if (c.next_step_cleared) continue
-      if (c.next_step_snoozed_until && new Date(c.next_step_snoozed_until) > now) continue
-      items.push({
-        comm: c,
-        engagement: e,
-        isOverdue: c.next_step_due_at ? new Date(c.next_step_due_at) < now : false,
-      })
+      if (!c.next_step || c.next_step_cleared) continue
+      const snoozed = c.next_step_snoozed_until && new Date(c.next_step_snoozed_until) > now
+      const isOverdue = !snoozed && c.next_step_due_at ? new Date(c.next_step_due_at) < now : false
+      items.push({ comm: c, engagement: e, isOverdue })
     }
   }
   return items.sort((a, b) => {
@@ -313,60 +336,10 @@ function engagementHref(e: Engagement) {
   return `/engagements/${e.id}`
 }
 
-function NextStepsSection({ items }: { items: NextStepItem[] }) {
-  if (items.length === 0) return null
-  const overdueCount = items.filter(i => i.isOverdue).length
-  return (
-    <div className="bg-white border border-ink-100 rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
-        <Flag size={13} className="text-gold flex-shrink-0" />
-        <h2 className="font-display text-xl font-semibold text-ink">Next Steps</h2>
-        <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{items.length}</span>
-        {overdueCount > 0 && (
-          <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full ml-auto">
-            {overdueCount} overdue
-          </span>
-        )}
-      </div>
-      <div className="divide-y divide-ink-50">
-        {items.map((item, idx) => {
-          const due = item.comm.next_step_due_at ? new Date(item.comm.next_step_due_at) : null
-          const dueStr = due ? due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
-          return (
-            <Link key={idx} href={engagementHref(item.engagement)}
-              className="flex items-center gap-4 px-6 py-3.5 hover:bg-parchment/40 transition-all group">
-              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.isOverdue ? 'bg-red-500' : 'bg-gold'}`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-ink-400 truncate">{item.engagement.organization}</p>
-                <p className={`text-sm truncate ${item.isOverdue ? 'text-red-600' : 'text-ink'}`}>{item.comm.next_step}</p>
-              </div>
-              {dueStr && (
-                <span className={`text-[11px] font-medium flex-shrink-0 ${item.isOverdue ? 'text-red-500' : 'text-ink-400'}`}>
-                  {item.isOverdue ? 'Overdue · ' : ''}{dueStr}
-                </span>
-              )}
-              <ArrowRight size={11} className="text-ink-100 group-hover:text-gold/60 transition-all flex-shrink-0" />
-            </Link>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ─── Outstanding Data ─────────────────────────────────────────────────────────
-
 const FIELD_LABELS: Record<string, string> = {
-  fee: 'Fee',
-  event_date: 'Event Date',
-  event_city: 'Event City',
-  event_name: 'Event Name',
-  topic: 'Topic',
-  venue_name: 'Venue',
-  travel_notes: 'Travel Notes',
-  hotel_notes: 'Hotel Notes',
-  av_notes: 'A/V Notes',
-  payment_notes: 'Payment Notes',
+  fee: 'Fee', event_date: 'Event Date', event_city: 'Event City', event_name: 'Event Name',
+  topic: 'Topic', venue_name: 'Venue', travel_notes: 'Travel Notes',
+  hotel_notes: 'Hotel Notes', av_notes: 'A/V Notes', payment_notes: 'Payment Notes',
 }
 
 type OutstandingDataItem = { engagement: Engagement; neededFields: string[] }
@@ -387,86 +360,212 @@ function buildOutstandingData(allEngagements: Engagement[]): OutstandingDataItem
   return items
 }
 
-function OutstandingDataSection({ items }: { items: OutstandingDataItem[] }) {
-  if (items.length === 0) return null
+function ColumnSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-ink-100 rounded-2xl overflow-hidden">
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
-        <Database size={13} className="text-ink-400 flex-shrink-0" />
-        <h2 className="font-display text-xl font-semibold text-ink">Outstanding Data</h2>
-        <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{items.length}</span>
-      </div>
-      <div className="divide-y divide-ink-50">
-        {items.map((item, idx) => (
-          <Link key={idx} href={engagementHref(item.engagement)}
-            className="flex items-center gap-4 px-6 py-3.5 hover:bg-parchment/40 transition-all group">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-ink truncate">{item.engagement.organization}</p>
-              <p className="text-xs text-ink-400 truncate mt-0.5">Needed: {item.neededFields.join(', ')}</p>
-            </div>
-            <ArrowRight size={11} className="text-ink-100 group-hover:text-gold/60 transition-all flex-shrink-0" />
-          </Link>
-        ))}
-      </div>
+    <div className="border-b border-ink-50 last:border-b-0 px-5 py-4">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-ink-300 mb-2">{title}</p>
+      {children}
     </div>
   )
 }
 
-// ─── Alert Panel ──────────────────────────────────────────────────────────────
-
-function AlertPanel({ groups }: { groups: AlertGroup[] }) {
-  const totalRed = groups.flatMap(g => g.items).filter(i => i.severity === 'red').length
-  const totalYellow = groups.flatMap(g => g.items).filter(i => i.severity === 'yellow').length
-  if (groups.length === 0) return (
-    <div className="bg-white border border-ink-100 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 py-12">
-      <CheckCircle2 size={20} className="text-sage/50" />
-      <p className="text-sm text-ink-300 font-medium">All clear</p>
-    </div>
+function ActionRow({ href, label, sub, severity }: {
+  href: string; label: string; sub?: string; severity?: 'red' | 'amber' | 'neutral'
+}) {
+  return (
+    <Link href={href} className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg -mx-2.5 transition-all group ${
+      severity === 'red' ? 'hover:bg-red-50/60' : severity === 'amber' ? 'hover:bg-amber-50/40' : 'hover:bg-parchment/60'
+    }`}>
+      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+        severity === 'red' ? 'bg-red-400' : severity === 'amber' ? 'bg-amber-300' : 'bg-ink-200'
+      }`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-ink truncate leading-snug">{label}</p>
+        {sub && <p className="text-xs text-ink-400 truncate">{sub}</p>}
+      </div>
+      <ArrowRight size={11} className="text-ink-100 group-hover:text-ink-300 transition-all flex-shrink-0" />
+    </Link>
   )
+}
+
+function ToDoColumn({ readyToProgress, overdueSteps, redAlerts, allEngagements }: {
+  readyToProgress: { e: Engagement; type: 'confirm' | 'wrapup' }[]
+  overdueSteps: NextStepItem[]
+  redAlerts: AlertItem[]
+  allEngagements: Engagement[]
+}) {
+  const needsResponse = allEngagements.filter(e => e.comms?.some(c => c.needs_response))
+  const outstandingData = buildOutstandingData(allEngagements)
+  const isEmpty = readyToProgress.length === 0 && overdueSteps.length === 0 && redAlerts.length === 0 && needsResponse.length === 0 && outstandingData.length === 0
+  const total = readyToProgress.length + overdueSteps.length + redAlerts.length + needsResponse.length + outstandingData.length
 
   return (
-    <div className="bg-white border border-ink-100 rounded-2xl p-6 flex flex-col gap-5">
-      <div className="flex items-center gap-3">
-        <AlertTriangle size={13} className="text-red-400" />
-        <h2 className="font-display text-xl font-semibold text-ink">Needs Attention</h2>
-        <div className="ml-auto flex items-center gap-2">
-          {totalRed > 0 && <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">{totalRed} urgent</span>}
-          {totalYellow > 0 && <span className="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">{totalYellow} watch</span>}
-        </div>
+    <div className="bg-white border border-ink-100 rounded-2xl overflow-hidden flex flex-col">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-ink-50">
+        <div className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+        <h2 className="font-display text-lg font-semibold text-ink">To Do</h2>
+        {total > 0 && <span className="text-xs text-red-600 font-semibold bg-red-50 border border-red-100 px-2 py-0.5 rounded-full">{total}</span>}
       </div>
+      {isEmpty ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-14">
+          <CheckCircle2 size={20} className="text-sage/50" />
+          <p className="text-sm text-ink-300 font-medium">All clear</p>
+        </div>
+      ) : (
+        <>
+          {readyToProgress.length > 0 && (
+            <ColumnSection title="Move Forward">
+              {readyToProgress.map(({ e, type }) => (
+                <div key={`${type}-${e.id}`} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg -mx-2.5 hover:bg-parchment/60 transition-all">
+                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-gold" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-ink truncate">{e.event_name || e.organization}</p>
+                    <p className="text-xs text-ink-400 truncate">{type === 'confirm' ? `${e.organization} · ready to confirm` : `${e.organization} · event passed`}</p>
+                  </div>
+                  <Link href={type === 'confirm' ? `/prospects/${e.id}` : `/engagements/${e.id}`}
+                    className="text-[10px] font-semibold text-gold-dark bg-gold/10 border border-gold/20 rounded-full px-2.5 py-1 hover:bg-gold/20 transition-all flex-shrink-0">
+                    {type === 'confirm' ? '→ Confirm' : '→ Wrap-Up'}
+                  </Link>
+                </div>
+              ))}
+            </ColumnSection>
+          )}
+          {(overdueSteps.length > 0 || redAlerts.length > 0) && (
+            <ColumnSection title="Overdue">
+              {overdueSteps.map(({ comm, engagement }, idx) => (
+                <ActionRow key={`step-${idx}`} href={engagementHref(engagement)}
+                  label={engagement.organization}
+                  sub={`Follow up: ${comm.next_step}`}
+                  severity="red" />
+              ))}
+              {redAlerts.map((a, idx) => (
+                <ActionRow key={`alert-${idx}`} href={a.href}
+                  label={a.engagement.organization}
+                  sub={a.label.split(' — ').slice(1).join(' — ')}
+                  severity="red" />
+              ))}
+            </ColumnSection>
+          )}
+          {needsResponse.length > 0 && (
+            <ColumnSection title="Reply Needed">
+              {needsResponse.map(e => {
+                const last = e.comms?.slice().reverse().find(c => c.needs_response)
+                return (
+                  <ActionRow key={e.id} href={engagementHref(e)}
+                    label={e.organization}
+                    sub={last?.from_name ? `${last.from_name} reached out` : 'Inbound waiting'}
+                    severity="red" />
+                )
+              })}
+            </ColumnSection>
+          )}
+          {outstandingData.length > 0 && (
+            <ColumnSection title="Fill In">
+              {outstandingData.map((item, idx) => (
+                <ActionRow key={idx} href={engagementHref(item.engagement)}
+                  label={item.engagement.organization}
+                  sub={`Missing: ${item.neededFields.slice(0, 3).join(', ')}${item.neededFields.length > 3 ? ` +${item.neededFields.length - 3}` : ''}`}
+                  severity="amber" />
+              ))}
+            </ColumnSection>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 
-      <div className="space-y-5">
-        {groups.map(group => (
-          <div key={group.category}>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-ink-300 mb-1.5 pl-1">{group.category}</p>
-            <div className="space-y-0.5">
-              {[...group.items.filter(i => i.severity === 'red'), ...group.items.filter(i => i.severity === 'yellow')].map((item, idx) => (
+function WaitingColumn({ allEngagements, yellowAlerts }: { allEngagements: Engagement[]; yellowAlerts: AlertItem[] }) {
+  const now = new Date()
+  type WaitItem = { label: string; sub: string; href: string; dateLabel: string; snoozed: boolean }
+  const items: WaitItem[] = []
+
+  for (const e of allEngagements) {
+    for (const c of e.comms ?? []) {
+      if (!c.next_step || c.next_step_cleared) continue
+      const snoozedUntil = c.next_step_snoozed_until ? new Date(c.next_step_snoozed_until) : null
+      const dueAt = c.next_step_due_at ? new Date(c.next_step_due_at) : null
+      if (snoozedUntil && snoozedUntil > now) {
+        items.push({ label: e.organization, sub: c.next_step, href: engagementHref(e),
+          dateLabel: snoozedUntil.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), snoozed: true })
+      } else if (dueAt && dueAt > now) {
+        items.push({ label: e.organization, sub: c.next_step, href: engagementHref(e),
+          dateLabel: dueAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), snoozed: false })
+      }
+    }
+  }
+  items.sort((a, b) => a.dateLabel.localeCompare(b.dateLabel))
+
+  const activeItems = items.filter(i => !i.snoozed)
+  const snoozedItems = items.filter(i => i.snoozed)
+  const isEmpty = items.length === 0 && yellowAlerts.length === 0
+  const total = items.length + yellowAlerts.length
+
+  return (
+    <div className="bg-white border border-ink-100 rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-ink-50">
+        <div className="w-2 h-2 rounded-full bg-ink-300 flex-shrink-0" />
+        <h2 className="font-display text-lg font-semibold text-ink">Waiting</h2>
+        {total > 0 && <span className="text-xs text-ink-400 font-medium bg-parchment px-2 py-0.5 rounded-full">{total}</span>}
+      </div>
+      {isEmpty ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-14">
+          <Circle size={20} className="text-ink-100" />
+          <p className="text-sm text-ink-300 font-medium">Nothing pending</p>
+        </div>
+      ) : (
+        <>
+          {activeItems.length > 0 && (
+            <ColumnSection title="Active Follow-Ups">
+              {activeItems.map((item, idx) => (
                 <Link key={idx} href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group -mx-1 ${
-                    item.severity === 'red' ? 'hover:bg-red-50/60' : 'hover:bg-amber-50/40'
-                  }`}>
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.severity === 'red' ? 'bg-red-500' : 'bg-amber-400'}`} />
-                  <span className="text-sm text-ink-600 flex-1 truncate">{item.label}</span>
-                  <ArrowRight size={11} className={`flex-shrink-0 transition-all ${
-                    item.severity === 'red' ? 'text-ink-200 group-hover:text-red-400' : 'text-ink-200 group-hover:text-amber-400'
-                  }`} />
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg -mx-2.5 hover:bg-parchment/60 transition-all group">
+                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-ink-200" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-ink truncate">{item.label}</p>
+                    <p className="text-xs text-ink-400 truncate">{item.sub}</p>
+                  </div>
+                  <span className="text-[10px] text-ink-400 font-medium bg-parchment border border-ink-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                    Due {item.dateLabel}
+                  </span>
                 </Link>
               ))}
-            </div>
-          </div>
-        ))}
-      </div>
+            </ColumnSection>
+          )}
+          {snoozedItems.length > 0 && (
+            <ColumnSection title="Snoozed">
+              {snoozedItems.map((item, idx) => (
+                <Link key={idx} href={item.href}
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg -mx-2.5 hover:bg-parchment/60 transition-all group">
+                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-ink-100" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-ink-400 truncate">{item.label}</p>
+                    <p className="text-xs text-ink-300 truncate">{item.sub}</p>
+                  </div>
+                  <span className="text-[10px] text-ink-300 font-medium bg-parchment/60 px-2 py-0.5 rounded-full flex-shrink-0">
+                    Until {item.dateLabel}
+                  </span>
+                </Link>
+              ))}
+            </ColumnSection>
+          )}
+          {yellowAlerts.length > 0 && (
+            <ColumnSection title="Watch">
+              {yellowAlerts.map((a, idx) => (
+                <ActionRow key={idx} href={a.href}
+                  label={a.engagement.organization}
+                  sub={a.label.split(' — ').slice(1).join(' — ')}
+                  severity="amber" />
+              ))}
+            </ColumnSection>
+          )}
+        </>
+      )}
     </div>
   )
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-
-const STEP_COLORS: Record<string, string> = {
-  inquiry:    'text-blue-600 bg-blue-50',
-  outreach:   'text-purple-600 bg-purple-50',
-  in_contact: 'text-sage-dark bg-sage/10',
-}
 
 export default function DashboardPage() {
   const { engagements: allEngagements, reviewItems } = useStore()
@@ -484,21 +583,21 @@ export default function DashboardPage() {
   const beyond2Weeks = allUpcoming.filter(e => daysUntil(e.event_date!) > 14)
   const carouselEvents = within2Weeks.length >= 3 ? within2Weeks : [...within2Weeks, ...beyond2Weeks.slice(0, 3 - within2Weeks.length)]
 
-  // Ready to Progress — two clean pipeline moves
   const readyToProgress = [
     ...prospects.filter(e => e.prospect_step === 'confirmed' || (e as any).booking_review_needed)
       .map(e => ({ e, type: 'confirm' as const })),
     ...[...active, ...postEvent.filter(e => (e as any).wrap_up_review_needed)]
-      .filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i) // dedupe
+      .filter((e, i, arr) => arr.findIndex(x => x.id === e.id) === i)
       .filter(e => (e.section === 'engagements' && e.event_date && daysUntil(e.event_date) < 0) || (e as any).wrap_up_review_needed)
       .map(e => ({ e, type: 'wrapup' as const })),
   ]
 
   const alertGroups = buildAlerts(prospects, active, postEvent)
+  const allAlertItems = alertGroups.flatMap(g => g.items)
   const reviewCount = reviewItems.filter(r => !r.confirmed_by).length
   const needsResponseCount = allEngagements.filter(e => e.comms?.some(c => c.needs_response)).length
   const nextStepItems = buildNextSteps(allEngagements)
-  const outstandingDataItems = buildOutstandingData(allEngagements)
+  const overdueSteps = nextStepItems.filter(i => i.isOverdue)
 
   return (
     <div>
@@ -568,99 +667,20 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Ready to Progress (unified pipeline actions strip) ── */}
-        {readyToProgress.length > 0 && (
-          <div className="mb-6 bg-white border border-ink-100 rounded-2xl overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-ink-50">
-              <div className="w-2 h-2 rounded-full bg-gold flex-shrink-0" />
-              <h2 className="font-display text-xl font-semibold text-ink">Ready to Progress</h2>
-              <span className="text-xs text-ink-400 font-medium bg-parchment px-2.5 py-0.5 rounded-full">{readyToProgress.length}</span>
-            </div>
-            <div className="divide-y divide-ink-50">
-              {readyToProgress.map(({ e, type }) => (
-                <div key={`${type}-${e.id}`} className="flex items-center gap-4 px-6 py-3.5">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2.5 mb-0.5">
-                      <p className="text-sm font-semibold text-ink truncate">{e.event_name || e.organization}</p>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${
-                        type === 'confirm'
-                          ? 'bg-sage/10 text-sage border-sage/20'
-                          : 'bg-parchment text-ink-400 border-ink-200'
-                      }`}>
-                        {type === 'confirm' ? '→ Engagement' : '→ Wrap-Up'}
-                      </span>
-                      {e.event_date && (
-                        <span className="text-[10px] text-ink-300 flex-shrink-0">
-                          {new Date(e.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </span>
-                      )}
-                      {e.fee && <span className="text-[10px] text-ink-400 flex-shrink-0">${e.fee.toLocaleString()}</span>}
-                    </div>
-                    <p className="text-xs text-ink-400">
-                      {type === 'confirm' ? `${e.organization} · confirmed` : `${e.organization} · event has passed`}
-                    </p>
-                  </div>
-                  <Link
-                    href={type === 'confirm' ? `/prospects/${e.id}` : `/engagements/${e.id}`}
-                    className="text-xs text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 rounded-lg px-3 py-1.5 transition-all flex-shrink-0"
-                  >
-                    {type === 'confirm' ? 'Confirm' : 'Wrap up'}
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Next Steps + Outstanding Data ── */}
-        {(nextStepItems.length > 0 || outstandingDataItems.length > 0) && (
-          <div className={`mb-6 grid gap-5 ${nextStepItems.length > 0 && outstandingDataItems.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <NextStepsSection items={nextStepItems} />
-            <OutstandingDataSection items={outstandingDataItems} />
-          </div>
-        )}
-
-        {/* ── Main grid: Alerts | Prospects ── */}
+        {/* ── To Do | Waiting ── */}
         <div className="grid grid-cols-2 gap-5">
-
-          {/* Alerts */}
-          <AlertPanel groups={alertGroups} />
-
-          {/* Prospects snapshot */}
-          <div className="bg-white border border-ink-100 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <Users size={13} className="text-sage" />
-                <h2 className="font-display text-xl font-semibold text-ink">Prospects</h2>
-              </div>
-              <Link href="/prospects" className="text-xs text-gold/70 hover:text-gold flex items-center gap-1 transition-all font-medium">
-                View all <ArrowRight size={11} />
-              </Link>
-            </div>
-
-            <div className="space-y-px">
-              {prospects.slice(0, 8).map(e => {
-                const sc = STEP_COLORS[e.prospect_step ?? 'inquiry'] ?? 'text-ink-400 bg-parchment'
-                const { text: oneLiner, urgent } = prospectOneLiner(e)
-                return (
-                  <Link key={e.id} href={`/prospects/${e.id}`}
-                    className="flex items-start gap-3 py-3 px-3 rounded-xl hover:bg-parchment/70 transition-all -mx-3 group">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-sm font-semibold text-ink truncate">{e.organization}</p>
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0 ${sc}`}>
-                          {e.prospect_step?.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <p className={`text-xs truncate leading-relaxed ${urgent ? 'text-red-500' : 'text-ink-400'}`}>{oneLiner}</p>
-                    </div>
-                    <ArrowRight size={11} className="text-ink-100 group-hover:text-gold/60 transition-all flex-shrink-0 mt-1.5" />
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
+          <ToDoColumn
+            readyToProgress={readyToProgress}
+            overdueSteps={overdueSteps}
+            redAlerts={allAlertItems.filter(i => i.severity === 'red')}
+            allEngagements={allEngagements}
+          />
+          <WaitingColumn
+            allEngagements={allEngagements}
+            yellowAlerts={allAlertItems.filter(i => i.severity === 'yellow')}
+          />
         </div>
+
       </div>
     </div>
   )
