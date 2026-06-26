@@ -97,11 +97,27 @@ function EditableField({
   }
 
   return (
-    <div className="group flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5">
       {label && (
         <div className="flex items-center gap-1.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300">{label}</p>
-          {status === 'needed' && <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300 flex-1">{label}</p>
+          {fieldKey && ctx && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button onClick={toggleNeeded} title="Flag as needed"
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors border ${
+                  status === 'needed'
+                    ? 'text-amber-600 bg-amber-50 border-amber-200'
+                    : 'text-ink-200 border-ink-100 hover:text-amber-500 hover:border-amber-200 hover:bg-amber-50/40'
+                }`}>
+                <Flag size={9} />
+                {status === 'needed' && <span>needed</span>}
+              </button>
+              <button onClick={toggleNotNeeded} title="Dismiss field"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors border text-ink-200 border-ink-100 hover:text-red-400 hover:border-red-200 hover:bg-red-50/40">
+                <Minus size={9} />
+              </button>
+            </div>
+          )}
         </div>
       )}
       {editing ? (
@@ -121,41 +137,25 @@ function EditableField({
           <button onClick={cancel} className="p-1 text-ink-300 hover:text-ink mt-0.5 flex-shrink-0"><X size={13} /></button>
         </div>
       ) : (
-        <div className="flex items-center gap-1 min-w-0">
-          <button onClick={() => { setDraft(value || ''); setEditing(true) }} className="text-left flex-1 min-w-0">
-            {value ? (
-              link ? (
-                <span className="text-sm font-semibold text-gold hover:text-gold-dark inline-flex items-center gap-1">
-                  {value} <ExternalLink size={10} />
-                </span>
-              ) : (
-                <span className="text-sm text-ink leading-snug group-hover:underline decoration-dashed decoration-ink-200 underline-offset-2">{value}</span>
-              )
-            ) : (
-              <span className={`inline-flex items-center gap-1.5 text-xs border border-dashed rounded px-2 py-0.5 transition-colors ${
-                status === 'needed'
-                  ? 'border-amber-300/70 bg-amber-50/50 text-amber-600 hover:border-amber-400'
-                  : 'text-ink-300 border-ink-200 hover:border-gold/40 hover:text-gold/70'
-              }`}>
-                <Plus size={9} className="flex-shrink-0" />{displayPlaceholder}
+        <button onClick={() => { setDraft(value || ''); setEditing(true) }} className="text-left w-full">
+          {value ? (
+            link ? (
+              <span className="text-sm font-semibold text-gold hover:text-gold-dark inline-flex items-center gap-1">
+                {value} <ExternalLink size={10} />
               </span>
-            )}
-          </button>
-          {fieldKey && ctx && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1">
-              <button onClick={toggleNeeded} title="Flag as needed"
-                className={`p-1 rounded transition-colors ${
-                  status === 'needed' ? 'text-amber-500 bg-amber-50' : 'text-ink-200 hover:text-amber-400'
-                }`}>
-                <Flag size={10} />
-              </button>
-              <button onClick={toggleNotNeeded} title="Mark as N/A"
-                className="p-1 rounded transition-colors text-ink-200 hover:text-ink-400">
-                <Minus size={10} />
-              </button>
-            </div>
+            ) : (
+              <span className="text-sm text-ink leading-snug hover:underline decoration-dashed decoration-ink-200 underline-offset-2">{value}</span>
+            )
+          ) : (
+            <span className={`inline-flex items-center gap-1.5 text-xs border border-dashed rounded px-2 py-0.5 transition-colors ${
+              status === 'needed'
+                ? 'border-amber-300/70 bg-amber-50/50 text-amber-600 hover:border-amber-400'
+                : 'text-ink-300 border-ink-200 hover:border-gold/40 hover:text-gold/70'
+            }`}>
+              <Plus size={9} className="flex-shrink-0" />{displayPlaceholder}
+            </span>
           )}
-        </div>
+        </button>
       )}
     </div>
   )
@@ -179,15 +179,16 @@ function BDivider() { return <div className="border-t border-ink-100 my-5" /> }
 
 function BSectionHeader({ children, onRemove }: { children: React.ReactNode; onRemove?: () => void }) {
   return (
-    <div className="group/section flex items-center gap-3 mb-4">
+    <div className="flex items-center gap-3 mb-4">
       <div className="h-px flex-1 bg-gold/25" />
       <span className="text-[10px] font-bold uppercase tracking-widest text-gold">{children}</span>
       <div className="h-px flex-1 bg-gold/25" />
       {onRemove && (
         <button onClick={onRemove}
-          className="opacity-0 group-hover/section:opacity-100 text-ink-300 hover:text-red-400 transition-all flex-shrink-0"
+          className="text-ink-200 hover:text-red-400 transition-colors flex-shrink-0 border border-ink-100 hover:border-red-200 rounded px-1.5 py-0.5 flex items-center gap-1"
           title="Remove section">
-          <X size={12} />
+          <X size={10} />
+          <span className="text-[10px]">remove</span>
         </button>
       )}
     </div>
@@ -1808,7 +1809,7 @@ function SectionTravel({ e, save, onRemove }: { e: Engagement; save: (p: Partial
           <button onClick={() => setMode('fly')} className={`px-2.5 py-1 transition-colors ${mode === 'fly' ? 'bg-ink text-cream' : 'text-ink-400 hover:text-ink'}`}>✈ Fly</button>
           <button onClick={() => setMode('drive')} className={`px-2.5 py-1 transition-colors ${mode === 'drive' ? 'bg-ink text-cream' : 'text-ink-400 hover:text-ink'}`}>⛽ Drive</button>
         </div>
-        <button onClick={onRemove} className="text-ink-300 hover:text-red-400 transition-colors flex-shrink-0" title="Remove section"><X size={12} /></button>
+        <button onClick={onRemove} className="text-ink-200 hover:text-red-400 transition-colors flex-shrink-0 border border-ink-100 hover:border-red-200 rounded px-1.5 py-0.5 flex items-center gap-1" title="Remove section"><X size={10} /><span className="text-[10px]">remove</span></button>
       </div>
 
       {mode === 'fly' ? (
@@ -2051,7 +2052,7 @@ function BriefingDocument({ e }: { e: Engagement }) {
         <div className="flex items-center gap-2">
           <FileText size={15} className="text-gold" />
           <span className="text-sm font-semibold text-ink">Briefing Document</span>
-          <span className="text-[10px] text-ink-300 font-medium ml-1">— click any field to edit</span>
+          <span className="text-[10px] text-ink-300 font-medium ml-1">— click any field to edit · hover to flag or dismiss</span>
         </div>
         <button onClick={handleDownload} disabled={downloading}
           className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
