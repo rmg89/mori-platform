@@ -285,92 +285,6 @@ function WrapUpLogCommPanel({ engagementId, onClose }: { engagementId: string; o
   )
 }
 
-// ─── Field Status Panel ───────────────────────────────────────────────────────
-
-const WRAPUP_TRACKABLE_FIELDS = [
-  { key: 'fee',              label: 'Fee' },
-  { key: 'payment_notes',    label: 'Payment Notes' },
-  { key: 'event_date',       label: 'Event Date' },
-  { key: 'event_city',       label: 'Location' },
-  { key: 'topic',            label: 'Topic' },
-]
-
-function WrapUpFieldStatusPanel({ e }: { e: import('@/types').Engagement }) {
-  const { setFieldStatus } = useStore()
-  const [open, setOpen] = useState(false)
-
-  const pending = WRAPUP_TRACKABLE_FIELDS.filter(({ key }) => {
-    const val = (e as unknown as Record<string, unknown>)[key]
-    const filled = val !== undefined && val !== null && val !== ''
-    return e.field_statuses?.[key] === 'needed' && !filled
-  })
-
-  return (
-    <div className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
-      <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-parchment/40 transition-colors text-left">
-        <Flag size={13} className={`flex-shrink-0 ${pending.length > 0 ? 'text-amber-400' : 'text-ink-200'}`} />
-        <span className="text-xs font-semibold uppercase tracking-widest text-ink-400 flex-1">Data Tracking</span>
-        {pending.length > 0 && (
-          <span className="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-            {pending.length} needed
-          </span>
-        )}
-        {open ? <ChevronUp size={13} className="text-ink-300" /> : <ChevronDown size={13} className="text-ink-300" />}
-      </button>
-
-      {open && (
-        <div className="border-t border-ink-100 px-5 py-4">
-          <p className="text-[10px] text-ink-300 mb-3">
-            Flag fields you still expect to fill in, or mark as N/A. Flagged-but-empty fields surface on the dashboard.
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {WRAPUP_TRACKABLE_FIELDS.map(({ key, label }) => {
-              const val = (e as unknown as Record<string, unknown>)[key]
-              const filled = val !== undefined && val !== null && val !== ''
-              const status = e.field_statuses?.[key]
-
-              const bg = status === 'needed' && !filled ? 'bg-amber-50 border-amber-200'
-                : status === 'not_needed' ? 'bg-parchment border-ink-100'
-                : filled ? 'bg-sage/5 border-sage/20'
-                : 'bg-white border-ink-100'
-
-              return (
-                <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${bg}`}>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-300 truncate">{label}</p>
-                    <p className={`text-xs truncate mt-0.5 ${
-                      filled ? 'text-ink'
-                      : status === 'not_needed' ? 'text-ink-200 italic'
-                      : status === 'needed' ? 'text-amber-500 italic'
-                      : 'text-ink-200 italic'
-                    }`}>
-                      {filled
-                        ? (typeof val === 'number' ? val.toLocaleString() : String(val).split('\n')[0].slice(0, 28))
-                        : status === 'not_needed' ? 'N/A' : status === 'needed' ? 'needed' : '—'}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-0.5 flex-shrink-0">
-                    <button onClick={() => setFieldStatus(e.id, key, status === 'needed' ? null : 'needed')}
-                      title="Flag as needed"
-                      className={`p-0.5 rounded transition-colors ${status === 'needed' ? 'text-amber-500' : 'text-ink-200 hover:text-amber-400'}`}>
-                      <Flag size={9} />
-                    </button>
-                    <button onClick={() => setFieldStatus(e.id, key, status === 'not_needed' ? null : 'not_needed')}
-                      title="Mark as N/A"
-                      className={`p-0.5 rounded transition-colors ${status === 'not_needed' ? 'text-ink-400' : 'text-ink-200 hover:text-ink-400'}`}>
-                      <X size={9} />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function WrapUpTimelinePanel({ engagementId, comms }: { engagementId: string; comms: import('@/types').CommEntry[] }) {
   const [showLog, setShowLog] = useState(false)
@@ -881,16 +795,34 @@ export default function WrapUpDetailPage() {
         </div>
       </div>
 
-      {/* Data Tracking */}
-      <WrapUpFieldStatusPanel e={e} />
-
       {/* Timeline */}
       <WrapUpTimelinePanel engagementId={e.id} comms={e.comms} />
 
-      {/* Engagement history snapshot */}
-      {e.engagement_snapshot && <WrapUpSnapshotPanel snapshot={e.engagement_snapshot} />}
-      {/* Prospect history snapshot (if this went directly from prospect → wrap-up via decline) */}
-      {e.prospect_snapshot && !e.engagement_snapshot && <WrapUpSnapshotPanel label="Prospect Stage History" snapshot={e.prospect_snapshot} />}
+      {/* Engagement stage history — always shown */}
+      <WrapUpSnapshotPanel label="Engagement Stage History" snapshot={e.engagement_snapshot ?? {
+        event_name: e.event_name,
+        event_date: e.event_date,
+        event_city: e.event_city,
+        fee: e.fee,
+        event_format: e.event_format,
+        audience_size: e.audience_size,
+        topic: e.topic,
+        hotel_name: e.hotel_name,
+        contract_required: e.contract_required,
+        contract_signed_at: (e as any).contract_signed_at,
+        confirmed_at: (e as any).confirmed_at,
+      }} />
+
+      {/* Prospect background — always shown */}
+      <WrapUpSnapshotPanel label="Prospect Background" snapshot={e.prospect_snapshot ?? {
+        prospect_step: e.prospect_step,
+        source: e.source,
+        notes: e.notes,
+        event_date: e.event_date,
+        event_city: e.event_city,
+        fee: e.fee,
+        audience_size: e.audience_size,
+      }} />
 
       {/* Archive */}
       <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">

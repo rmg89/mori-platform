@@ -117,14 +117,12 @@ function EditableField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {label ? (
+      {label && (
         <div className="flex items-center gap-1.5">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-300 flex-1">{label}</p>
           {fieldControls}
         </div>
-      ) : fieldControls ? (
-        <div className="flex justify-end">{fieldControls}</div>
-      ) : null}
+      )}
       {editing ? (
         <div className="flex items-start gap-2">
           {multiline ? (
@@ -142,25 +140,28 @@ function EditableField({
           <button onClick={cancel} className="p-1 text-ink-300 hover:text-ink mt-0.5 flex-shrink-0"><X size={13} /></button>
         </div>
       ) : (
-        <button onClick={() => { setDraft(value || ''); setEditing(true) }} className="text-left w-full">
-          {value ? (
-            link ? (
-              <span className="text-sm font-semibold text-gold hover:text-gold-dark inline-flex items-center gap-1">
-                {value} <ExternalLink size={10} />
-              </span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setDraft(value || ''); setEditing(true) }} className="text-left flex-1 min-w-0">
+            {value ? (
+              link ? (
+                <span className="text-sm font-semibold text-gold hover:text-gold-dark inline-flex items-center gap-1">
+                  {value} <ExternalLink size={10} />
+                </span>
+              ) : (
+                <span className="text-sm text-ink leading-snug hover:underline decoration-dashed decoration-ink-200 underline-offset-2">{value}</span>
+              )
             ) : (
-              <span className="text-sm text-ink leading-snug hover:underline decoration-dashed decoration-ink-200 underline-offset-2">{value}</span>
-            )
-          ) : (
-            <span className={`inline-flex items-center gap-1.5 text-xs border border-dashed rounded px-2 py-0.5 transition-colors ${
-              status === 'needed'
-                ? 'border-amber-300/70 bg-amber-50/50 text-amber-600 hover:border-amber-400'
-                : 'text-ink-300 border-ink-200 hover:border-gold/40 hover:text-gold/70'
-            }`}>
-              <Plus size={9} className="flex-shrink-0" />{displayPlaceholder}
-            </span>
-          )}
-        </button>
+              <span className={`inline-flex items-center gap-1.5 text-xs border border-dashed rounded px-2 py-0.5 transition-colors ${
+                status === 'needed'
+                  ? 'border-amber-300/70 bg-amber-50/50 text-amber-600 hover:border-amber-400'
+                  : 'text-ink-300 border-ink-200 hover:border-gold/40 hover:text-gold/70'
+              }`}>
+                <Plus size={9} className="flex-shrink-0" />{displayPlaceholder}
+              </span>
+            )}
+          </button>
+          {!label && fieldControls}
+        </div>
       )}
     </div>
   )
@@ -602,12 +603,18 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
 
 function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
   const { companies, updateCompany } = useStore()
+  const ctx = useContext(BriefingFieldContext)
   const [addingTeam, setAddingTeam] = useState(false)
   const [newTeamName, setNewTeamName] = useState('')
 
   const linkedCompany = companies.find(c => c.id === e.company_id)
     ?? companies.find(c => c.name.toLowerCase() === e.organization.toLowerCase())
   const linkedTeam = linkedCompany?.teams.find(t => t.id === e.team_id)
+
+  // Hide entire row (icon + field) when dismissed
+  const shown = (key: string) => ctx?.fieldStatuses[key] !== 'not_needed' || ctx.showHidden
+  const detailKeys = ['event_date', 'event_time', 'event_city', 'session_length', 'audience_size']
+  const hiddenCount = detailKeys.filter(k => ctx?.fieldStatuses[k] === 'not_needed').length
 
   function handleAddTeam() {
     if (!newTeamName.trim() || !linkedCompany) return
@@ -698,45 +705,62 @@ function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engage
         )}
 
         <div className="border-t border-ink-50 pt-2 space-y-3">
-          <div className="flex items-start gap-2.5">
-            <Calendar size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
-            <div className="flex items-center gap-1.5 flex-1">
-              <EditableField label="" value={e.event_date ? formatDate(e.event_date) : undefined}
-                placeholder="Start date" onSave={v => save({ event_date: v })} fieldKey="event_date" />
-              {(e as any).event_end_date && (
-                <>
-                  <span className="text-ink-300 text-xs">–</span>
-                  <EditableField label="" value={formatDate((e as any).event_end_date)}
-                    placeholder="End date" onSave={v => save({ event_end_date: v } as any)} fieldKey="event_end_date" />
-                </>
-              )}
-              {!(e as any).event_end_date && (
-                <button onClick={() => save({ event_end_date: e.event_date } as any)}
-                  className="text-[10px] text-ink-200 hover:text-ink-400 transition-colors">+ end</button>
-              )}
+          {shown('event_date') && (
+            <div className="flex items-center gap-2.5">
+              <Calendar size={14} className="text-ink-300 flex-shrink-0" />
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <EditableField label="" value={e.event_date ? formatDate(e.event_date) : undefined}
+                  placeholder="Start date" onSave={v => save({ event_date: v })} fieldKey="event_date" />
+                {(e as any).event_end_date && (
+                  <>
+                    <span className="text-ink-300 text-xs">–</span>
+                    <EditableField label="" value={formatDate((e as any).event_end_date)}
+                      placeholder="End date" onSave={v => save({ event_end_date: v } as any)} fieldKey="event_end_date" />
+                  </>
+                )}
+                {!(e as any).event_end_date && (
+                  <button onClick={() => save({ event_end_date: e.event_date } as any)}
+                    className="text-[10px] text-ink-200 hover:text-ink-400 transition-colors flex-shrink-0">+ end</button>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-2.5">
-            <Clock size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
-            <EditableField label="" value={(e as any).event_time}
-              placeholder="Time" onSave={v => save({ event_time: v } as any)} fieldKey="event_time" />
-          </div>
-          <div className="flex items-start gap-2.5">
-            <MapPin size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
-            <EditableField label="" value={e.event_city}
-              placeholder="Location" onSave={v => save({ event_city: v })} fieldKey="event_city" />
-          </div>
-          <div className="flex items-start gap-2.5">
-            <Clock size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
-            <EditableField label="" value={e.session_length ? `${e.session_length} min` : undefined}
-              placeholder="Duration" onSave={v => save({ session_length: parseInt(v) || undefined })} fieldKey="session_length" />
-          </div>
-          <div className="flex items-start gap-2.5">
-            <Users size={14} className="text-ink-300 mt-0.5 flex-shrink-0" />
-            <EditableField label="" value={e.audience_size ? `${e.audience_size.toLocaleString()} attendees` : undefined}
-              placeholder="Audience size" onSave={v => save({ audience_size: parseInt(v.replace(/\D/g, '')) || undefined })} fieldKey="audience_size" />
-          </div>
+          )}
+          {shown('event_time') && (
+            <div className="flex items-center gap-2.5">
+              <Clock size={14} className="text-ink-300 flex-shrink-0" />
+              <EditableField label="" value={(e as any).event_time}
+                placeholder="Time" onSave={v => save({ event_time: v } as any)} fieldKey="event_time" />
+            </div>
+          )}
+          {shown('event_city') && (
+            <div className="flex items-center gap-2.5">
+              <MapPin size={14} className="text-ink-300 flex-shrink-0" />
+              <EditableField label="" value={e.event_city}
+                placeholder="Location" onSave={v => save({ event_city: v })} fieldKey="event_city" />
+            </div>
+          )}
+          {shown('session_length') && (
+            <div className="flex items-center gap-2.5">
+              <Clock size={14} className="text-ink-300 flex-shrink-0" />
+              <EditableField label="" value={e.session_length ? `${e.session_length} min` : undefined}
+                placeholder="Duration" onSave={v => save({ session_length: parseInt(v) || undefined })} fieldKey="session_length" />
+            </div>
+          )}
+          {shown('audience_size') && (
+            <div className="flex items-center gap-2.5">
+              <Users size={14} className="text-ink-300 flex-shrink-0" />
+              <EditableField label="" value={e.audience_size ? `${e.audience_size.toLocaleString()} attendees` : undefined}
+                placeholder="Audience size" onSave={v => save({ audience_size: parseInt(v.replace(/\D/g, '')) || undefined })} fieldKey="audience_size" />
+            </div>
+          )}
         </div>
+
+        {hiddenCount > 0 && (
+          <button onClick={() => ctx?.toggleShowHidden()}
+            className="text-xs text-ink-300 hover:text-ink-500 transition-colors mt-1">
+            {ctx?.showHidden ? 'hide dismissed' : `${hiddenCount} field${hiddenCount !== 1 ? 's' : ''} dismissed`}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -1002,8 +1026,11 @@ function ContactsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement
 // ─── Deposit Card ─────────────────────────────────────────────────────────────
 
 function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
+  const ctx = useContext(BriefingFieldContext)
   const [downloading, setDownloading] = useState(false)
   const [editingAmount, setEditingAmount] = useState(false)
+
+  if (ctx?.fieldStatuses['_deposit_section'] === 'not_needed') return null
   const [amountDraft, setAmountDraft] = useState('')
 
   const sent = !!(e as any).deposit_invoice_sent_at
@@ -1052,6 +1079,12 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
         <div className="flex items-center gap-2">
           <Receipt size={14} className="text-gold" />
           <p className="text-xs text-ink-400 uppercase tracking-widest font-medium">Deposit Invoice</p>
+          {ctx && (
+            <button onClick={ev => { ev.stopPropagation(); ctx.onStatusChange('_deposit_section', 'not_needed') }}
+              className="text-ink-400 hover:text-red-400 transition-colors border border-ink-200 hover:border-red-200 rounded px-1.5 py-0.5 flex items-center gap-1 ml-1">
+              <X size={10} /><span className="text-[10px]">remove</span>
+            </button>
+          )}
         </div>
 
         {/* Status badge */}
@@ -1582,21 +1615,21 @@ function SectionHeader({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
       {isVirtual && (
         <div className="bg-gold/6 border border-gold/20 rounded-xl px-4 py-3 space-y-3">
           <EditableField label="Join Link" value={(e as any).join_link} placeholder="Join link"
-            onSave={v => save({ join_link: v } as any)} />
+            onSave={v => save({ join_link: v } as any)} fieldKey="join_link" />
           <BTwoCol>
             <EditableField label="Backup Dial-In" value={(e as any).dial_in_backup} placeholder="Backup dial-in number"
-              onSave={v => save({ dial_in_backup: v } as any)} />
+              onSave={v => save({ dial_in_backup: v } as any)} fieldKey="dial_in_backup" />
             <EditableField label="Green Room Opens" value={(e as any).green_room_time} placeholder="Green room time"
-              onSave={v => save({ green_room_time: v } as any)} />
+              onSave={v => save({ green_room_time: v } as any)} fieldKey="green_room_time" />
           </BTwoCol>
           <EditableField label="Go Live" value={(e as any).go_live_time} placeholder="Go live time"
-            onSave={v => save({ go_live_time: v } as any)} />
+            onSave={v => save({ go_live_time: v } as any)} fieldKey="go_live_time" />
         </div>
       )}
       {hasPhysical && (
         <BTwoCol>
           <EditableField label="Green Room / Load-In" value={(e as any).green_room_time}
-            placeholder="Green room / load-in time" onSave={v => save({ green_room_time: v } as any)} />
+            placeholder="Green room / load-in time" onSave={v => save({ green_room_time: v } as any)} fieldKey="green_room_time" />
         </BTwoCol>
       )}
     </div>
@@ -2388,6 +2421,13 @@ export default function EngagementDetailPage() {
 
       {/* Deposit Invoice */}
       <DepositCard e={e} save={save} />
+      {(e.field_statuses?.['_deposit_section'] === 'not_needed') && (
+        <div className="mb-6 flex items-center gap-2 text-xs text-ink-300">
+          <span>Deposit Invoice hidden</span>
+          <button onClick={() => setFieldStatus(e.id, '_deposit_section', null)}
+            className="text-ink-400 hover:text-ink underline underline-offset-2 transition-colors">restore</button>
+        </div>
+      )}
 
       {/* Briefing Document */}
       <BriefingDocument e={e} />
@@ -2395,8 +2435,18 @@ export default function EngagementDetailPage() {
       {/* Comms timeline */}
       <TimelinePanel e={e} />
 
-      {/* Prospect history snapshot */}
-      {e.prospect_snapshot && <SnapshotPanel label="Prospect Stage History" snapshot={e.prospect_snapshot} />}
+      {/* Prospect background — always shown, uses saved snapshot or falls back to live fields */}
+      <SnapshotPanel label="Prospect Background" snapshot={e.prospect_snapshot ?? {
+        prospect_step: e.prospect_step,
+        source: e.source,
+        notes: e.notes,
+        event_name: e.event_name,
+        event_date: e.event_date,
+        event_city: e.event_city,
+        fee: e.fee,
+        event_format: e.event_format,
+        audience_size: e.audience_size,
+      }} />
 
       {/* Delete */}
       <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
