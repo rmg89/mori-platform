@@ -53,6 +53,53 @@ function createDoc() {
   return doc
 }
 
+// ─── Invoice header — editorial brand treatment ────────────────────────────────
+// Separate from the contract header so each can evolve independently.
+// Uses Times Bold (the closest built-in serif to Cormorant Garamond).
+// Content starts at y = 152 after this call.
+
+function addInvoiceHeader(doc: any, title: string) {
+  // Dark ink band
+  doc.setFillColor(15, 14, 12)
+  doc.rect(0, 0, 612, 90, 'F')
+
+  // Name — Times Bold, gold, large
+  doc.setFont('times', 'bold')
+  doc.setFontSize(21)
+  doc.setTextColor(201, 168, 76)
+  doc.text('MORI TAHERIPOUR', 50, 44)
+
+  // Hairline gold rule under name
+  doc.setDrawColor(201, 168, 76)
+  doc.setLineWidth(0.3)
+  doc.line(50, 54, 562, 54)
+
+  // Credentials — Helvetica, warm off-white
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(185, 182, 174)
+  doc.text('Wharton School  ·  Author, Bring Yourself  ·  Keynote Speaker  ·  Negotiation Expert', 50, 70)
+
+  // Document title below dark band — large, serif, ink
+  doc.setFont('times', 'bold')
+  doc.setFontSize(27)
+  doc.setTextColor(15, 14, 12)
+  doc.text(title.toUpperCase(), 50, 122)
+
+  // Gold accent rule
+  doc.setDrawColor(201, 168, 76)
+  doc.setLineWidth(0.8)
+  doc.line(50, 132, 562, 132)
+
+  // Reset all state so callers start clean
+  doc.setDrawColor(15, 14, 12)
+  doc.setLineWidth(0.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(15, 14, 12)
+}
+
+// ─── Contract / legacy header (used by generateContract) ──────────────────────
+
 function addHeader(doc: any, title: string) {
   doc.setFillColor(15, 14, 12)
   doc.rect(0, 0, 612, 80, 'F')
@@ -72,10 +119,14 @@ function addHeader(doc: any, title: string) {
 }
 
 function addFooter(doc: any, pageNum: number) {
-  doc.setFontSize(8)
-  doc.setTextColor(150, 148, 144)
-  doc.text('moritaheripour.com  |  Confidential', 50, 760)
-  doc.text(`Page ${pageNum}`, 562, 760, { align: 'right' })
+  doc.setDrawColor(210, 208, 202)
+  doc.setLineWidth(0.3)
+  doc.line(50, 748, 562, 748)
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(165, 162, 155)
+  doc.text('moritaheripour.com  ·  team@moritaheripour.com', 50, 761)
+  doc.text(`Page ${pageNum}`, 562, 761, { align: 'right' })
 }
 
 function addField(doc: any, label: string, value: string, x: number, y: number) {
@@ -454,99 +505,170 @@ export function generateBriefingDocBytes(client: Client): Buffer {
 
 export function generateInvoice(client: Client, invoiceNumber: string): Blob {
   const doc = createDoc()
-  addHeader(doc, 'Invoice')
+  addInvoiceHeader(doc, 'Invoice')
 
-  let y = 110
+  let y = 152
+  const L = 50, R = 562, W = 512
 
-  // Invoice meta
-  doc.setFontSize(10)
-  doc.setTextColor(15, 14, 12)
-  addField(doc, 'Invoice Number', invoiceNumber, 50, y)
-  addField(doc, 'Invoice Date', formatDate(new Date().toISOString()), 200, y)
-  addField(doc, 'Due Date', formatDate(new Date(Date.now() + 30 * 86400000).toISOString()), 370, y)
-  y += 50
-
-  // Billed to
-  doc.setDrawColor(201, 168, 76)
-  doc.setLineWidth(0.5)
-  doc.line(50, y, 562, y)
-  y += 16
-  doc.setFontSize(11)
+  // ── Meta row ──────────────────────────────────────────────────────────────
+  doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
-  doc.text('BILLED TO', 50, y)
-  y += 16
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(60, 58, 54)
-  doc.text(`${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}`, 50, y); y += 14
-  if (pc(client)?.title || "—") { doc.text(pc(client)?.title || "—", 50, y); y += 14 }
-  doc.text(client.organization, 50, y); y += 14
-  doc.text(pc(client)?.email || "—", 50, y); y += 30
-
-  // Line items
-  doc.setDrawColor(201, 168, 76)
-  doc.line(50, y, 562, y)
-  y += 16
-
-  // Table header
-  doc.setFillColor(247, 246, 243)
-  doc.rect(50, y - 6, 512, 22, 'F')
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(100, 97, 90)
-  doc.text('DESCRIPTION', 60, y + 8)
-  doc.text('AMOUNT', 530, y + 8, { align: 'right' })
-  y += 30
-
-  // Line item: speaking fee
-  doc.setFontSize(10)
+  doc.setTextColor(140, 137, 130)
+  doc.text('INVOICE NUMBER', L, y)
+  doc.text('INVOICE DATE', 230, y)
+  doc.text('PAYMENT DUE', 410, y)
+  y += 12
+  doc.setFontSize(10.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(15, 14, 12)
-  const desc = `Keynote / Speaking Fee — ${client.event_name || client.topic || 'Speaking Engagement'}\n${formatDate(client.event_date)} · ${client.event_city || ''} · ${client.organization}`
-  const descLines = doc.splitTextToSize(desc, 380)
-  doc.text(descLines, 60, y)
-  doc.text(formatCurrency(client.fee), 530, y, { align: 'right' })
-  y += descLines.length * 14 + 10
+  doc.text(invoiceNumber, L, y)
+  doc.text(formatDate(new Date().toISOString()), 230, y)
+  doc.text(formatDate(new Date(Date.now() + 30 * 86400000).toISOString()), 410, y)
+  y += 34
 
-  // Travel if applicable
-  if (client.travel_covered) {
-    doc.text('Travel & Accommodation (per agreement — covered by Client)', 60, y)
-    doc.text('—', 530, y, { align: 'right' })
-    y += 20
-  }
-
-  // Total
-  y += 10
+  // ── Billed To ─────────────────────────────────────────────────────────────
   doc.setDrawColor(201, 168, 76)
-  doc.line(400, y, 562, y)
+  doc.setLineWidth(0.4)
+  doc.line(L, y, R, y)
   y += 14
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(140, 137, 130)
+  doc.text('BILLED TO', L, y)
+  y += 13
+
+  const c = pc(client)
+  const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
   doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
-  doc.text('TOTAL DUE', 400, y)
-  doc.text(formatCurrency(client.fee), 530, y, { align: 'right' })
-  y += 40
+  doc.setTextColor(15, 14, 12)
+  doc.text(fullName, L, y)
+  y += 15
 
-  // Payment instructions
-  doc.setDrawColor(200, 198, 194)
-  doc.line(50, y, 562, y)
+  if (c?.title) {
+    doc.setFontSize(9.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(110, 107, 100)
+    doc.text(c.title, L, y)
+    y += 13
+  }
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(40, 38, 34)
+  doc.text(client.organization || '—', L, y)
+  y += 13
+
+  if (c?.email) {
+    doc.setTextColor(110, 107, 100)
+    doc.text(c.email, L, y)
+    y += 13
+  }
+  y += 22
+
+  // ── Line items ────────────────────────────────────────────────────────────
+  doc.setDrawColor(201, 168, 76)
+  doc.setLineWidth(0.4)
+  doc.line(L, y, R, y)
+  y += 12
+
+  // Table header bar
+  doc.setFillColor(248, 246, 242)
+  doc.rect(L, y - 4, W, 22, 'F')
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(130, 127, 120)
+  doc.text('DESCRIPTION', L + 8, y + 9)
+  doc.text('AMOUNT', R - 8, y + 9, { align: 'right' })
+  y += 28
+
+  // Speaking fee line
+  const eventLabel = client.event_name || client.topic || 'Speaking Engagement'
+  doc.setFontSize(10.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(15, 14, 12)
+  doc.text('Keynote / Speaking Fee', L + 8, y)
+  doc.setFont('times', 'bold')
+  doc.setFontSize(10.5)
+  doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
+  y += 14
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(110, 107, 100)
+  const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
+  const subLines = doc.splitTextToSize(subDesc, 400)
+  doc.text(subLines, L + 8, y)
+  y += subLines.length * 13 + 12
+
+  // Travel line (if applicable)
+  if (client.travel_covered) {
+    doc.setFontSize(10.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(15, 14, 12)
+    doc.text('Travel & Accommodation', L + 8, y)
+    doc.text('—', R - 8, y, { align: 'right' })
+    y += 13
+    doc.setFontSize(9)
+    doc.setTextColor(110, 107, 100)
+    doc.text('Per agreement — covered by client', L + 8, y)
+    y += 18
+  }
+
+  // ── Total ─────────────────────────────────────────────────────────────────
+  y += 6
+  doc.setDrawColor(201, 168, 76)
+  doc.setLineWidth(0.8)
+  doc.line(370, y, R, y)
+  y += 15
+
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(140, 137, 130)
+  doc.text('TOTAL DUE', 378, y)
+
+  doc.setFont('times', 'bold')
+  doc.setFontSize(15)
+  doc.setTextColor(15, 14, 12)
+  doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
+  y += 38
+
+  // ── Payment instructions ──────────────────────────────────────────────────
+  doc.setDrawColor(210, 208, 202)
+  doc.setLineWidth(0.3)
+  doc.line(L, y, R, y)
+  y += 15
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(140, 137, 130)
+  doc.text('PAYMENT INSTRUCTIONS', L, y)
+  y += 14
+
+  const payRows: [string, string][] = [
+    ['Wire / ACH', '[Bank name, routing & account — contact team@moritaheripour.com]'],
+    ['Check', 'Payable to Mori Taheripour'],
+    ['Reference', `Please include invoice number ${invoiceNumber} in the payment memo`],
+    ['Questions', 'team@moritaheripour.com'],
+  ]
+  for (const [label, value] of payRows) {
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(40, 38, 34)
+    doc.text(label, L, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 97, 90)
+    const vLines = doc.splitTextToSize(s(value), 370)
+    doc.text(vLines, L + 110, y)
+    y += Math.max(vLines.length, 1) * 13 + 3
+  }
+
   y += 16
   doc.setFontSize(9)
-  doc.setFont('helvetica', 'bold')
-  doc.text('PAYMENT INSTRUCTIONS', 50, y)
-  y += 14
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(60, 58, 54)
-  const payLines = [
-    'Wire Transfer / ACH: [TODO: Add bank details]',
-    'Check payable to: Mori Taheripour',
-    'Please include invoice number in payment reference.',
-    'Questions: team@moritaheripour.com',
-  ]
-  for (const l of payLines) { doc.text(l, 50, y); y += 14 }
-  y += 20
-  doc.setFontSize(9)
-  doc.setTextColor(100, 97, 90)
-  doc.text('Thank you for the opportunity to work together.', 50, y)
+  doc.setFont('times', 'italic')
+  doc.setTextColor(170, 167, 160)
+  doc.text('Be Confident. Be Curious. Bring Yourself.', L, y)
 
   addFooter(doc, 1)
   return doc.output('blob')
@@ -556,97 +678,191 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
 
 export function generateDepositInvoice(client: Client, invoiceNumber: string): Blob {
   const doc = createDoc()
-  addHeader(doc, 'Deposit Invoice')
+  addInvoiceHeader(doc, 'Deposit Invoice')
 
-  let y = 110
+  let y = 152
+  const L = 50, R = 562, W = 512
 
-  doc.setFontSize(10)
-  doc.setTextColor(15, 14, 12)
-  addField(doc, 'Invoice Number', invoiceNumber, 50, y)
-  addField(doc, 'Invoice Date', formatDate(new Date().toISOString()), 200, y)
-  addField(doc, 'Due Date', formatDate(new Date(Date.now() + 14 * 86400000).toISOString()), 370, y)
-  y += 50
-
-  doc.setDrawColor(201, 168, 76)
-  doc.setLineWidth(0.5)
-  doc.line(50, y, 562, y)
-  y += 16
-  doc.setFontSize(11)
+  // ── Meta row ──────────────────────────────────────────────────────────────
+  doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
-  doc.text('BILLED TO', 50, y)
-  y += 16
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(60, 58, 54)
-  doc.text(`${pc(client)?.first_name || '—'} ${pc(client)?.last_name || '—'}`, 50, y); y += 14
-  if (pc(client)?.title) { doc.text(pc(client)!.title!, 50, y); y += 14 }
-  doc.text(client.organization, 50, y); y += 14
-  doc.text(pc(client)?.email || '—', 50, y); y += 30
-
-  doc.setDrawColor(201, 168, 76)
-  doc.line(50, y, 562, y)
-  y += 16
-
-  doc.setFillColor(247, 246, 243)
-  doc.rect(50, y - 6, 512, 22, 'F')
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(100, 97, 90)
-  doc.text('DESCRIPTION', 60, y + 8)
-  doc.text('AMOUNT', 530, y + 8, { align: 'right' })
-  y += 30
-
-  const depositAmount = client.deposit_amount ?? 0
-  doc.setFontSize(10)
+  doc.setTextColor(140, 137, 130)
+  doc.text('INVOICE NUMBER', L, y)
+  doc.text('INVOICE DATE', 230, y)
+  doc.text('DEPOSIT DUE', 410, y)
+  y += 12
+  doc.setFontSize(10.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(15, 14, 12)
-  const desc = `Deposit — ${client.event_name || client.topic || 'Speaking Engagement'}\n${formatDate(client.event_date)} · ${client.event_city || ''} · ${client.organization}`
-  const descLines = doc.splitTextToSize(desc, 380)
-  doc.text(descLines, 60, y)
-  doc.text(formatCurrency(depositAmount), 530, y, { align: 'right' })
-  y += descLines.length * 14 + 10
+  doc.text(invoiceNumber, L, y)
+  doc.text(formatDate(new Date().toISOString()), 230, y)
+  doc.text(formatDate(new Date(Date.now() + 14 * 86400000).toISOString()), 410, y)
+  y += 34
 
-  y += 10
+  // ── Billed To ─────────────────────────────────────────────────────────────
   doc.setDrawColor(201, 168, 76)
-  doc.line(400, y, 562, y)
+  doc.setLineWidth(0.4)
+  doc.line(L, y, R, y)
   y += 14
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(140, 137, 130)
+  doc.text('BILLED TO', L, y)
+  y += 13
+
+  const c = pc(client)
+  const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
   doc.setFontSize(12)
   doc.setFont('helvetica', 'bold')
-  doc.text('DEPOSIT DUE', 400, y)
-  doc.text(formatCurrency(depositAmount), 530, y, { align: 'right' })
-  y += 30
+  doc.setTextColor(15, 14, 12)
+  doc.text(fullName, L, y)
+  y += 15
 
-  if (client.fee && client.fee > depositAmount) {
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'italic')
-    doc.setTextColor(100, 97, 90)
-    const balanceNote = doc.splitTextToSize(`Balance of ${formatCurrency(client.fee - depositAmount)} due per separate final invoice after the event.`, 162)
-    doc.text(balanceNote, 530, y, { align: 'right' })
-    y += balanceNote.length * 13 + 10
+  if (c?.title) {
+    doc.setFontSize(9.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(110, 107, 100)
+    doc.text(c.title, L, y)
+    y += 13
   }
-  y += 10
 
-  doc.setDrawColor(200, 198, 194)
-  doc.line(50, y, 562, y)
-  y += 16
-  doc.setFontSize(9)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(40, 38, 34)
+  doc.text(client.organization || '—', L, y)
+  y += 13
+
+  if (c?.email) {
+    doc.setTextColor(110, 107, 100)
+    doc.text(c.email, L, y)
+    y += 13
+  }
+  y += 22
+
+  // ── Line items ────────────────────────────────────────────────────────────
+  doc.setDrawColor(201, 168, 76)
+  doc.setLineWidth(0.4)
+  doc.line(L, y, R, y)
+  y += 12
+
+  doc.setFillColor(248, 246, 242)
+  doc.rect(L, y - 4, W, 22, 'F')
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(130, 127, 120)
+  doc.text('DESCRIPTION', L + 8, y + 9)
+  doc.text('AMOUNT', R - 8, y + 9, { align: 'right' })
+  y += 28
+
+  const depositAmount = client.deposit_amount ?? 0
+  const eventLabel = client.event_name || client.topic || 'Speaking Engagement'
+
+  doc.setFontSize(10.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 14, 12)
-  doc.text('PAYMENT INSTRUCTIONS', 50, y)
+  doc.text('Deposit — Speaking Fee', L + 8, y)
+  doc.setFont('times', 'bold')
+  doc.setFontSize(10.5)
+  doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
   y += 14
+
   doc.setFont('helvetica', 'normal')
-  doc.setTextColor(60, 58, 54)
-  const payLines = [
-    'Wire Transfer / ACH: [TODO: Add bank details]',
-    'Check payable to: Mori Taheripour',
-    'Please include invoice number in payment reference.',
-    'Questions: team@moritaheripour.com',
-  ]
-  for (const l of payLines) { doc.text(l, 50, y); y += 14 }
-  y += 20
   doc.setFontSize(9)
-  doc.setTextColor(100, 97, 90)
-  doc.text('Thank you for the opportunity to work together.', 50, y)
+  doc.setTextColor(110, 107, 100)
+  const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
+  const subLines = doc.splitTextToSize(subDesc, 400)
+  doc.text(subLines, L + 8, y)
+  y += subLines.length * 13 + 12
+
+  // ── Fee summary breakdown ─────────────────────────────────────────────────
+  y += 8
+
+  // Total fee (context row — grayed)
+  if (client.fee) {
+    doc.setFontSize(8.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(140, 137, 130)
+    doc.text('Total Speaking Fee', 375, y)
+    doc.setTextColor(110, 107, 100)
+    doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
+    y += 14
+  }
+
+  // Gold rule then the primary deposit row
+  doc.setDrawColor(201, 168, 76)
+  doc.setLineWidth(0.8)
+  doc.line(370, y, R, y)
+  y += 14
+
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(140, 137, 130)
+  doc.text('DEPOSIT DUE (THIS INVOICE)', 375, y)
+  doc.setFont('times', 'bold')
+  doc.setFontSize(15)
+  doc.setTextColor(15, 14, 12)
+  doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
+  y += 18
+
+  // Balance row
+  if (client.fee && client.fee > depositAmount) {
+    doc.setFontSize(8.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(140, 137, 130)
+    doc.text('Balance Due After Event', 375, y)
+    doc.setTextColor(110, 107, 100)
+    doc.text(formatCurrency(client.fee - depositAmount), R - 8, y, { align: 'right' })
+    y += 14
+  }
+  y += 16
+
+  // Confirming language
+  doc.setFontSize(8.5)
+  doc.setFont('helvetica', 'italic')
+  doc.setTextColor(130, 127, 120)
+  const confirmLines = doc.splitTextToSize(
+    s('This deposit confirms your engagement and is applied toward the total speaking fee. The remaining balance will be invoiced separately following the event.'),
+    W
+  )
+  doc.text(confirmLines, L, y)
+  y += confirmLines.length * 12 + 22
+
+  // ── Payment instructions ──────────────────────────────────────────────────
+  doc.setDrawColor(210, 208, 202)
+  doc.setLineWidth(0.3)
+  doc.line(L, y, R, y)
+  y += 15
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(140, 137, 130)
+  doc.text('PAYMENT INSTRUCTIONS', L, y)
+  y += 14
+
+  const payRows: [string, string][] = [
+    ['Wire / ACH', '[Bank name, routing & account — contact team@moritaheripour.com]'],
+    ['Check', 'Payable to Mori Taheripour'],
+    ['Reference', `Please include invoice number ${invoiceNumber} in the payment memo`],
+    ['Questions', 'team@moritaheripour.com'],
+  ]
+  for (const [label, value] of payRows) {
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(40, 38, 34)
+    doc.text(label, L, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 97, 90)
+    const vLines = doc.splitTextToSize(s(value), 370)
+    doc.text(vLines, L + 110, y)
+    y += Math.max(vLines.length, 1) * 13 + 3
+  }
+
+  y += 16
+  doc.setFontSize(9)
+  doc.setFont('times', 'italic')
+  doc.setTextColor(170, 167, 160)
+  doc.text('Be Confident. Be Curious. Bring Yourself.', L, y)
 
   addFooter(doc, 1)
   return doc.output('blob')

@@ -1055,19 +1055,34 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
     save({ [field]: undefined } as any)
   }
 
+  async function downloadDepositPdf() {
+    const { generateDepositInvoice } = await import('@/lib/documents')
+    const invoiceNum = `DEP-${e.id.slice(0, 6).toUpperCase()}`
+    const blob = generateDepositInvoice(e, invoiceNum)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `deposit-invoice-${e.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleGenerateAndSend() {
+    if (!amount) return
+    setDownloading(true)
+    try {
+      await downloadDepositPdf()
+      save({ deposit_invoice_sent_at: new Date().toISOString() } as any)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   async function handleDownload() {
     if (!amount) return
     setDownloading(true)
     try {
-      const { generateDepositInvoice } = await import('@/lib/documents')
-      const invoiceNum = `DEP-${e.id.slice(0, 6).toUpperCase()}`
-      const blob = generateDepositInvoice(e, invoiceNum)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `deposit-invoice-${e.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
+      await downloadDepositPdf()
     } finally {
       setDownloading(false)
     }
@@ -1096,6 +1111,27 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
           {status === 'received' ? 'Received' : status === 'sent' ? 'Invoice Sent' : 'Not Sent'}
         </span>
       </div>
+
+      {/* Pre-flight gaps — shown before invoice is sent */}
+      {!sent && (() => {
+        const c = primaryContact(e)
+        const gaps: string[] = []
+        if (!c?.first_name && !c?.last_name) gaps.push('primary contact name')
+        if (!c?.email) gaps.push('contact email')
+        if (!e.fee) gaps.push('speaking fee')
+        if (!e.event_date) gaps.push('event date')
+        if (!e.event_name && !e.topic) gaps.push('event name or topic')
+        if (gaps.length === 0) return null
+        return (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
+            <AlertTriangle size={11} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-amber-700 leading-relaxed">
+              <span className="font-semibold">Invoice will have blanks: </span>
+              {gaps.join(', ')}
+            </p>
+          </div>
+        )
+      })()}
 
       <div className="flex items-end gap-6">
         {/* Amount */}
@@ -1155,17 +1191,24 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
 
         {/* Actions */}
         <div className="flex flex-col gap-2 flex-shrink-0">
-          {amount && (
-            <button onClick={handleDownload} disabled={downloading}
+          {amount && !sent && (
+            <button onClick={handleGenerateAndSend} disabled={downloading}
               className="flex items-center gap-1.5 text-xs font-medium text-gold hover:text-gold-dark border border-gold/30 hover:border-gold/60 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
               <Download size={11} />
-              {downloading ? 'Generating…' : 'Download PDF'}
+              {downloading ? 'Generating…' : 'Generate & Send Invoice'}
             </button>
           )}
-          {!sent && (
+          {!amount && !sent && (
             <button onClick={markSent}
               className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all">
               <Check size={11} /> Mark Invoice Sent
+            </button>
+          )}
+          {amount && sent && (
+            <button onClick={handleDownload} disabled={downloading}
+              className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+              <Download size={11} />
+              {downloading ? 'Generating…' : 'Re-download Invoice'}
             </button>
           )}
           {sent && !received && (

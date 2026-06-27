@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, PostEventMediaType, primaryContact } from '@/types'
 import { formatDate, getInitials, formatRelativeDue } from '@/lib/utils'
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2, History, ChevronDown, ChevronUp, Flag, Bell, BellOff } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2, History, ChevronDown, ChevronUp, Flag, Bell, BellOff, Download } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 
@@ -350,6 +350,7 @@ export default function WrapUpDetailPage() {
   const [addingMediaType, setAddingMediaType] = useState<PostEventMediaType | null>(null)
   const [linkUrl, setLinkUrl] = useState('')
   const [linkDescription, setLinkDescription] = useState('')
+  const [invoiceDownloading, setInvoiceDownloading] = useState(false)
 
   const e = allEngagements.find(eng => eng.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
@@ -373,6 +374,24 @@ export default function WrapUpDetailPage() {
 
   const outstandingCount = needed.length
   const allDone = activeFlags.length > 0 && outstandingCount === 0
+
+  async function handleInvoiceDownload() {
+    if (!e || !e.fee) return
+    setInvoiceDownloading(true)
+    try {
+      const { generateInvoice } = await import('@/lib/documents')
+      const invoiceNum = `INV-${e.id.slice(0, 6).toUpperCase()}`
+      const blob = generateInvoice(e, invoiceNum)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `invoice-${e.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setInvoiceDownloading(false)
+    }
+  }
 
   function handleStageClick(flagId: PostEventFlag, stageId: string) {
     if (stageId === '') {
@@ -503,6 +522,42 @@ export default function WrapUpDetailPage() {
                         className="w-full text-xs bg-transparent border-b border-transparent hover:border-ink-100 focus:border-ink-200 px-1 py-1 text-ink-500 placeholder:text-ink-300 focus:outline-none transition-colors"
                       />
                     </div>
+
+                    {flagId === 'invoice' && (
+                      <div className="mt-2.5 pt-2.5 border-t border-dashed border-ink-100 space-y-2">
+                        {(() => {
+                          const contact = primaryContact(e)
+                          const gaps: string[] = []
+                          if (!e.fee) gaps.push('speaking fee')
+                          if (!contact?.first_name && !contact?.last_name) gaps.push('primary contact name')
+                          if (!contact?.email) gaps.push('contact email')
+                          if (!e.event_date) gaps.push('event date')
+                          if (!e.event_name && !e.topic) gaps.push('event name or topic')
+                          if (gaps.length === 0) return null
+                          return (
+                            <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                              <AlertTriangle size={10} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                              <p className="text-[10px] text-amber-700 leading-relaxed">
+                                <span className="font-semibold">Invoice will have blanks:</span>{' '}
+                                {gaps.join(', ')}
+                              </p>
+                            </div>
+                          )
+                        })()}
+                        {e.fee ? (
+                          <button
+                            onClick={handleInvoiceDownload}
+                            disabled={invoiceDownloading}
+                            className="flex items-center gap-1.5 text-xs font-medium text-gold hover:text-gold-dark border border-gold/30 hover:border-gold/60 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50"
+                          >
+                            <Download size={11} />
+                            {invoiceDownloading ? 'Generating…' : 'Download Invoice'}
+                          </button>
+                        ) : (
+                          <p className="text-[10px] text-ink-300 italic">Set a speaking fee to enable invoice generation.</p>
+                        )}
+                      </div>
+                    )}
 
                     {flagId === 'testimonial' && (
                       <div className="mt-2.5 pt-2.5 border-t border-dashed border-ink-100 space-y-1.5">
