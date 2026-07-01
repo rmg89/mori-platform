@@ -1,8 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, POST_EVENT_FLAGS, PostEventFlag } from '@/types'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
 
 export type ScanType = 'booking' | 'declined' | 'wrapup'
 
@@ -116,12 +114,12 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
     const context = buildContext(row, contacts ?? [], comms ?? [])
     const system = systemPromptFor(scanType)
 
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+    const message = await callAI(() => anthropic.messages.create({
+      model: AI_MODEL,
       max_tokens: 700,
       system,
       messages: [{ role: 'user', content: context }],
-    })
+    }))
 
     const text = message.content[0].type === 'text' ? message.content[0].text : ''
     const result = parseJson(text)

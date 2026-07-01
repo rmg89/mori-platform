@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
 
 export async function POST(req: NextRequest) {
   const { thread_subject, contact_name, contact_org, last_message } = await req.json()
@@ -26,12 +24,12 @@ ${last_message}
 Draft a reply.`
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+    const message = await callAI(() => anthropic.messages.create({
+      model: AI_MODEL,
       max_tokens: 600,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
-    })
+    }))
 
     const reply = message.content[0].type === 'text' ? message.content[0].text : ''
     return NextResponse.json({ reply })

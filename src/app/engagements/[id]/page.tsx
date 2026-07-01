@@ -13,10 +13,13 @@ import {
   Clock, Wifi, Hotel, Plane, ExternalLink,
   Pencil, Check, X, Plus, Minus, Trash2, GripVertical, ChevronDown, ChevronUp,
   FileCheck, Upload, ArrowDown, Paperclip, Building2,
-  Receipt, History, Flag, Bell, BellOff
+  Receipt, History, Flag, Bell, BellOff, FolderArchive
 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
+import ArchiveModal from '@/components/ArchiveModal'
+import TimezoneSelect from '@/components/TimezoneSelect'
+import { TIMEZONE_OPTIONS } from '@/lib/timezone'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1644,6 +1647,9 @@ function SectionHeader({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
     ? `In-Person${e.event_city ? ` — ${e.event_city}` : ''}`
     : 'Virtual'
 
+  const eventTz = (e as any).event_timezone as string | undefined
+  const tzShort = eventTz ? (TIMEZONE_OPTIONS.find(t => t.id === eventTz)?.short ?? eventTz) : null
+
   return (
     <div className="space-y-4">
       <BTwoCol>
@@ -1654,6 +1660,19 @@ function SectionHeader({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
       </BTwoCol>
       <EditableField label="Format" value={`${eventTypeLabel(eventType)} — ${formatStr}`}
         placeholder="Format and location" onSave={v => save({ event_city: v })} />
+
+      {/* Timezone selector for all briefing times */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-ink-400 font-medium whitespace-nowrap">All times:</span>
+        <TimezoneSelect
+          value={eventTz ?? 'America/New_York'}
+          onChange={tz => save({ event_timezone: tz } as any)}
+          className="text-xs"
+        />
+        {tzShort && (
+          <span className="text-[10px] text-ink-300">Enter all times as {tzShort}</span>
+        )}
+      </div>
 
       {isVirtual && (
         <div className="bg-gold/6 border border-gold/20 rounded-xl px-4 py-3 space-y-3">
@@ -2389,8 +2408,9 @@ function TimelinePanel({ e }: { e: Engagement }) {
 export default function EngagementDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement, setFieldStatus } = useStore()
+  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement, archiveEngagement, setFieldStatus } = useStore()
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [, startTransition] = useTransition()
   const e = allEngagements.find(e => e.id === id)
@@ -2491,8 +2511,21 @@ export default function EngagementDetailPage() {
         audience_size: e.audience_size,
       }} />
 
+      {/* Archive */}
+      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-ink">Archive this engagement</p>
+          <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+        </div>
+        <button
+          onClick={() => setArchiveModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+          <FolderArchive size={13} /> Archive
+        </button>
+      </div>
+
       {/* Delete */}
-      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+      <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
         <div>
           <p className="text-sm font-medium text-red-600">Delete this engagement</p>
           <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
@@ -2503,6 +2536,13 @@ export default function EngagementDetailPage() {
           <Trash2 size={13} /> Delete
         </button>
       </div>
+
+      <ArchiveModal
+        open={archiveModalOpen}
+        engagement={e}
+        onConfirm={(reason: string) => { archiveEngagement(e.id, reason); startTransition(() => router.push('/archive')) }}
+        onCancel={() => setArchiveModalOpen(false)}
+      />
 
       <ConfirmModal
         open={deleteModalOpen}

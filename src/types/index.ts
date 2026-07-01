@@ -76,7 +76,8 @@ export interface EngagementCall {
   status: CallStatus
   number: number
   requested_at?: string      // when the call was requested (ISO datetime)
-  scheduled_at?: string      // planned date+time of the call
+  scheduled_at?: string      // planned date+time of the call (UTC ISO)
+  scheduled_tz?: string      // IANA timezone id the user entered the time in (e.g. "America/New_York")
   completed_at?: string      // when it actually happened
   format?: CallFormat        // phone, video, in-person
   details?: string           // freeform: link, phone #, person calling, etc.
@@ -303,6 +304,7 @@ export interface Engagement {
   cancellation_reason?: string
   archived?: boolean
   archived_at?: string
+  archived_reason?: string
 
   organization: string
   company_id?: string          // links to Company.id
@@ -314,6 +316,7 @@ export interface Engagement {
   proposed_dates?: { date: string; times?: string[] }[]  // each date can have multiple freeform time options
   event_date?: string
   event_time?: string          // freeform: "10am", "10–11:30am", "morning (~2hrs)"
+  event_timezone?: string      // IANA tz id for all briefing times (e.g. "America/New_York")
   event_location?: string
   event_city?: string
   event_format?: 'in_person' | 'virtual' | 'hybrid'

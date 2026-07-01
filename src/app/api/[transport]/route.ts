@@ -535,15 +535,14 @@ const handler = createMcpHandler(
     // ── 22. archive_engagement ────────────────────────────────────────────────
     server.registerTool('archive_engagement', {
       title: 'Archive Engagement',
-      description: 'Archive an engagement so it no longer appears in the active pipeline.',
-      inputSchema: { engagement_id: z.string(), reason: z.string().optional() },
+      description: 'Archive an engagement so it no longer appears in the active pipeline. A reason is required — explain why it is being archived (e.g. cancelled, declined, duplicated, completed outside normal flow).',
+      inputSchema: { engagement_id: z.string(), reason: z.string() },
     }, async ({ engagement_id, reason }) => {
       const now = new Date().toISOString()
-      const patch: Record<string, unknown> = { archived: true, archived_at: now, updated_at: now }
-      if (reason) patch.cancellation_reason = reason
+      const patch: Record<string, unknown> = { archived: true, archived_at: now, archived_reason: reason, updated_at: now }
       const { error } = await supabase.from('engagements').update(patch).eq('id', engagement_id)
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-      return { content: [{ type: 'text' as const, text: 'Engagement archived.' }] }
+      return { content: [{ type: 'text' as const, text: `Engagement archived. Reason: ${reason}` }] }
     })
 
     // ── 23. get_companies ─────────────────────────────────────────────────────

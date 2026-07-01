@@ -1,11 +1,13 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
 import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, updateCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
+
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 interface StoreState {
   engagements: Engagement[]
@@ -13,6 +15,8 @@ interface StoreState {
   companies: Company[]
   loading: boolean
   error: string | null
+  saveStatus: SaveStatus
+  saveError: string | null
 }
 
 interface StoreActions {
@@ -30,7 +34,7 @@ interface StoreActions {
   confirmWrapUpReview: (id: string) => void
 
   // Archive / delete
-  archiveEngagement: (id: string) => void
+  archiveEngagement: (id: string, reason?: string) => void
   deleteEngagement: (id: string) => void
 
   // Engagement flags
@@ -92,6 +96,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const trackSave = useCallback((promise: Promise<unknown>) => {
+    setSaveStatus('saving')
+    setSaveError(null)
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    promise.then(() => {
+      setSaveStatus('saved')
+      saveTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2500)
+    }).catch((err: unknown) => {
+      setSaveStatus('error')
+      setSaveError(err instanceof Error ? err.message : 'Save failed')
+    })
+  }, [])
+
+  // Lightweight error-only handler for fire-and-forget writes where we don't
+  // need the full saving/saved lifecycle — just surfaces failures to the user.
+  const onWriteError = useCallback((err: unknown) => {
+    console.error(err)
+    setSaveStatus('error')
+    setSaveError(err instanceof Error ? err.message : 'Save failed')
+  }, [])
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -137,7 +165,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateCompany = useCallback((id: string, patch: Partial<Company>) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
     const { teams, engagement_ids, contact_ids, ...dbPatch } = patch
-    if (Object.keys(dbPatch).length > 0) updateCompanyRow(id, dbPatch as Record<string, unknown>).catch(console.error)
+    if (Object.keys(dbPatch).length > 0) updateCompanyRow(id, dbPatch as Record<string, unknown>).catch(onWriteError)
   }, [])
 
   const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
@@ -145,7 +173,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       prev.forEach((e: Engagement) => {
         e.contacts.forEach((c: EngagementContact) => {
           if (c.email.toLowerCase() === email.toLowerCase()) {
-            upsertContact({ id: c.id, engagement_id: e.id, ...patch } as never).catch(console.error)
+            upsertContact({ id: c.id, engagement_id: e.id, ...patch } as never).catch(onWriteError)
           }
         })
       })
@@ -165,7 +193,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Write to Supabase — strip relational arrays (own tables) but keep JSONB material columns
     const { contacts, comms, calls, briefing_notes, alerts, engagement_flags, media_flags, post_event_flags, post_event_needed, post_event_not_needed, ...scalarPatch } = patch as Engagement
     if (Object.keys(scalarPatch).length > 0) {
-      updateEngagementRow(id, scalarPatch as Record<string, unknown>).catch(console.error)
+      trackSave(updateEngagementRow(id, scalarPatch as Record<string, unknown>))
     }
     // Persist any new contacts (temp IDs = new or linked from UI)
     if (contacts) {
@@ -183,7 +211,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             status: (c.status as string) ?? 'prospect_active',
             watching: c.watching ?? false,
             notes: c.notes ?? null,
-          }).catch(console.error)
+          }).catch(onWriteError)
         }
       })
     }
@@ -193,7 +221,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, prospect_step: step, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { prospect_step: step }).catch(console.error)
+    updateEngagementRow(id, { prospect_step: step }).catch(onWriteError)
   }, [])
 
   const runScan = useCallback((id: string, scanType: 'booking' | 'declined' | 'wrapup') => {
@@ -219,7 +247,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return next
         }))
       })
-      .catch(console.error)
+      .catch(onWriteError)
   }, [])
 
   const confirmProspect = useCallback((id: string) => {
@@ -242,7 +270,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         audience_size: e.audience_size,
         event_format: e.event_format,
       }
-      updateEngagementRow(id, { section: 'engagements', prospect_step: null, booking_review_needed: true, confirmed_at: now, prospect_snapshot }).catch(console.error)
+      updateEngagementRow(id, { section: 'engagements', prospect_step: null, booking_review_needed: true, confirmed_at: now, prospect_snapshot }).catch(onWriteError)
       return { ...e, section: 'engagements' as const, prospect_step: undefined, booking_review_needed: true, confirmed_at: now, prospect_snapshot, updated_at: now }
     }))
     runScan(id, 'booking')
@@ -261,7 +289,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         comms: e.comms,
         contacts: e.contacts,
       }
-      updateEngagementRow(id, { section: 'wrap-up', prospect_step: 'declined', wrap_up_review_needed: true, declined_at: now, prospect_snapshot }).catch(console.error)
+      updateEngagementRow(id, { section: 'wrap-up', prospect_step: 'declined', wrap_up_review_needed: true, declined_at: now, prospect_snapshot }).catch(onWriteError)
       return { ...e, section: 'wrap-up' as const, prospect_step: 'declined' as const, wrap_up_review_needed: true, declined_at: now, prospect_snapshot, updated_at: now }
     }))
     runScan(id, 'declined')
@@ -294,7 +322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         flight_details: e.flight_details,
         hotel_name: e.hotel_name,
       }
-      updateEngagementRow(id, { section: 'wrap-up', wrap_up_review_needed: true, engagement_snapshot }).catch(console.error)
+      updateEngagementRow(id, { section: 'wrap-up', wrap_up_review_needed: true, engagement_snapshot }).catch(onWriteError)
       return { ...e, section: 'wrap-up' as const, wrap_up_review_needed: true, engagement_snapshot, updated_at: now }
     }))
   }, [])
@@ -303,27 +331,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, booking_review_needed: false, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { booking_review_needed: false }).catch(console.error)
+    updateEngagementRow(id, { booking_review_needed: false }).catch(onWriteError)
   }, [])
 
   const confirmWrapUpReview = useCallback((id: string) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, wrap_up_review_needed: false, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { wrap_up_review_needed: false }).catch(console.error)
+    updateEngagementRow(id, { wrap_up_review_needed: false }).catch(onWriteError)
   }, [])
 
-  const archiveEngagement = useCallback((id: string) => {
+  const archiveEngagement = useCallback((id: string, reason?: string) => {
     const now = new Date().toISOString()
     setEngagements(prev => prev.map(e =>
-      e.id === id ? { ...e, archived: true, archived_at: now, updated_at: now } : e
+      e.id === id ? { ...e, archived: true, archived_at: now, archived_reason: reason, updated_at: now } : e
     ))
-    updateEngagementRow(id, { archived: true, archived_at: now }).catch(console.error)
+    updateEngagementRow(id, { archived: true, archived_at: now, ...(reason ? { archived_reason: reason } : {}) }).catch(onWriteError)
   }, [])
 
   const deleteEngagement = useCallback((id: string) => {
     setEngagements(prev => prev.filter(e => e.id !== id))
-    deleteEngagementRow(id).catch(console.error)
+    deleteEngagementRow(id).catch(onWriteError)
   }, [])
 
   const toggleEngagementFlag = useCallback((id: string, flag: EngagementFlag) => {
@@ -333,7 +361,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const flags = isOn
         ? e.engagement_flags.filter(f => f !== flag)
         : [...e.engagement_flags, flag]
-      updateEngagementRow(id, isOn ? flagOffColumn(flag) : flagToColumn(flag)).catch(console.error)
+      updateEngagementRow(id, isOn ? flagOffColumn(flag) : flagToColumn(flag)).catch(onWriteError)
       return { ...e, engagement_flags: flags, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -347,7 +375,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         confirmed: 'media_confirmed', bio_sent: 'media_bio_sent',
         prep_sent: 'media_prep_sent', day_of_ready: 'media_day_of_ready',
       }
-      updateEngagementRow(id, { [colMap[flag]]: !flags.includes(flag) }).catch(console.error)
+      updateEngagementRow(id, { [colMap[flag]]: !flags.includes(flag) }).catch(onWriteError)
       return { ...e, media_flags: next, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -357,7 +385,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (e.id !== id) return e
       const post_event_needed = [...(e.post_event_needed ?? []).filter(f => f !== flag), flag]
       const post_event_not_needed = (e.post_event_not_needed ?? []).filter(f => f !== flag)
-      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(console.error)
+      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(onWriteError)
       return {
         ...e,
         post_event_needed,
@@ -383,7 +411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const post_event_needed = (e.post_event_needed ?? []).filter(f => f !== flag)
       const post_event_not_needed = (e.post_event_not_needed ?? []).filter(f => f !== flag)
       const dbPatch = { post_event_needed, post_event_not_needed, ...(colMap[flag] ?? {}) }
-      updateEngagementRow(id, dbPatch).catch(console.error)
+      updateEngagementRow(id, dbPatch).catch(onWriteError)
       return {
         ...e,
         post_event_flags: [...(e.post_event_flags ?? []).filter(f => f !== flag), flag],
@@ -399,7 +427,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (e.id !== id) return e
       const post_event_not_needed = [...(e.post_event_not_needed ?? []).filter(f => f !== flag), flag]
       const post_event_needed = (e.post_event_needed ?? []).filter(f => f !== flag)
-      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(console.error)
+      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(onWriteError)
       return {
         ...e,
         post_event_not_needed,
@@ -415,7 +443,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (e.id !== id) return e
       const post_event_needed = (e.post_event_needed ?? []).filter(f => f !== flag)
       const post_event_not_needed = (e.post_event_not_needed ?? []).filter(f => f !== flag)
-      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(console.error)
+      updateEngagementRow(id, { post_event_needed, post_event_not_needed }).catch(onWriteError)
       return {
         ...e,
         post_event_flags: (e.post_event_flags ?? []).filter(f => f !== flag),
@@ -430,35 +458,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_follow_up_details: details, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { follow_up_details: details }).catch(console.error)
+    updateEngagementRow(id, { follow_up_details: details }).catch(onWriteError)
   }, [])
 
   const updatePostEventFollowUpDate = useCallback((id: string, date: string) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_follow_up_date: date || undefined, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { post_event_follow_up_date: date || null }).catch(console.error)
+    updateEngagementRow(id, { post_event_follow_up_date: date || null }).catch(onWriteError)
   }, [])
 
   const updatePostEventTestimonialLink = useCallback((id: string, link: string) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_testimonial_link: link, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { post_event_testimonial_link: link }).catch(console.error)
+    updateEngagementRow(id, { post_event_testimonial_link: link }).catch(onWriteError)
   }, [])
 
   const updatePostEventTestimonialText = useCallback((id: string, text: string) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_testimonial_text: text, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { post_event_testimonial_text: text }).catch(console.error)
+    updateEngagementRow(id, { post_event_testimonial_text: text }).catch(onWriteError)
   }, [])
 
   const updatePostEventItemNote = useCallback((id: string, flag: PostEventFlag, note: string) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
       const post_event_item_notes = { ...(e.post_event_item_notes ?? {}), [flag]: note }
-      updateEngagementRow(id, { post_event_item_notes }).catch(console.error)
+      updateEngagementRow(id, { post_event_item_notes }).catch(onWriteError)
       return { ...e, post_event_item_notes, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -468,7 +496,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (e.id !== id) return e
       const item: PostEventMediaItem = { id: `media_${Date.now()}`, type: file.type, name: file.name, url: file.url, description: file.description, uploaded_at: new Date().toISOString() }
       const post_event_media = [...(e.post_event_media ?? []), item]
-      updateEngagementRow(id, { post_event_media }).catch(console.error)
+      updateEngagementRow(id, { post_event_media }).catch(onWriteError)
       return { ...e, post_event_media, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -477,7 +505,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
       const post_event_media = (e.post_event_media ?? []).filter(m => m.id !== mediaId)
-      updateEngagementRow(id, { post_event_media }).catch(console.error)
+      updateEngagementRow(id, { post_event_media }).catch(onWriteError)
       return { ...e, post_event_media, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -486,7 +514,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
       const post_event_media = (e.post_event_media ?? []).map(m => m.id === mediaId ? { ...m, description } : m)
-      updateEngagementRow(id, { post_event_media }).catch(console.error)
+      updateEngagementRow(id, { post_event_media }).catch(onWriteError)
       return { ...e, post_event_media, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -495,7 +523,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_notes: notes, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { notes }).catch(console.error)
+    updateEngagementRow(id, { notes }).catch(onWriteError)
   }, [])
 
   const updatePostEventStage = useCallback((id: string, stages: Partial<WrapUpFlagStages>) => {
@@ -560,7 +588,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     ))
-    updateEngagementRow(id, { event_date: date, event_time: time ?? null }).catch(console.error)
+    updateEngagementRow(id, { event_date: date, event_time: time ?? null }).catch(onWriteError)
   }, [])
 
   const addCall = useCallback((engagementId: string, call: EngagementCall) => {
@@ -569,7 +597,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? { ...e, calls: [...(e.calls ?? []), call], updated_at: new Date().toISOString() }
         : e
     ))
-    upsertCall({ ...call, engagement_id: engagementId }).catch(console.error)
+    upsertCall({ ...call, engagement_id: engagementId }).catch(onWriteError)
   }, [])
 
   const updateCall = useCallback((engagementId: string, callId: string, patch: Partial<EngagementCall>) => {
@@ -581,7 +609,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     }))
-    upsertCall({ id: callId, engagement_id: engagementId, ...patch } as never).catch(console.error)
+    upsertCall({ id: callId, engagement_id: engagementId, ...patch } as never).catch(onWriteError)
   }, [])
 
   const addComm = useCallback((engagementId: string, comm: CommEntry) => {
@@ -612,7 +640,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       next_step_due_at: comm.next_step_due_at ?? null,
       next_step_snoozed_until: comm.next_step_snoozed_until ?? null,
       next_step_cleared: comm.next_step_cleared ?? null,
-    }).catch(console.error)
+    }).catch(onWriteError)
   }, [])
 
   const updateComm = useCallback((engagementId: string, commId: string, patch: Partial<CommEntry>) => {
@@ -629,7 +657,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       next_step_due_at: patch.next_step_due_at ?? undefined,
       next_step_snoozed_until: patch.next_step_snoozed_until ?? undefined,
       next_step_cleared: patch.next_step_cleared ?? undefined,
-    } as Parameters<typeof updateCommRow>[1]).catch(console.error)
+    } as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
   }, [])
 
   const setFieldStatus = useCallback((id: string, field: string, status: 'needed' | 'not_needed' | null) => {
@@ -637,7 +665,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (e.id !== id) return e
       const field_statuses = { ...(e.field_statuses ?? {}) }
       if (status === null) { delete field_statuses[field] } else { field_statuses[field] = status }
-      updateEngagementRow(id, { field_statuses }).catch(console.error)
+      updateEngagementRow(id, { field_statuses }).catch(onWriteError)
       return { ...e, field_statuses, updated_at: new Date().toISOString() }
     }))
   }, [])
@@ -654,7 +682,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      engagements, reviewItems, companies, loading, error,
+      engagements, reviewItems, companies, loading, error, saveStatus, saveError,
       updateEngagement, setProspectStep,
       confirmProspect, declineProspect, moveToWrapUp, confirmBookingReview, confirmWrapUpReview,
       archiveEngagement, deleteEngagement,

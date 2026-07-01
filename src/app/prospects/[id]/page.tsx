@@ -4,18 +4,19 @@ import { useState, useTransition } from 'react'
 import { useStore } from '@/lib/store'
 import { PROSPECT_STEPS, ProspectStep, EngagementCall, CallFormat, CommEntry, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
+import { localInputToISO, formatCallDateTime, browserTimezone } from '@/lib/timezone'
+import TimezoneSelect from '@/components/TimezoneSelect'
+import ArchiveModal from '@/components/ArchiveModal'
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Circle,
-  Phone, Edit3, Check, X, Plus, Trash2
+  Phone, Edit3, Check, X, Plus, Trash2, FolderArchive
 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 
-function formatDT(iso?: string) {
+function formatDT(iso?: string, tzId?: string) {
   if (!iso) return null
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return formatCallDateTime(iso, tzId)
 }
 
 const STEP_COLORS: Record<string, string> = {
@@ -360,6 +361,7 @@ function CallRow({ call, engagementId, label }: {
   const [scheduling, setScheduling] = useState(false)
   const [schedDate, setSchedDate] = useState('')
   const [schedTime, setSchedTime] = useState('')
+  const [schedTz, setSchedTz] = useState(() => browserTimezone())
   const [format, setFormat] = useState<'phone' | 'video' | 'in_person'>('video')
   const [details, setDetails] = useState(call.details ?? '')
   const [requestedDate, setRequestedDate] = useState(
@@ -367,8 +369,12 @@ function CallRow({ call, engagementId, label }: {
   )
 
   const saveSchedule = () => {
-    const scheduled_at = schedDate ? `${schedDate}T${schedTime || '00:00'}:00Z` : undefined
-    updateCall(engagementId, call.id, { status: 'scheduled', scheduled_at, format, details: details || undefined })
+    const scheduled_at = schedDate ? localInputToISO(schedDate, schedTime || '00:00', schedTz) : undefined
+    updateCall(engagementId, call.id, {
+      status: 'scheduled', scheduled_at,
+      format, details: details || undefined,
+      scheduled_tz: schedTz,
+    })
     setScheduling(false)
   }
 
@@ -433,7 +439,7 @@ function CallRow({ call, engagementId, label }: {
         )}
         {call.scheduled_at && (
           <span className="flex items-center gap-1">
-            {formatIcon} Scheduled: <span className="text-gold-dark font-medium">{formatDT(call.scheduled_at)}</span>
+            {formatIcon} Scheduled: <span className="text-gold-dark font-medium">{formatDT(call.scheduled_at, (call as any).scheduled_tz)}</span>
           </span>
         )}
         {call.completed_at && (
@@ -452,11 +458,12 @@ function CallRow({ call, engagementId, label }: {
       {scheduling && (
         <div className="pl-5 space-y-2.5 border-t border-ink-50 pt-2.5">
           <p className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Schedule this call</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)}
-              className="text-sm border border-ink-100 rounded-lg px-3 py-1.5 outline-none focus:border-gold bg-white flex-1" />
+              className="text-sm border border-ink-100 rounded-lg px-3 py-1.5 outline-none focus:border-gold bg-white flex-1 min-w-0" />
             <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
-              className="text-sm border border-ink-100 rounded-lg px-3 py-1.5 outline-none focus:border-gold bg-white w-32" />
+              className="text-sm border border-ink-100 rounded-lg px-3 py-1.5 outline-none focus:border-gold bg-white w-28" />
+            <TimezoneSelect value={schedTz} onChange={setSchedTz} className="w-36 text-xs" />
           </div>
           <div className="flex gap-2">
             {(['phone', 'video', 'in_person'] as const).map(f => (
@@ -536,10 +543,11 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
 export default function ProspectDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall, confirmProspect, declineProspect, deleteEngagement } = useStore()
+  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall, confirmProspect, declineProspect, deleteEngagement, archiveEngagement } = useStore()
   const [showLogComm, setShowLogComm] = useState(false)
   const [showAddCall, setShowAddCall] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false)
   const [, startTransition] = useTransition()
 
   const e = allEngagements.find(e => e.id === id)
@@ -819,8 +827,21 @@ export default function ProspectDetailPage() {
         </div>
       </div>
 
+      {/* Archive */}
+      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-ink">Archive this prospect</p>
+          <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+        </div>
+        <button
+          onClick={() => setArchiveModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+          <FolderArchive size={13} /> Archive
+        </button>
+      </div>
+
       {/* Delete */}
-      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+      <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
         <div>
           <p className="text-sm font-medium text-red-600">Delete this prospect</p>
           <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this prospect. This cannot be undone.</p>
@@ -831,6 +852,13 @@ export default function ProspectDetailPage() {
           <Trash2 size={13} /> Delete
         </button>
       </div>
+
+      <ArchiveModal
+        open={archiveModalOpen}
+        engagement={e}
+        onConfirm={(reason: string) => { archiveEngagement(e.id, reason); startTransition(() => router.push('/archive')) }}
+        onCancel={() => setArchiveModalOpen(false)}
+      />
 
       <ConfirmModal
         open={deleteModalOpen}

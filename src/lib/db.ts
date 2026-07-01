@@ -131,6 +131,7 @@ interface CallRow {
   number: number | null
   requested_at: string | null
   scheduled_at: string | null
+  scheduled_tz: string | null
   completed_at: string | null
   notes: string | null
   added_by: string | null
@@ -205,6 +206,7 @@ function mapCall(row: CallRow): EngagementCall {
     number: row.number ?? 1,
     requested_at: row.requested_at ?? undefined,
     scheduled_at: row.scheduled_at ?? undefined,
+    scheduled_tz: row.scheduled_tz ?? undefined,
     completed_at: row.completed_at ?? undefined,
     notes: row.notes ?? undefined,
     added_by: (row.added_by as 'ai' | 'manual') ?? 'manual',

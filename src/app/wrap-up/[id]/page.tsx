@@ -7,6 +7,7 @@ import { formatDate, getInitials, formatRelativeDue } from '@/lib/utils'
 import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2, History, ChevronDown, ChevronUp, Flag, Bell, BellOff, Download } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
+import ArchiveModal from '@/components/ArchiveModal'
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -889,19 +890,15 @@ export default function WrapUpDetailPage() {
               : `${outstandingCount} item${outstandingCount === 1 ? '' : 's'} still outstanding.`}
           </p>
         </div>
-        {allDone ? (
-          <button
-            onClick={() => { archiveEngagement(e.id); router.push('/archive') }}
-            className="flex items-center gap-1.5 text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all flex-shrink-0">
-            <FolderArchive size={13} /> Archive
-          </button>
-        ) : (
-          <button
-            onClick={() => setArchiveModalOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 px-4 py-2 rounded-lg hover:bg-parchment transition-all flex-shrink-0">
-            <FolderArchive size={13} /> Archive Anyway
-          </button>
-        )}
+        <button
+          onClick={() => setArchiveModalOpen(true)}
+          className={`flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg transition-all flex-shrink-0 ${
+            allDone
+              ? 'text-white bg-ink hover:bg-ink-700'
+              : 'text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment'
+          }`}>
+          <FolderArchive size={13} /> {allDone ? 'Archive' : 'Archive Anyway'}
+        </button>
       </div>
 
       {/* Delete */}
@@ -917,12 +914,10 @@ export default function WrapUpDetailPage() {
         </button>
       </div>
 
-      <ConfirmModal
+      <ArchiveModal
         open={archiveModalOpen}
-        title="Archive anyway?"
-        description={`This engagement still has ${outstandingCount} outstanding wrap-up item${outstandingCount === 1 ? '' : 's'}. Archiving will move it out of the active list.`}
-        confirmLabel="Archive Anyway"
-        onConfirm={() => { archiveEngagement(e.id); router.push('/archive') }}
+        engagement={e}
+        onConfirm={reason => { archiveEngagement(e.id, reason); router.push('/archive') }}
         onCancel={() => setArchiveModalOpen(false)}
       />
 

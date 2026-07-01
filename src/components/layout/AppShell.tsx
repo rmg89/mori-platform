@@ -3,10 +3,27 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, UserSearch, Handshake, Archive, FolderArchive,
-  ClipboardCheck, Sparkles, Settings, Building2
+  ClipboardCheck, Sparkles, Settings, Building2,
+  CheckCircle2, Loader2, AlertCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useStore } from '@/lib/store'
+import { useStore, SaveStatus } from '@/lib/store'
+
+function SaveIndicator({ status, error }: { status: SaveStatus; error: string | null }) {
+  if (status === 'idle') return null
+  return (
+    <div className={`flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-full transition-all ${
+      status === 'saving' ? 'text-ink-400 bg-ink-50' :
+      status === 'saved'  ? 'text-sage-dark bg-sage/10' :
+      'text-red-600 bg-red-50'
+    }`} title={status === 'error' ? (error ?? 'Save failed') : undefined}>
+      {status === 'saving' && <Loader2 size={10} className="animate-spin" />}
+      {status === 'saved'  && <CheckCircle2 size={10} />}
+      {status === 'error'  && <AlertCircle size={10} />}
+      {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save failed'}
+    </div>
+  )
+}
 
 const NAV = [
   { href: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard },
@@ -21,7 +38,7 @@ const NAV = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { reviewItems } = useStore()
+  const { reviewItems, saveStatus, saveError } = useStore()
   const reviewCount = reviewItems.filter(i => !i.confirmed_by).length
 
   return (
@@ -93,6 +110,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="bg-transparent text-xs text-ink-600 placeholder:text-ink-300 outline-none flex-1"
             />
           </div>
+          <SaveIndicator status={saveStatus} error={saveError} />
           <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-gold bg-ink-800">
             MT
           </div>

@@ -558,9 +558,10 @@ function WaitingColumn({ allEngagements, yellowAlerts }: { allEngagements: Engag
 
 export default function DashboardPage() {
   const { engagements: allEngagements, reviewItems } = useStore()
-  const prospects = allEngagements.filter(e => e.section === 'prospects')
-  const active = allEngagements.filter(e => e.section === 'engagements')
-  const postEvent = allEngagements.filter(e => e.section === 'wrap-up')
+  const activeEngagements = allEngagements.filter(e => !e.archived)
+  const prospects = activeEngagements.filter(e => e.section === 'prospects')
+  const active = activeEngagements.filter(e => e.section === 'engagements')
+  const postEvent = activeEngagements.filter(e => e.section === 'wrap-up')
 
   const total = prospects.length + active.length + postEvent.length || 1
   const pPct = (prospects.length / total) * 100
@@ -584,8 +585,8 @@ export default function DashboardPage() {
   const alertGroups = buildAlerts(prospects, active, postEvent)
   const allAlertItems = alertGroups.flatMap(g => g.items)
   const reviewCount = reviewItems.filter(r => !r.confirmed_by).length
-  const needsResponseCount = allEngagements.filter(e => e.comms?.some(c => c.needs_response)).length
-  const nextStepItems = buildNextSteps(allEngagements)
+  const needsResponseCount = activeEngagements.filter(e => e.comms?.some(c => c.needs_response)).length
+  const nextStepItems = buildNextSteps(activeEngagements)
   const overdueSteps = nextStepItems.filter(i => i.isOverdue)
 
   return (
@@ -662,10 +663,10 @@ export default function DashboardPage() {
             readyToProgress={readyToProgress}
             overdueSteps={overdueSteps}
             redAlerts={allAlertItems.filter(i => i.severity === 'red')}
-            allEngagements={allEngagements}
+            allEngagements={activeEngagements}
           />
           <WaitingColumn
-            allEngagements={allEngagements}
+            allEngagements={activeEngagements}
             yellowAlerts={allAlertItems.filter(i => i.severity === 'yellow')}
           />
         </div>

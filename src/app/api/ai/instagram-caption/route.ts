@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
 
 export async function POST(req: NextRequest) {
   const { image_description, topic_prompt, tone } = await req.json()
@@ -35,12 +33,12 @@ Topic / direction: ${topic_prompt || 'General professional content'}
 Write 3 Instagram caption options for Mori.`
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+    const message = await callAI(() => anthropic.messages.create({
+      model: AI_MODEL,
       max_tokens: 1200,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
-    })
+    }))
 
     const text = message.content[0].type === 'text' ? message.content[0].text : ''
 
