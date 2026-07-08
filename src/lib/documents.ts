@@ -594,22 +594,21 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
 
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
-  doc.setTextColor(40, 38, 34)
+  doc.setTextColor(110, 107, 100)
   doc.text(client.organization || '—', L, y)
   y += 13
 
   if (c?.email) {
-    doc.setTextColor(110, 107, 100)
     doc.text(c.email, L, y)
     y += 13
   }
-  y += 18
+  y += 26
 
   // ── Line items ────────────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
-  y += 12
+  y += 16
 
   // Table header bar
   doc.setFillColor(248, 246, 242)
@@ -627,8 +626,6 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 14, 12)
   doc.text('Keynote / Speaking Fee', L + 8, y)
-  doc.setFont('times', 'bold')
-  doc.setFontSize(10.5)
   doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
   y += 14
 
@@ -666,7 +663,7 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   doc.setTextColor(140, 137, 130)
   doc.text('TOTAL DUE', 378, y)
 
-  doc.setFont('times', 'bold')
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
   doc.setTextColor(15, 14, 12)
   doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
@@ -768,22 +765,21 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
 
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
-  doc.setTextColor(40, 38, 34)
+  doc.setTextColor(110, 107, 100)
   doc.text(client.organization || '—', L, y)
   y += 13
 
   if (c?.email) {
-    doc.setTextColor(110, 107, 100)
     doc.text(c.email, L, y)
     y += 13
   }
-  y += 18
+  y += 26
 
   // ── Line items ────────────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
-  y += 12
+  y += 16
 
   doc.setFillColor(248, 246, 242)
   doc.rect(L, y - 4, W, 22, 'F')
@@ -801,8 +797,6 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 14, 12)
   doc.text('Deposit — Speaking Fee', L + 8, y)
-  doc.setFont('times', 'bold')
-  doc.setFontSize(10.5)
   doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
   y += 14
 
@@ -838,7 +832,7 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(140, 137, 130)
   doc.text('DEPOSIT DUE (THIS INVOICE)', 375, y)
-  doc.setFont('times', 'bold')
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
   doc.setTextColor(15, 14, 12)
   doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
