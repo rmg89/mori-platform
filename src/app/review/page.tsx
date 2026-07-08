@@ -32,14 +32,14 @@ export default function ReviewPage() {
 
   function confirm(id: string, action?: ReviewAction) {
     setItems(prev => prev.map(i => i.id === id
-      ? { ...i, ai_suggested_action: action ?? i.ai_suggested_action, confirmed_by: 'team@moritaheripour.com', confirmed_at: new Date().toISOString() }
+      ? { ...i, ai_suggested_action: action ?? i.ai_suggested_action, confirmed_by: 'admin@moritaheripour.com', confirmed_at: new Date().toISOString() }
       : i
     ))
   }
 
   function confirmAll(ids: string[]) {
     setItems(prev => prev.map(i => ids.includes(i.id)
-      ? { ...i, confirmed_by: 'team@moritaheripour.com', confirmed_at: new Date().toISOString() }
+      ? { ...i, confirmed_by: 'admin@moritaheripour.com', confirmed_at: new Date().toISOString() }
       : i
     ))
   }

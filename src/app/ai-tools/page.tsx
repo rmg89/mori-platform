@@ -11,10 +11,9 @@ const TONES = [
 
 function todayInvoiceNumber(prefix: string) {
   const d = new Date()
-  const yy = String(d.getFullYear()).slice(2)
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
-  return `${prefix}-${yy}${mm}${dd}`
+  return `${prefix}-${mm}${dd}`
 }
 
 function Field({
@@ -141,8 +140,8 @@ export default function AIToolsPage() {
       }
 
       const blob = invoiceType === 'deposit'
-        ? generateDepositInvoice(mockEngagement, invNumber)
-        : generateInvoice(mockEngagement, invNumber)
+        ? await generateDepositInvoice(mockEngagement, invNumber)
+        : await generateInvoice(mockEngagement, invNumber)
 
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

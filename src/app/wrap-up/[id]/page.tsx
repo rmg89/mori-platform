@@ -380,9 +380,9 @@ export default function WrapUpDetailPage() {
     if (!e || !e.fee) return
     setInvoiceDownloading(true)
     try {
-      const { generateInvoice } = await import('@/lib/documents')
-      const invoiceNum = `INV-${e.id.slice(0, 6).toUpperCase()}`
-      const blob = generateInvoice(e, invoiceNum)
+      const { generateInvoice, shortInvoiceNumber } = await import('@/lib/documents')
+      const invoiceNum = `INV-${shortInvoiceNumber(e.id)}`
+      const blob = await generateInvoice(e, invoiceNum)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

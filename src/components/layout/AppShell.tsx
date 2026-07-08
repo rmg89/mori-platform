@@ -89,7 +89,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
           <div className="px-3 pt-2 pb-1">
             <div className="text-[10px] uppercase tracking-widest text-ink-300 mb-0.5">Signed in as</div>
-            <div className="text-[11px] font-medium truncate text-ink-400">team@moritaheripour.com</div>
+            <div className="text-[11px] font-medium truncate text-ink-400">admin@moritaheripour.com</div>
           </div>
         </div>
       </aside>

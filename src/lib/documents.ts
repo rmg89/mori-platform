@@ -53,43 +53,80 @@ function createDoc() {
   return doc
 }
 
-// ─── Invoice header — editorial brand treatment ────────────────────────────────
+// Short, stable invoice number derived from an engagement id — 4 digits, no crypto needed.
+export function shortInvoiceNumber(id: string): string {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0
+  }
+  return String(hash % 10000).padStart(4, '0')
+}
+
+// Signature/logo image to use in place of the typed name in the invoice header.
+// Drop the file at public/signature.png — falls back to a plain text wordmark if absent.
+type SignatureImage = { dataUrl: string; width: number; height: number }
+
+async function loadSignatureImage(): Promise<SignatureImage | null> {
+  try {
+    const res = await fetch('/signature.png')
+    if (!res.ok) return null
+    const blob = await res.blob()
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+    const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve({ width: img.width, height: img.height })
+      img.onerror = reject
+      img.src = dataUrl
+    })
+    return { dataUrl, width, height }
+  } catch {
+    return null
+  }
+}
+
+// ─── Invoice header — quiet, monochrome brand treatment ────────────────────────
 // Separate from the contract header so each can evolve independently.
-// Uses Times Bold (the closest built-in serif to Cormorant Garamond).
-// Content starts at y = 152 after this call.
+// Content starts at y = 122 after this call.
 
-function addInvoiceHeader(doc: any, title: string) {
-  // Dark ink band
-  doc.setFillColor(15, 14, 12)
-  doc.rect(0, 0, 612, 90, 'F')
+function addInvoiceHeader(doc: any, title: string, signature: SignatureImage | null) {
+  if (signature) {
+    const maxH = 36, maxW = 210
+    const scale = Math.min(maxH / signature.height, maxW / signature.width, 1)
+    const w = signature.width * scale, h = signature.height * scale
+    doc.addImage(signature.dataUrl, 'PNG', 50, 44 - h, w, h)
+  } else {
+    doc.setFont('times', 'bold')
+    doc.setFontSize(19)
+    doc.setTextColor(15, 14, 12)
+    doc.text('Mori Taheripour', 50, 44)
+  }
 
-  // Name — Times Bold, gold, large
-  doc.setFont('times', 'bold')
-  doc.setFontSize(21)
-  doc.setTextColor(201, 168, 76)
-  doc.text('MORI TAHERIPOUR', 50, 44)
-
-  // Hairline gold rule under name
-  doc.setDrawColor(201, 168, 76)
-  doc.setLineWidth(0.3)
-  doc.line(50, 54, 562, 54)
-
-  // Credentials — Helvetica, warm off-white
+  // Credentials — small, muted
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
-  doc.setTextColor(185, 182, 174)
-  doc.text('Wharton School  ·  Author, Bring Yourself  ·  Keynote Speaker  ·  Negotiation Expert', 50, 70)
+  doc.setTextColor(120, 117, 110)
+  doc.text('Wharton School  ·  Author, Bring Yourself  ·  Keynote Speaker  ·  Negotiation Expert', 50, 60)
 
-  // Document title below dark band — large, serif, ink
-  doc.setFont('times', 'bold')
-  doc.setFontSize(27)
-  doc.setTextColor(15, 14, 12)
-  doc.text(title.toUpperCase(), 50, 122)
+  // Hairline rule
+  doc.setDrawColor(205, 202, 196)
+  doc.setLineWidth(0.5)
+  doc.line(50, 72, 562, 72)
 
-  // Gold accent rule
-  doc.setDrawColor(201, 168, 76)
-  doc.setLineWidth(0.8)
-  doc.line(50, 132, 562, 132)
+  // Document title — modest, ink
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12.5)
+  doc.setTextColor(80, 78, 72)
+  doc.text(title.toUpperCase(), 50, 94)
+
+  // Single stronger rule to close the header
+  doc.setDrawColor(15, 14, 12)
+  doc.setLineWidth(0.6)
+  doc.line(50, 102, 562, 102)
 
   // Reset all state so callers start clean
   doc.setDrawColor(15, 14, 12)
@@ -125,7 +162,7 @@ function addFooter(doc: any, pageNum: number) {
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(165, 162, 155)
-  doc.text('moritaheripour.com  ·  team@moritaheripour.com', 50, 761)
+  doc.text('moritaheripour.com  ·  admin@moritaheripour.com', 50, 761)
   doc.text(`Page ${pageNum}`, 562, 761, { align: 'right' })
 }
 
@@ -503,11 +540,12 @@ export function generateBriefingDocBytes(client: Client): Buffer {
 
 // ─── Invoice ──────────────────────────────────────────────────────────────────
 
-export function generateInvoice(client: Client, invoiceNumber: string): Blob {
+export async function generateInvoice(client: Client, invoiceNumber: string): Promise<Blob> {
   const doc = createDoc()
-  addInvoiceHeader(doc, 'Invoice')
+  const signature = await loadSignatureImage()
+  addInvoiceHeader(doc, 'Invoice', signature)
 
-  let y = 152
+  let y = 122
   const L = 50, R = 562, W = 512
 
   // ── Meta row ──────────────────────────────────────────────────────────────
@@ -524,10 +562,10 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
   doc.text(formatDate(new Date(Date.now() + 30 * 86400000).toISOString()), 410, y)
-  y += 34
+  y += 28
 
   // ── Billed To ─────────────────────────────────────────────────────────────
-  doc.setDrawColor(201, 168, 76)
+  doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
   y += 14
@@ -565,10 +603,10 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
     doc.text(c.email, L, y)
     y += 13
   }
-  y += 22
+  y += 18
 
   // ── Line items ────────────────────────────────────────────────────────────
-  doc.setDrawColor(201, 168, 76)
+  doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
   y += 12
@@ -618,7 +656,7 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
 
   // ── Total ─────────────────────────────────────────────────────────────────
   y += 6
-  doc.setDrawColor(201, 168, 76)
+  doc.setDrawColor(15, 14, 12)
   doc.setLineWidth(0.8)
   doc.line(370, y, R, y)
   y += 15
@@ -632,7 +670,7 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
   doc.setFontSize(15)
   doc.setTextColor(15, 14, 12)
   doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
-  y += 38
+  y += 30
 
   // ── Payment instructions ──────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
@@ -647,10 +685,10 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
   y += 14
 
   const payRows: [string, string][] = [
-    ['Wire / ACH', '[Bank name, routing & account — contact team@moritaheripour.com]'],
+    ['Wire / ACH', '[Bank name, routing & account — contact admin@moritaheripour.com]'],
     ['Check', 'Payable to Mori Taheripour'],
     ['Reference', `Please include invoice number ${invoiceNumber} in the payment memo`],
-    ['Questions', 'team@moritaheripour.com'],
+    ['Questions', 'admin@moritaheripour.com'],
   ]
   for (const [label, value] of payRows) {
     doc.setFontSize(9)
@@ -676,11 +714,12 @@ export function generateInvoice(client: Client, invoiceNumber: string): Blob {
 
 // ─── Deposit Invoice ───────────────────────────────────────────────────────────
 
-export function generateDepositInvoice(client: Client, invoiceNumber: string): Blob {
+export async function generateDepositInvoice(client: Client, invoiceNumber: string): Promise<Blob> {
   const doc = createDoc()
-  addInvoiceHeader(doc, 'Deposit Invoice')
+  const signature = await loadSignatureImage()
+  addInvoiceHeader(doc, 'Deposit Invoice', signature)
 
-  let y = 152
+  let y = 122
   const L = 50, R = 562, W = 512
 
   // ── Meta row ──────────────────────────────────────────────────────────────
@@ -697,10 +736,10 @@ export function generateDepositInvoice(client: Client, invoiceNumber: string): B
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
   doc.text(formatDate(new Date(Date.now() + 14 * 86400000).toISOString()), 410, y)
-  y += 34
+  y += 28
 
   // ── Billed To ─────────────────────────────────────────────────────────────
-  doc.setDrawColor(201, 168, 76)
+  doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
   y += 14
@@ -738,10 +777,10 @@ export function generateDepositInvoice(client: Client, invoiceNumber: string): B
     doc.text(c.email, L, y)
     y += 13
   }
-  y += 22
+  y += 18
 
   // ── Line items ────────────────────────────────────────────────────────────
-  doc.setDrawColor(201, 168, 76)
+  doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
   y += 12
@@ -789,8 +828,8 @@ export function generateDepositInvoice(client: Client, invoiceNumber: string): B
     y += 14
   }
 
-  // Gold rule then the primary deposit row
-  doc.setDrawColor(201, 168, 76)
+  // Rule then the primary deposit row
+  doc.setDrawColor(15, 14, 12)
   doc.setLineWidth(0.8)
   doc.line(370, y, R, y)
   y += 14
@@ -841,10 +880,10 @@ export function generateDepositInvoice(client: Client, invoiceNumber: string): B
   y += 14
 
   const payRows: [string, string][] = [
-    ['Wire / ACH', '[Bank name, routing & account — contact team@moritaheripour.com]'],
+    ['Wire / ACH', '[Bank name, routing & account — contact admin@moritaheripour.com]'],
     ['Check', 'Payable to Mori Taheripour'],
     ['Reference', `Please include invoice number ${invoiceNumber} in the payment memo`],
-    ['Questions', 'team@moritaheripour.com'],
+    ['Questions', 'admin@moritaheripour.com'],
   ]
   for (const [label, value] of payRows) {
     doc.setFontSize(9)

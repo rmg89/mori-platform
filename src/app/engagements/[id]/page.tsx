@@ -1059,9 +1059,9 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
   }
 
   async function downloadDepositPdf() {
-    const { generateDepositInvoice } = await import('@/lib/documents')
-    const invoiceNum = `DEP-${e.id.slice(0, 6).toUpperCase()}`
-    const blob = generateDepositInvoice(e, invoiceNum)
+    const { generateDepositInvoice, shortInvoiceNumber } = await import('@/lib/documents')
+    const invoiceNum = `DEP-${shortInvoiceNumber(e.id)}`
+    const blob = await generateDepositInvoice(e, invoiceNum)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
