@@ -133,10 +133,17 @@ function addInvoiceHeader(doc: any, title: string, signature: SignatureImage | n
 // Left: the business's own letterhead info. Right: who the invoice is billed
 // to. Returns the y position to continue from.
 
+// Draws each wrapped line individually at an exact lineHeight apart, rather
+// than handing jsPDF an array (which spaces multi-line text using its own
+// internal line-height factor — ~1.15x font size — causing lines within one
+// call to sit closer together than the gap to the next field).
 function addWrappedLine(doc: any, text: string, x: number, y: number, maxWidth: number, lineHeight = 13): number {
   const lines = doc.splitTextToSize(text, maxWidth)
-  doc.text(lines, x, y)
-  return y + lines.length * lineHeight
+  for (const line of lines) {
+    doc.text(line, x, y)
+    y += lineHeight
+  }
+  return y
 }
 
 function addFromBilledTo(doc: any, y: number, L: number, R: number, business: BusinessProfile, client: Client): number {
@@ -643,9 +650,7 @@ export async function generateInvoice(client: Client, invoiceNumber: string, bus
   doc.setFontSize(10)
   doc.setTextColor(110, 107, 100)
   const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
-  const subLines = doc.splitTextToSize(subDesc, 400)
-  doc.text(subLines, L + 8, y)
-  y += subLines.length * 13 + 12
+  y = addWrappedLine(doc, subDesc, L + 8, y, 400) + 12
 
   // Travel line (if applicable)
   if (client.travel_covered) {
@@ -697,9 +702,7 @@ export async function generateInvoice(client: Client, invoiceNumber: string, bus
     doc.setTextColor(40, 38, 34)
     doc.text(label, L, y)
     doc.setTextColor(100, 97, 90)
-    const vLines = doc.splitTextToSize(s(value), 370)
-    doc.text(vLines, L + 110, y)
-    y += Math.max(vLines.length, 1) * 13 + 3
+    y = addWrappedLine(doc, s(value), L + 110, y, 370) + 3
   }
 
   return doc.output('blob')
@@ -756,9 +759,7 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   doc.setFontSize(10)
   doc.setTextColor(110, 107, 100)
   const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
-  const subLines = doc.splitTextToSize(subDesc, 400)
-  doc.text(subLines, L + 8, y)
-  y += subLines.length * 13 + 12
+  y = addWrappedLine(doc, subDesc, L + 8, y, 400) + 12
 
   // ── Fee summary breakdown ─────────────────────────────────────────────────
   y += 8
@@ -801,12 +802,8 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   // Confirming language
   doc.setFontSize(10)
   doc.setTextColor(130, 127, 120)
-  const confirmLines = doc.splitTextToSize(
-    s('This deposit confirms your engagement and is applied toward the total speaking fee. The remaining balance will be invoiced separately following the event.'),
-    W
-  )
-  doc.text(confirmLines, L, y)
-  y += confirmLines.length * 12 + 22
+  const confirmText = s('This deposit confirms your engagement and is applied toward the total speaking fee. The remaining balance will be invoiced separately following the event.')
+  y = addWrappedLine(doc, confirmText, L, y, W, 12) + 22
 
   // ── Payment instructions ──────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
@@ -828,9 +825,7 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
     doc.setTextColor(40, 38, 34)
     doc.text(label, L, y)
     doc.setTextColor(100, 97, 90)
-    const vLines = doc.splitTextToSize(s(value), 370)
-    doc.text(vLines, L + 110, y)
-    y += Math.max(vLines.length, 1) * 13 + 3
+    y = addWrappedLine(doc, s(value), L + 110, y, 370) + 3
   }
 
   return doc.output('blob')
