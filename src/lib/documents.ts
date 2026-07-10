@@ -555,7 +555,7 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   doc.text('INVOICE DATE', 230, y)
   doc.text('PAYMENT DUE', 410, y)
   y += 12
-  doc.setFontSize(10.5)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
@@ -576,13 +576,13 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
 
   const c = pc(client)
   const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
-  doc.setFontSize(12)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(fullName, L, y)
   y += 15
 
   if (c?.title) {
-    doc.setFontSize(9.5)
+    doc.setFontSize(10)
     doc.setTextColor(110, 107, 100)
     doc.text(c.title, L, y)
     y += 13
@@ -616,13 +616,13 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
 
   // Speaking fee line
   const eventLabel = client.event_name || client.topic || 'Speaking Engagement'
-  doc.setFontSize(10.5)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text('Keynote / Speaking Fee', L + 8, y)
   doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
   y += 14
 
-  doc.setFontSize(9)
+  doc.setFontSize(10)
   doc.setTextColor(110, 107, 100)
   const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
   const subLines = doc.splitTextToSize(subDesc, 400)
@@ -631,12 +631,12 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
 
   // Travel line (if applicable)
   if (client.travel_covered) {
-    doc.setFontSize(10.5)
+    doc.setFontSize(10)
     doc.setTextColor(15, 14, 12)
     doc.text('Travel & Accommodation', L + 8, y)
     doc.text('—', R - 8, y, { align: 'right' })
     y += 13
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(110, 107, 100)
     doc.text('Per agreement — covered by client', L + 8, y)
     y += 18
@@ -649,11 +649,11 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   doc.line(370, y, R, y)
   y += 15
 
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(140, 137, 130)
   doc.text('TOTAL DUE', 378, y)
 
-  doc.setFontSize(15)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
   y += 30
@@ -675,7 +675,7 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   ]
   doc.setFont('helvetica', 'normal')
   for (const [label, value] of payRows) {
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(40, 38, 34)
     doc.text(label, L, y)
     doc.setTextColor(100, 97, 90)
@@ -684,7 +684,6 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
     y += Math.max(vLines.length, 1) * 13 + 3
   }
 
-  addFooter(doc, 1)
   return doc.output('blob')
 }
 
@@ -706,7 +705,7 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   doc.text('INVOICE DATE', 230, y)
   doc.text('DEPOSIT DUE', 410, y)
   y += 12
-  doc.setFontSize(10.5)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
@@ -726,13 +725,13 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
 
   const c = pc(client)
   const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
-  doc.setFontSize(12)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(fullName, L, y)
   y += 15
 
   if (c?.title) {
-    doc.setFontSize(9.5)
+    doc.setFontSize(10)
     doc.setTextColor(110, 107, 100)
     doc.text(c.title, L, y)
     y += 13
@@ -766,13 +765,13 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   const depositAmount = client.deposit_amount ?? 0
   const eventLabel = client.event_name || client.topic || 'Speaking Engagement'
 
-  doc.setFontSize(10.5)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text('Deposit — Speaking Fee', L + 8, y)
   doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
   y += 14
 
-  doc.setFontSize(9)
+  doc.setFontSize(10)
   doc.setTextColor(110, 107, 100)
   const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
   const subLines = doc.splitTextToSize(subDesc, 400)
@@ -784,7 +783,7 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
 
   // Total fee (context row — grayed)
   if (client.fee) {
-    doc.setFontSize(8.5)
+    doc.setFontSize(10)
     doc.setTextColor(140, 137, 130)
     doc.text('Total Speaking Fee', 375, y)
     doc.setTextColor(110, 107, 100)
@@ -798,17 +797,17 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   doc.line(370, y, R, y)
   y += 14
 
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(140, 137, 130)
   doc.text('DEPOSIT DUE (THIS INVOICE)', 375, y)
-  doc.setFontSize(15)
+  doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
   y += 18
 
   // Balance row
   if (client.fee && client.fee > depositAmount) {
-    doc.setFontSize(8.5)
+    doc.setFontSize(10)
     doc.setTextColor(140, 137, 130)
     doc.text('Balance Due After Event', 375, y)
     doc.setTextColor(110, 107, 100)
@@ -818,7 +817,7 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   y += 16
 
   // Confirming language
-  doc.setFontSize(8.5)
+  doc.setFontSize(10)
   doc.setTextColor(130, 127, 120)
   const confirmLines = doc.splitTextToSize(
     s('This deposit confirms your engagement and is applied toward the total speaking fee. The remaining balance will be invoiced separately following the event.'),
@@ -843,7 +842,7 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
     ['Check', 'Payable to MT Global Strategies'],
   ]
   for (const [label, value] of payRows) {
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(40, 38, 34)
     doc.text(label, L, y)
     doc.setTextColor(100, 97, 90)
@@ -852,6 +851,5 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
     y += Math.max(vLines.length, 1) * 13 + 3
   }
 
-  addFooter(doc, 1)
   return doc.output('blob')
 }
