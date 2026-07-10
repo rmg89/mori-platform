@@ -147,6 +147,7 @@ export function buildInvoiceSnapshot(client: Engagement): InvoiceSnapshot {
     contact_last_name: c?.last_name,
     contact_title: c?.title,
     contact_email: c?.email,
+    contact_phone: c?.phone,
   }
 }
 
@@ -171,6 +172,8 @@ export function snapshotToClient(inv: Invoice): any {
       last_name: s.contact_last_name ?? '',
       title: s.contact_title,
       email: s.contact_email ?? '',
+      phone: s.contact_phone,
+      address: s.contact_address,
       is_current_point_of_contact: true,
       role: 'primary',
       status: 'client',

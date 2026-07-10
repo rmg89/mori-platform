@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, X } from 'lucide-react'
 
 interface ConfirmModalProps {
@@ -25,7 +26,7 @@ export default function ConfirmModal({
 
   const canConfirm = !requireText || input === requireText
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onCancel}>
       <div className="bg-white border border-ink-100 rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={ev => ev.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -64,6 +65,7 @@ export default function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

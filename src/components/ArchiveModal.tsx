@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Archive, X, Wand2, Loader2 } from 'lucide-react'
 import type { Engagement } from '@/types'
 
@@ -42,7 +43,7 @@ export default function ArchiveModal({ open, engagement, onConfirm, onCancel }: 
 
   const canConfirm = reason.trim().length > 0
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4"
       onClick={onCancel}
@@ -103,6 +104,7 @@ export default function ArchiveModal({ open, engagement, onConfirm, onCancel }: 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

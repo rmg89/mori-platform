@@ -158,7 +158,7 @@ function addFromBilledTo(doc: any, y: number, L: number, R: number, business: Bu
   if (business.phone) yLeft = addWrappedLine(doc, business.phone, L, yLeft, colWidth)
   if (business.fax) yLeft = addWrappedLine(doc, `Fax: ${business.fax}`, L, yLeft, colWidth)
 
-  const c = pc(client)
+  const c = pc(client) as any
   const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
   let yRight = y + 13
   doc.setFontSize(10)
@@ -167,10 +167,27 @@ function addFromBilledTo(doc: any, y: number, L: number, R: number, business: Bu
   doc.setTextColor(110, 107, 100)
   if (c?.title) yRight = addWrappedLine(doc, c.title, rightX, yRight, R - rightX)
   yRight = addWrappedLine(doc, client.organization || '—', rightX, yRight, R - rightX)
+  if (c?.address) yRight = addWrappedLine(doc, c.address, rightX, yRight, R - rightX)
+  if (c?.phone) yRight = addWrappedLine(doc, c.phone, rightX, yRight, R - rightX)
   if (c?.email) yRight = addWrappedLine(doc, c.email, rightX, yRight, R - rightX)
 
   doc.setTextColor(15, 14, 12)
   return Math.max(yLeft, yRight) + 22
+}
+
+// Shaded DESCRIPTION/AMOUNT table header — vertically centers the caps text
+// in the box and returns a y with generous clearance before the first line item.
+function addLineItemsTableHeader(doc: any, y: number, L: number, R: number, W: number): number {
+  const boxH = 24
+  doc.setFillColor(248, 246, 242)
+  doc.rect(L, y, W, boxH, 'F')
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(130, 127, 120)
+  const textY = y + boxH / 2 + 2.6
+  doc.text('DESCRIPTION', L + 8, textY)
+  doc.text('AMOUNT', R - 8, textY, { align: 'right' })
+  return y + boxH + 18
 }
 
 // ─── Contract / legacy header (used by generateContract) ──────────────────────
@@ -611,16 +628,9 @@ export async function generateInvoice(client: Client, invoiceNumber: string, bus
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
-  y += 22
+  y += 14
 
-  // Table header bar
-  doc.setFillColor(248, 246, 242)
-  doc.rect(L, y - 4, W, 22, 'F')
-  doc.setFontSize(7.5)
-  doc.setTextColor(130, 127, 120)
-  doc.text('DESCRIPTION', L + 8, y + 9)
-  doc.text('AMOUNT', R - 8, y + 9, { align: 'right' })
-  y += 28
+  y = addLineItemsTableHeader(doc, y, L, R, W)
 
   // Speaking fee line
   const eventLabel = client.event_name || client.topic || 'Speaking Engagement'
@@ -730,15 +740,9 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
-  y += 22
+  y += 14
 
-  doc.setFillColor(248, 246, 242)
-  doc.rect(L, y - 4, W, 22, 'F')
-  doc.setFontSize(7.5)
-  doc.setTextColor(130, 127, 120)
-  doc.text('DESCRIPTION', L + 8, y + 9)
-  doc.text('AMOUNT', R - 8, y + 9, { align: 'right' })
-  y += 28
+  y = addLineItemsTableHeader(doc, y, L, R, W)
 
   const depositAmount = client.deposit_amount ?? 0
   const eventLabel = client.event_name || client.topic || 'Speaking Engagement'

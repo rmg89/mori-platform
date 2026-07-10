@@ -26,6 +26,25 @@ function BillingField({
   )
 }
 
+function BillingTextArea({
+  label, value, onChange, placeholder,
+}: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string
+}) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">{label}</label>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={2}
+        className="w-full text-sm bg-parchment border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold/40 text-ink placeholder:text-ink-300 transition-all resize-none"
+      />
+    </div>
+  )
+}
+
 function BillingTab() {
   const [profile, setProfile] = useState<BusinessProfile>({ name: '' })
   const [loading, setLoading] = useState(true)
@@ -60,7 +79,7 @@ function BillingTab() {
       </p>
       <div className="space-y-3">
         <BillingField label="Business name" value={profile.name} onChange={v => setProfile(p => ({ ...p, name: v }))} placeholder="MT Global Strategies" />
-        <BillingField label="Address" value={profile.address ?? ''} onChange={v => setProfile(p => ({ ...p, address: v }))} placeholder="2425 L Street, NW, #409, Washington, DC" />
+        <BillingTextArea label="Address" value={profile.address ?? ''} onChange={v => setProfile(p => ({ ...p, address: v }))} placeholder={'2425 L Street, NW, #409\nWashington, DC'} />
         <div className="grid grid-cols-2 gap-3">
           <BillingField label="Phone" value={profile.phone ?? ''} onChange={v => setProfile(p => ({ ...p, phone: v }))} placeholder="510-385-7917" />
           <BillingField label="Fax" value={profile.fax ?? ''} onChange={v => setProfile(p => ({ ...p, fax: v }))} placeholder="202-223-1655" />

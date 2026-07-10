@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Invoice, InvoiceSnapshot } from '@/types'
 import { updateInvoiceSnapshot } from '@/lib/invoices'
@@ -24,6 +25,26 @@ function Field({
   )
 }
 
+function TextAreaField({
+  label, value, onChange, placeholder, rows = 2,
+}: {
+  label: string; value: string; onChange: (v: string) => void
+  placeholder?: string; rows?: number
+}) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">{label}</label>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full text-sm bg-parchment border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold/40 text-ink placeholder:text-ink-300 transition-all resize-none"
+      />
+    </div>
+  )
+}
+
 interface InvoiceEditModalProps {
   invoice: Invoice
   onClose: () => void
@@ -37,6 +58,8 @@ export default function InvoiceEditModal({ invoice, onClose, onSaved }: InvoiceE
   const [contactLastName, setContactLastName] = useState(s.contact_last_name ?? '')
   const [contactTitle, setContactTitle] = useState(s.contact_title ?? '')
   const [contactEmail, setContactEmail] = useState(s.contact_email ?? '')
+  const [contactPhone, setContactPhone] = useState(s.contact_phone ?? '')
+  const [contactAddress, setContactAddress] = useState(s.contact_address ?? '')
   const [eventName, setEventName] = useState(s.event_name ?? '')
   const [eventDate, setEventDate] = useState(s.event_date ?? '')
   const [eventCity, setEventCity] = useState(s.event_city ?? '')
@@ -53,6 +76,8 @@ export default function InvoiceEditModal({ invoice, onClose, onSaved }: InvoiceE
         contact_last_name: contactLastName.trim() || undefined,
         contact_title: contactTitle.trim() || undefined,
         contact_email: contactEmail.trim() || undefined,
+        contact_phone: contactPhone.trim() || undefined,
+        contact_address: contactAddress.trim() || undefined,
         event_name: eventName.trim() || undefined,
         topic: eventName.trim() || undefined,
         event_date: eventDate || undefined,
@@ -67,7 +92,7 @@ export default function InvoiceEditModal({ invoice, onClose, onSaved }: InvoiceE
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-white border border-ink-100 rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[85vh] overflow-y-auto" onClick={ev => ev.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -87,7 +112,11 @@ export default function InvoiceEditModal({ invoice, onClose, onSaved }: InvoiceE
             <Field label="Contact last name" value={contactLastName} onChange={setContactLastName} />
           </div>
           <Field label="Contact title" value={contactTitle} onChange={setContactTitle} placeholder="Sr. Director, Health & Performance" />
-          <Field label="Contact email" value={contactEmail} onChange={setContactEmail} type="email" />
+          <TextAreaField label="Contact address" value={contactAddress} onChange={setContactAddress} placeholder={'200 West Street\nNew York, NY 10282'} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Contact phone" value={contactPhone} onChange={setContactPhone} placeholder="212-357-7289" />
+            <Field label="Contact email" value={contactEmail} onChange={setContactEmail} type="email" />
+          </div>
           <Field label="Event name" value={eventName} onChange={setEventName} placeholder="Stress & Energy Reset Retreat" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Event date" value={eventDate} onChange={setEventDate} type="date" />
@@ -113,6 +142,7 @@ export default function InvoiceEditModal({ invoice, onClose, onSaved }: InvoiceE
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
