@@ -558,6 +558,22 @@ export async function updateCompanyRow(id: string, patch: Record<string, unknown
   if (error) throw new Error(`updateCompanyRow: ${error.message}`)
 }
 
+export async function insertCompanyRow(name: string): Promise<import('@/types').Company> {
+  const { data, error } = await supabase.from('companies').insert({ name }).select('*').single()
+  if (error) throw new Error(`insertCompanyRow: ${error.message}`)
+  return {
+    id: data.id as string,
+    name: data.name as string,
+    industry: (data.industry as string) ?? undefined,
+    website: (data.website as string) ?? undefined,
+    notes: (data.notes as string) ?? undefined,
+    watching: (data.watching as boolean) ?? false,
+    teams: [],
+    engagement_ids: [],
+    contact_ids: [],
+  }
+}
+
 export async function insertComm(comm: Omit<CommRow, 'id'>): Promise<void> {
   const { error } = await supabase.from('communications').insert(comm)
   if (error) throw new Error(`insertComm: ${error.message}`)

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact } from '@/lib/db'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -92,6 +92,7 @@ interface StoreActions {
 
   // Companies
   updateCompany: (id: string, patch: Partial<Company>) => void
+  createCompany: (name: string) => Promise<Company>
 
   // Contacts (global — updates all engagements sharing the same email)
   updateContact: (email: string, patch: Partial<EngagementContact>) => void
@@ -138,8 +139,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     Promise.all([fetchAllEngagements(), fetchCompanies()])
       .then(([engData, coData]) => {
-        setEngagements(engData)
-        setCompanies(coData)
+        // Preserve any records created locally (e.g. via the New Inquiry modal)
+        // while this initial fetch was still in flight — don't let a stale
+        // snapshot wipe out state that already moved on.
+        setEngagements(prev => {
+          const fetchedIds = new Set(engData.map(e => e.id))
+          return [...engData, ...prev.filter(e => !fetchedIds.has(e.id))]
+        })
+        setCompanies(prev => {
+          const fetchedIds = new Set(coData.map(c => c.id))
+          return [...coData, ...prev.filter(c => !fetchedIds.has(c.id))]
+        })
         setLoading(false)
       })
       .catch(err => {
@@ -179,6 +189,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c))
     const { teams, engagement_ids, contact_ids, ...dbPatch } = patch
     if (Object.keys(dbPatch).length > 0) updateCompanyRow(id, dbPatch as Record<string, unknown>).catch(onWriteError)
+  }, [])
+
+  const createCompany = useCallback(async (name: string) => {
+    const company = await insertCompanyRow(name)
+    setCompanies(prev => [...prev, company].sort((a, b) => a.name.localeCompare(b.name)))
+    return company
   }, [])
 
   const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
@@ -724,7 +740,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCall, updateCall, addComm, updateComm,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
-      updateCompany, updateContact,
+      updateCompany, createCompany, updateContact,
     }}>
       {children}
     </StoreContext.Provider>

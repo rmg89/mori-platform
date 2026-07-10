@@ -51,4 +51,6 @@ Manual test checklist lives in [PROJECT.md](PROJECT.md).
 
 `/wrap` drops lessons here tagged `[platform]` or `[craft]`; periodically sort into the sections above.
 
-- (nothing yet)
+- [platform] The MCP endpoint (`/api/[transport]`) requires `Authorization: Bearer <MCP_SECRET_TOKEN>` as of 2026-07-10. Any MCP client, including a Claude connector pointed at this server, needs that header configured or it gets 401s.
+- [craft] An env var that's defined but never referenced anywhere in the code (grep for it) is a strong signal of an incomplete security gate, not dead config — worth checking specifically during any scaffold/audit pass. Caught the unauthenticated MCP endpoint this way.
+- [craft] For comparing bearer tokens/secrets in a route handler, use `crypto.timingSafeEqual` with an equal-length check first, not plain `===` — avoids a timing side-channel for cheap.

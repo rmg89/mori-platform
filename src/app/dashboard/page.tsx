@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { Engagement, CommEntry } from '@/types'
 import { formatDate } from '@/lib/utils'
 import {
   ArrowRight, Bell, ChevronRight, ChevronLeft,
-  Zap, CheckCircle2, Circle, FileText
+  Zap, CheckCircle2, Circle, FileText, Plus
 } from 'lucide-react'
 import Link from 'next/link'
+import NewInquiryModal from '@/components/NewInquiryModal'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -557,6 +559,8 @@ function WaitingColumn({ allEngagements, yellowAlerts }: { allEngagements: Engag
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const [newInquiryOpen, setNewInquiryOpen] = useState(false)
+  const router = useRouter()
   const { engagements: allEngagements, reviewItems } = useStore()
   const activeEngagements = allEngagements.filter(e => !e.archived)
   const prospects = activeEngagements.filter(e => e.section === 'prospects')
@@ -631,6 +635,10 @@ export default function DashboardPage() {
 
           {/* Action pills */}
           <div className="flex items-center gap-2.5 flex-shrink-0">
+            <button onClick={() => setNewInquiryOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-ink text-cream text-sm rounded-xl hover:bg-ink-700 transition-all">
+              <Plus size={14} /> New Inquiry
+            </button>
             {reviewCount > 0 && (
               <Link href="/review"
                 className="flex items-center gap-2 px-4 py-2.5 bg-gold/8 border border-gold/25 rounded-xl hover:bg-gold/12 transition-all group">
@@ -649,6 +657,13 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {newInquiryOpen && (
+          <NewInquiryModal
+            onClose={() => setNewInquiryOpen(false)}
+            onCreated={id => router.push(`/prospects/${id}`)}
+          />
+        )}
 
         {/* ── Carousel ── */}
         {carouselEvents.length > 0 && (

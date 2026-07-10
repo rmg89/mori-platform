@@ -32,8 +32,9 @@ interface NewInquiryModalProps {
 }
 
 export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalProps) {
-  const { addProspect, companies, engagements } = useStore()
+  const { addProspect, companies, engagements, createCompany } = useStore()
   const [organization, setOrganization] = useState('')
+  const [creatingCompany, setCreatingCompany] = useState(false)
   const [contactMode, setContactMode] = useState<'search' | 'add'>('search')
   const [contactQuery, setContactQuery] = useState('')
   const [selectedContact, setSelectedContact] = useState<EngagementContact | null>(null)
@@ -81,6 +82,18 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
   const otherResults = trimmedQuery ? otherPool.filter(filterHit) : []
 
   const canSave = trimmedOrg.length > 0 && !saving
+
+  async function handleCreateCompany() {
+    if (!trimmedOrg || exactCompanyMatch || creatingCompany) return
+    setCreatingCompany(true)
+    try {
+      await createCompany(trimmedOrg)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create company')
+    } finally {
+      setCreatingCompany(false)
+    }
+  }
 
   async function handleSave() {
     if (!canSave) return
@@ -145,17 +158,21 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
               <div className="mt-1 border border-ink-100 rounded-lg overflow-hidden bg-white shadow-sm">
                 {companyMatches.map(c => (
                   <button key={c.id} type="button" onClick={() => setOrganization(c.name)}
-                    className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-parchment transition-colors flex items-center justify-between">
-                    <span>{c.name}</span>
-                    <span className="text-[10px] text-ink-300">{c.engagement_ids.length} engagement{c.engagement_ids.length === 1 ? '' : 's'}</span>
+                    className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-parchment transition-colors">
+                    {c.name}
                   </button>
                 ))}
               </div>
             )}
-            {exactCompanyMatch && (
+            {exactCompanyMatch ? (
               <p className="text-[11px] text-sage mt-1.5 flex items-center gap-1">
-                <Check size={11} /> Linked to existing company
+                <Check size={11} /> Linked to company record
               </p>
+            ) : trimmedOrg && (
+              <button type="button" onClick={handleCreateCompany} disabled={creatingCompany}
+                className="text-[11px] text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5 disabled:opacity-50">
+                <Plus size={10} /> {creatingCompany ? 'Adding…' : `Add "${trimmedOrg}" as a new organization`}
+              </button>
             )}
           </div>
 
