@@ -205,7 +205,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
               <p className="text-[11px] text-sage mt-1.5 flex items-center gap-1">
                 <Check size={11} /> Linked to company record
               </p>
-            ) : trimmedOrg && (
+            ) : (
               newOrgFormOpen ? (
                 <div className="mt-2 space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
                   <div className="flex items-center justify-between gap-2">
@@ -243,9 +243,9 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                   </div>
                 </div>
               ) : (
-                <button type="button" onClick={() => setNewOrgFormOpen(true)}
-                  className="text-[11px] text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5">
-                  <Plus size={10} /> Add "{trimmedOrg}" as a new organization
+                <button type="button" onClick={() => setNewOrgFormOpen(true)} disabled={!trimmedOrg}
+                  className="text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5 px-1 disabled:opacity-40 disabled:cursor-not-allowed">
+                  <Plus size={11} /> Add new organization
                 </button>
               )
             )}
