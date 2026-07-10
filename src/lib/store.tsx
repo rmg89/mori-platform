@@ -92,7 +92,7 @@ interface StoreActions {
 
   // Companies
   updateCompany: (id: string, patch: Partial<Company>) => void
-  createCompany: (name: string) => Promise<Company>
+  createCompany: (input: { name: string; website?: string; industry?: string }) => Promise<Company>
 
   // Contacts (global — updates all engagements sharing the same email)
   updateContact: (email: string, patch: Partial<EngagementContact>) => void
@@ -191,8 +191,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (Object.keys(dbPatch).length > 0) updateCompanyRow(id, dbPatch as Record<string, unknown>).catch(onWriteError)
   }, [])
 
-  const createCompany = useCallback(async (name: string) => {
-    const company = await insertCompanyRow(name)
+  const createCompany = useCallback(async (input: { name: string; website?: string; industry?: string }) => {
+    const company = await insertCompanyRow(input)
     setCompanies(prev => [...prev, company].sort((a, b) => a.name.localeCompare(b.name)))
     return company
   }, [])

@@ -558,8 +558,12 @@ export async function updateCompanyRow(id: string, patch: Record<string, unknown
   if (error) throw new Error(`updateCompanyRow: ${error.message}`)
 }
 
-export async function insertCompanyRow(name: string): Promise<import('@/types').Company> {
-  const { data, error } = await supabase.from('companies').insert({ name }).select('*').single()
+export async function insertCompanyRow(input: { name: string; website?: string; industry?: string }): Promise<import('@/types').Company> {
+  const { data, error } = await supabase.from('companies').insert({
+    name: input.name,
+    website: input.website || null,
+    industry: input.industry || null,
+  }).select('*').single()
   if (error) throw new Error(`insertCompanyRow: ${error.message}`)
   return {
     id: data.id as string,

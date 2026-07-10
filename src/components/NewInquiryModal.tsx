@@ -34,6 +34,9 @@ interface NewInquiryModalProps {
 export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalProps) {
   const { addProspect, companies, engagements, createCompany } = useStore()
   const [organization, setOrganization] = useState('')
+  const [newOrgFormOpen, setNewOrgFormOpen] = useState(false)
+  const [newOrgWebsite, setNewOrgWebsite] = useState('')
+  const [newOrgIndustry, setNewOrgIndustry] = useState('')
   const [creatingCompany, setCreatingCompany] = useState(false)
   const [contactMode, setContactMode] = useState<'search' | 'add'>('search')
   const [contactQuery, setContactQuery] = useState('')
@@ -87,7 +90,10 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
     if (!trimmedOrg || exactCompanyMatch || creatingCompany) return
     setCreatingCompany(true)
     try {
-      await createCompany(trimmedOrg)
+      await createCompany({ name: trimmedOrg, website: newOrgWebsite.trim() || undefined, industry: newOrgIndustry.trim() || undefined })
+      setNewOrgFormOpen(false)
+      setNewOrgWebsite('')
+      setNewOrgIndustry('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create company')
     } finally {
@@ -169,10 +175,29 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                 <Check size={11} /> Linked to company record
               </p>
             ) : trimmedOrg && (
-              <button type="button" onClick={handleCreateCompany} disabled={creatingCompany}
-                className="text-[11px] text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5 disabled:opacity-50">
-                <Plus size={10} /> {creatingCompany ? 'Adding…' : `Add "${trimmedOrg}" as a new organization`}
-              </button>
+              newOrgFormOpen ? (
+                <div className="mt-2 space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
+                  <p className="text-[11px] text-ink-400">New organization — add what you know, the rest can be filled in later.</p>
+                  <input value={newOrgWebsite} onChange={e => setNewOrgWebsite(e.target.value)} placeholder="Website (optional)" type="url"
+                    className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
+                  <input value={newOrgIndustry} onChange={e => setNewOrgIndustry(e.target.value)} placeholder="Industry (optional)"
+                    className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setNewOrgFormOpen(false)} className="text-xs text-ink-300 hover:text-ink transition-colors">
+                      Cancel
+                    </button>
+                    <button type="button" onClick={handleCreateCompany} disabled={creatingCompany}
+                      className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+                      {creatingCompany ? 'Adding…' : 'Create organization'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setNewOrgFormOpen(true)}
+                  className="text-[11px] text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5">
+                  <Plus size={10} /> Add "{trimmedOrg}" as a new organization
+                </button>
+              )
             )}
           </div>
 
