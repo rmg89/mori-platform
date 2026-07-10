@@ -35,16 +35,15 @@ interface NewInquiryModalProps {
 export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalProps) {
   const { addProspect, companies, engagements, createCompany } = useStore()
   const [organization, setOrganization] = useState('')
-  const [newOrgFormOpen, setNewOrgFormOpen] = useState(false)
+  const [orgMode, setOrgMode] = useState<'search' | 'add'>('search')
   const [newOrgWebsite, setNewOrgWebsite] = useState('')
-  const [newOrgIndustry, setNewOrgIndustry] = useState('')
   const [newOrgAiSuggested, setNewOrgAiSuggested] = useState(false)
   const [lookingUpOrg, setLookingUpOrg] = useState(false)
   const [lookupNote, setLookupNote] = useState<string | null>(null)
   const [creatingCompany, setCreatingCompany] = useState(false)
   const [contactMode, setContactMode] = useState<'search' | 'add'>('search')
   const [contactQuery, setContactQuery] = useState('')
-  const [selectedContact, setSelectedContact] = useState<EngagementContact | null>(null)
+  const [selectedContacts, setSelectedContacts] = useState<EngagementContact[]>([])
   const [contactFirstName, setContactFirstName] = useState('')
   const [contactLastName, setContactLastName] = useState('')
   const [contactTitle, setContactTitle] = useState('')
@@ -67,6 +66,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
 
   // ── Existing contact search (mirrors the contact linker on the engagement page) ──
   const orgLower = trimmedOrg.toLowerCase()
+  const addedEmails = new Set(selectedContacts.map(c => c.email.toLowerCase()))
   const pool: { contact: EngagementContact; organization: string }[] = []
   const otherPool: { contact: EngagementContact; organization: string }[] = []
   const seen = new Set<string>()
@@ -75,7 +75,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
     const sameOrg = orgLower.length > 0 && eng.organization.toLowerCase() === orgLower
     for (const c of eng.contacts) {
       const key = c.email.toLowerCase()
-      if (!key) continue
+      if (!key || addedEmails.has(key)) continue
       if (sameOrg && !seen.has(key)) { seen.add(key); pool.push({ contact: c, organization: eng.organization }) }
       else if (!sameOrg && !otherSeen.has(key) && !seen.has(key)) { otherSeen.add(key); otherPool.push({ contact: c, organization: eng.organization }) }
     }
@@ -89,6 +89,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
   const otherResults = trimmedQuery ? otherPool.filter(filterHit) : []
 
   const canSave = trimmedOrg.length > 0 && !saving
+  const canAddContact = contactFirstName.trim().length > 0 && contactLastName.trim().length > 0 && contactEmail.trim().length > 0
 
   async function handleLookupOrg() {
     if (!trimmedOrg || lookingUpOrg) return
@@ -101,10 +102,9 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
         body: JSON.stringify({ name: trimmedOrg }),
       })
       if (!res.ok) throw new Error('Lookup request failed')
-      const data: { website: string | null; industry: string | null } = await res.json()
-      if (data.website || data.industry) {
-        if (data.website) setNewOrgWebsite(data.website)
-        if (data.industry) setNewOrgIndustry(data.industry)
+      const data: { website: string | null } = await res.json()
+      if (data.website) {
+        setNewOrgWebsite(data.website)
         setNewOrgAiSuggested(true)
       } else {
         setLookupNote('No public info found — enter manually.')
@@ -120,10 +120,9 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
     if (!trimmedOrg || exactCompanyMatch || creatingCompany) return
     setCreatingCompany(true)
     try {
-      await createCompany({ name: trimmedOrg, website: newOrgWebsite.trim() || undefined, industry: newOrgIndustry.trim() || undefined })
-      setNewOrgFormOpen(false)
+      await createCompany({ name: trimmedOrg, website: newOrgWebsite.trim() || undefined })
+      setOrgMode('search')
       setNewOrgWebsite('')
-      setNewOrgIndustry('')
       setNewOrgAiSuggested(false)
       setLookupNote(null)
     } catch (err) {
@@ -133,28 +132,46 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
     }
   }
 
+  function handleSelectExistingContact(c: EngagementContact) {
+    setSelectedContacts(prev => [...prev, { ...c, id: `lnk_${Date.now()}_${prev.length}`, is_current_point_of_contact: prev.length === 0 }])
+    setContactQuery('')
+  }
+
+  function handleAddManualContact() {
+    if (!canAddContact) return
+    setSelectedContacts(prev => [...prev, {
+      id: `new_${Date.now()}_${prev.length}`,
+      first_name: contactFirstName.trim(),
+      last_name: contactLastName.trim(),
+      email: contactEmail.trim(),
+      phone: contactPhone.trim() || undefined,
+      title: contactTitle.trim() || undefined,
+      role: 'primary',
+      is_current_point_of_contact: prev.length === 0,
+      company_id: exactCompanyMatch?.id,
+    }])
+    setContactFirstName(''); setContactLastName(''); setContactTitle(''); setContactEmail(''); setContactPhone('')
+    setContactMode('search')
+  }
+
+  function removeSelectedContact(id: string) {
+    setSelectedContacts(prev => prev.filter(c => c.id !== id))
+  }
+
   async function handleSave() {
     if (!canSave) return
     setSaving(true)
     setError(null)
     try {
-      const contact = selectedContact
-        ? {
-            first_name: selectedContact.first_name,
-            last_name: selectedContact.last_name || undefined,
-            email: selectedContact.email || undefined,
-            phone: selectedContact.phone || undefined,
-            title: selectedContact.title || undefined,
-          }
-        : contactFirstName.trim()
-          ? {
-              first_name: contactFirstName.trim(),
-              last_name: contactLastName.trim() || undefined,
-              email: contactEmail.trim() || undefined,
-              phone: contactPhone.trim() || undefined,
-              title: contactTitle.trim() || undefined,
-            }
-          : undefined
+      const contacts = selectedContacts.map(c => ({
+        first_name: c.first_name,
+        last_name: c.last_name || undefined,
+        email: c.email || undefined,
+        phone: c.phone || undefined,
+        title: c.title || undefined,
+        company_id: c.company_id,
+        is_current_point_of_contact: c.is_current_point_of_contact,
+      }))
 
       const engagement = await addProspect({
         organization: trimmedOrg,
@@ -164,7 +181,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
         topic: topic.trim() || undefined,
         event_city: eventCity.trim() || undefined,
         notes: notes.trim() || undefined,
-        contact,
+        contacts: contacts.length > 0 ? contacts : undefined,
       })
       onCreated(engagement.id)
       onClose()
@@ -189,91 +206,111 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
         </div>
 
         <div className="space-y-3">
-          {/* Organization / company link */}
+          {/* Organization: search existing or add new */}
           <div>
-            <Field id="new-inquiry-organization" label="Organization" value={organization} onChange={setOrganization} placeholder="Canyon Ranch" />
-            {companyMatches.length > 0 && (
-              <div className="mt-1 border border-ink-100 rounded-lg overflow-hidden bg-white shadow-sm">
-                {companyMatches.map(c => (
-                  <button key={c.id} type="button" onClick={() => setOrganization(c.name)}
-                    className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-parchment transition-colors">
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">Organization</label>
+
             {exactCompanyMatch ? (
-              <p className="text-[11px] text-sage mt-1.5 flex items-center gap-1">
-                <Check size={11} /> Linked to company record
-              </p>
-            ) : (
-              newOrgFormOpen ? (
-                <div className="mt-2 space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-ink-400">New organization — add what you know, the rest can be filled in later.</p>
-                    <button type="button" onClick={handleLookupOrg} disabled={lookingUpOrg}
-                      className="flex items-center gap-1 text-[11px] font-medium text-gold hover:text-gold-dark transition-colors flex-shrink-0 disabled:opacity-50">
-                      {lookingUpOrg ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
-                      {lookingUpOrg ? 'Looking up…' : 'Look up with AI'}
-                    </button>
+              <div>
+                <input
+                  id="new-inquiry-organization"
+                  value={organization}
+                  onChange={e => setOrganization(e.target.value)}
+                  placeholder="Canyon Ranch"
+                  className="w-full text-sm bg-parchment border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold/40 text-ink placeholder:text-ink-300 transition-all"
+                />
+                <p className="text-[11px] text-sage mt-1.5 flex items-center gap-1">
+                  <Check size={11} /> Linked to company record
+                </p>
+              </div>
+            ) : orgMode === 'search' ? (
+              <div>
+                <input
+                  id="new-inquiry-organization"
+                  value={organization}
+                  onChange={e => setOrganization(e.target.value)}
+                  placeholder="Canyon Ranch"
+                  className="w-full text-sm bg-parchment border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold/40 text-ink placeholder:text-ink-300 transition-all"
+                />
+                {companyMatches.length > 0 && (
+                  <div className="mt-1 border border-ink-100 rounded-lg overflow-hidden bg-white shadow-sm">
+                    {companyMatches.map(c => (
+                      <button key={c.id} type="button" onClick={() => setOrganization(c.name)}
+                        className="w-full text-left px-3 py-2 text-sm text-ink hover:bg-parchment transition-colors">
+                        {c.name}
+                      </button>
+                    ))}
                   </div>
-                  {newOrgAiSuggested && (
-                    <p className="text-[10px] text-gold-dark bg-gold/10 border border-gold/20 rounded-md px-2 py-1 flex items-center gap-1">
-                      <Wand2 size={9} /> AI-suggested — please verify before saving
-                    </p>
-                  )}
-                  {lookupNote && <p className="text-[11px] text-ink-300 italic">{lookupNote}</p>}
+                )}
+                <button type="button" onClick={() => {
+                  if (trimmedOrg) setOrgMode('add')
+                  else document.getElementById('new-inquiry-organization')?.focus()
+                }}
+                  className="mt-1.5 text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 px-1">
+                  <Plus size={11} /> Add new organization
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
+                <input value={organization} onChange={e => setOrganization(e.target.value)} placeholder="Company name *" autoFocus
+                  className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
+                <div className="flex items-center justify-between gap-2">
                   <input
                     value={newOrgWebsite}
                     onChange={e => { setNewOrgWebsite(e.target.value); setNewOrgAiSuggested(false) }}
-                    placeholder="Website (optional)" type="url"
-                    className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
-                  <input
-                    value={newOrgIndustry}
-                    onChange={e => { setNewOrgIndustry(e.target.value); setNewOrgAiSuggested(false) }}
-                    placeholder="Industry (optional)"
-                    className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button type="button" onClick={() => setNewOrgFormOpen(false)} className="text-xs text-ink-300 hover:text-ink transition-colors">
-                      Cancel
-                    </button>
-                    <button type="button" onClick={handleCreateCompany} disabled={creatingCompany || !trimmedOrg}
-                      className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                      {creatingCompany ? 'Adding…' : 'Create organization'}
-                    </button>
-                  </div>
+                    placeholder="Company URL (optional)" type="url"
+                    className="flex-1 text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
+                  <button type="button" onClick={handleLookupOrg} disabled={!trimmedOrg || lookingUpOrg}
+                    className="flex items-center gap-1 text-[11px] font-medium text-gold hover:text-gold-dark transition-colors flex-shrink-0 disabled:opacity-50">
+                    {lookingUpOrg ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+                    {lookingUpOrg ? 'Looking up…' : 'Look up with AI'}
+                  </button>
                 </div>
-              ) : (
-                <button type="button" onClick={() => {
-                  if (trimmedOrg) setNewOrgFormOpen(true)
-                  else document.getElementById('new-inquiry-organization')?.focus()
-                }}
-                  className="text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5 px-1">
-                  <Plus size={11} /> Add new organization
-                </button>
-              )
+                {newOrgAiSuggested && (
+                  <p className="text-[10px] text-gold-dark bg-gold/10 border border-gold/20 rounded-md px-2 py-1 flex items-center gap-1">
+                    <Wand2 size={9} /> AI-suggested — please verify before saving
+                  </p>
+                )}
+                {lookupNote && <p className="text-[11px] text-ink-300 italic">{lookupNote}</p>}
+                <div className="flex items-center justify-between pt-1">
+                  <button type="button" onClick={() => setOrgMode('search')}
+                    className="text-xs text-ink-300 hover:text-ink transition-colors px-1">
+                    ‹ Search existing organizations instead
+                  </button>
+                  <button type="button" onClick={handleCreateCompany} disabled={creatingCompany || !trimmedOrg}
+                    className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    {creatingCompany ? 'Adding…' : 'Create organization'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Contact: search existing or add new */}
+          {/* Contact: search existing or add new — supports multiple */}
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">Contact</label>
 
-            {selectedContact ? (
-              <div className="flex items-center gap-2.5 bg-parchment border border-ink-100 rounded-lg px-3 py-2">
-                <div className="w-7 h-7 rounded-full bg-ink-800 flex items-center justify-center text-[11px] font-bold text-gold flex-shrink-0">
-                  {getInitials(selectedContact.first_name, selectedContact.last_name)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink truncate">{selectedContact.first_name} {selectedContact.last_name}</p>
-                  <p className="text-xs text-ink-300 truncate">{selectedContact.email}</p>
-                </div>
-                <button onClick={() => setSelectedContact(null)}
-                  className="p-1 rounded text-ink-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
-                  <X size={13} />
-                </button>
+            {selectedContacts.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {selectedContacts.map(c => (
+                  <div key={c.id} className="flex items-center gap-2.5 bg-parchment border border-ink-100 rounded-lg px-3 py-2">
+                    <div className="w-7 h-7 rounded-full bg-ink-800 flex items-center justify-center text-[11px] font-bold text-gold flex-shrink-0">
+                      {getInitials(c.first_name, c.last_name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-ink truncate">{c.first_name} {c.last_name}</p>
+                      <p className="text-xs text-ink-300 truncate">{c.email}</p>
+                    </div>
+                    <button onClick={() => removeSelectedContact(c.id)}
+                      className="p-1 rounded text-ink-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
               </div>
-            ) : contactMode === 'search' ? (
+            )}
+
+            {contactMode === 'search' ? (
               <div>
                 <input
                   value={contactQuery}
@@ -284,7 +321,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                 {(orgResults.length > 0 || otherResults.length > 0) ? (
                   <div className="mt-1.5 space-y-1 max-h-40 overflow-y-auto border border-ink-100 rounded-lg p-1.5">
                     {orgResults.map(h => (
-                      <button key={h.contact.id} onClick={() => setSelectedContact(h.contact)}
+                      <button key={h.contact.id} onClick={() => handleSelectExistingContact(h.contact)}
                         className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-parchment transition-colors text-left">
                         <div className="w-6 h-6 rounded-full bg-ink-800 flex items-center justify-center text-[10px] font-bold text-gold flex-shrink-0">
                           {getInitials(h.contact.first_name, h.contact.last_name)}
@@ -303,7 +340,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                           <div className="h-px flex-1 bg-ink-100" />
                         </div>
                         {otherResults.map(h => (
-                          <button key={h.contact.id} onClick={() => setSelectedContact(h.contact)}
+                          <button key={h.contact.id} onClick={() => handleSelectExistingContact(h.contact)}
                             className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-parchment transition-colors text-left">
                             <div className="w-6 h-6 rounded-full bg-ink-800 flex items-center justify-center text-[10px] font-bold text-gold flex-shrink-0">
                               {getInitials(h.contact.first_name, h.contact.last_name)}
@@ -328,23 +365,29 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
             ) : (
               <div className="space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
                 <div className="grid grid-cols-2 gap-2">
-                  <input value={contactFirstName} onChange={e => setContactFirstName(e.target.value)} placeholder="First name"
+                  <input value={contactFirstName} onChange={e => setContactFirstName(e.target.value)} placeholder="First name *" autoFocus
                     className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
-                  <input value={contactLastName} onChange={e => setContactLastName(e.target.value)} placeholder="Last name"
+                  <input value={contactLastName} onChange={e => setContactLastName(e.target.value)} placeholder="Last name *"
                     className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
                 </div>
                 <input value={contactTitle} onChange={e => setContactTitle(e.target.value)} placeholder="Title"
                   className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
                 <div className="grid grid-cols-2 gap-2">
-                  <input value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="Email" type="email"
+                  <input value={contactEmail} onChange={e => setContactEmail(e.target.value)} placeholder="Email *" type="email"
                     className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
                   <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Phone" type="tel"
                     className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
                 </div>
-                <button onClick={() => setContactMode('search')}
-                  className="text-xs text-ink-300 hover:text-ink transition-colors px-1">
-                  ‹ Search existing contacts instead
-                </button>
+                <div className="flex items-center justify-between pt-1">
+                  <button onClick={() => setContactMode('search')}
+                    className="text-xs text-ink-300 hover:text-ink transition-colors px-1">
+                    ‹ Search existing contacts instead
+                  </button>
+                  <button onClick={handleAddManualContact} disabled={!canAddContact}
+                    className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Add contact
+                  </button>
+                </div>
               </div>
             )}
           </div>

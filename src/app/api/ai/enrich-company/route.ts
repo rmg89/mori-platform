@@ -23,14 +23,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const system = `You research organizations for a speaker-booking CRM. Given an organization name, use web search to find its real official website and industry/sector.
+  const system = `You research organizations for a speaker-booking CRM. Given an organization name, use web search to find its real official website.
 
-Only report information you actually found via search. Never guess, estimate, or infer a website/industry from the name alone — if you can't confidently confirm it via search results, return null for that field.
+Only report a website you actually found via search. Never guess, estimate, or infer it from the name alone — if you can't confidently confirm it via search results, return null.
 
 Respond with ONLY a JSON object (no markdown fences) in this exact shape:
 {
-  "website": "https://example.com" or null,
-  "industry": "Hospitality" or null
+  "website": "https://example.com" or null
 }`
 
   try {
@@ -48,7 +47,6 @@ Respond with ONLY a JSON object (no markdown fences) in this exact shape:
 
     return NextResponse.json({
       website: typeof result?.website === 'string' ? result.website : null,
-      industry: typeof result?.industry === 'string' ? result.industry : null,
     })
   } catch (err: any) {
     console.error('enrich-company error:', err)

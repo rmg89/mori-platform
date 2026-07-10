@@ -33,6 +33,8 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 
 - ~~MCP endpoint (`src/app/api/[transport]`) had no auth check~~ — fixed 2026-07-10, now requires a `MCP_SECRET_TOKEN` bearer token.
 - The Review page (`src/app/review/page.tsx`) renders against `reviewItems`, which is never populated — see [CLAUDE.md](CLAUDE.md#this-platforms-quirks). Not a regression, just unfinished.
+- ~~A stray duplicate Vercel project (`mori-platform`) with no env vars had been failing every deploy for 9+ days while the real project (`team-taheripour-platform`) succeeded~~ — found and deleted 2026-07-10; local repo relinked to the correct project.
+- `ANTHROPIC_API_KEY` is not set in any environment (local or Vercel). Not currently blocking — no AI feature is live yet per the client — but `email-reply`, `instagram-caption`, and `ai-scan` will all fail at runtime until it's added.
 
 ## Test checklist
 
@@ -45,7 +47,9 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - [ ] Add a contact to an engagement, mark them as point of contact, and confirm it shows correctly on both the engagement and the Contacts directory
 - [ ] Let an engagement's `event_date` pass, then load the dashboard/pipeline and confirm it auto-transitions to Wrap-Up (see `fetchAllEngagements` side effect in `src/lib/db.ts`)
 - [ ] Hit the MCP endpoint (`/api/[transport]`) with no `Authorization` header and with a wrong token — confirm both get `401` — then with the correct `MCP_SECRET_TOKEN` bearer token and confirm the request reaches the handler
+- [ ] Run `vercel project ls` and confirm exactly one Vercel project is connected to this repo (`team-taheripour-platform`), and that it has all required env vars set (`SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `MCP_SECRET_TOKEN`) before trusting a deploy
 
 ## Decisions
 
-- (none recorded yet)
+- Canonical Vercel project for this repo is `team-taheripour-platform`, not `mori-platform` — confirmed 2026-07-10. The local Git repo and CLI are linked to it.
+- Local dev, Preview, and Production all share one Supabase project and one set of credentials — confirmed 2026-07-10. There is no separate dev/preview database.

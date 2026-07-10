@@ -43,7 +43,10 @@ interface StoreActions {
     event_city?: string
     fee?: number
     notes?: string
-    contact?: { first_name: string; last_name?: string; email?: string; phone?: string; title?: string }
+    contacts?: {
+      first_name: string; last_name?: string; email?: string; phone?: string; title?: string
+      company_id?: string; is_current_point_of_contact?: boolean
+    }[]
   }) => Promise<Engagement>
 
   // Archive / delete
@@ -240,6 +243,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             status: (c.status as string) ?? 'prospect_active',
             watching: c.watching ?? false,
             notes: c.notes ?? null,
+            company_id: c.company_id ?? null,
+            team_id: c.team_id ?? null,
           }).catch(onWriteError)
         }
       })
@@ -392,7 +397,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     event_city?: string
     fee?: number
     notes?: string
-    contact?: { first_name: string; last_name?: string; email?: string; phone?: string; title?: string }
+    contacts?: {
+      first_name: string; last_name?: string; email?: string; phone?: string; title?: string
+      company_id?: string; is_current_point_of_contact?: boolean
+    }[]
   }) => {
     const engagement = await insertEngagementRow(input)
     setEngagements(prev => [engagement, ...prev])

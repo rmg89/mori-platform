@@ -103,6 +103,8 @@ interface ContactRow {
   status: string | null
   watching: boolean
   notes: string | null
+  company_id: string | null
+  team_id: string | null
 }
 
 interface CommRow {
@@ -176,6 +178,8 @@ function mapContact(row: ContactRow): EngagementContact {
     status: (row.status as EngagementContact['status']) ?? undefined,
     watching: row.watching,
     notes: row.notes ?? undefined,
+    company_id: row.company_id ?? undefined,
+    team_id: row.team_id ?? undefined,
   }
 }
 
@@ -484,7 +488,10 @@ export async function insertEngagementRow(input: {
   event_city?: string
   fee?: number
   notes?: string
-  contact?: { first_name: string; last_name?: string; email?: string; phone?: string; title?: string }
+  contacts?: {
+    first_name: string; last_name?: string; email?: string; phone?: string; title?: string
+    company_id?: string; is_current_point_of_contact?: boolean
+  }[]
 }): Promise<Engagement> {
   const now = new Date().toISOString()
   const { data: row, error } = await supabase.from('engagements').insert({
@@ -503,22 +510,26 @@ export async function insertEngagementRow(input: {
   if (error) throw new Error(`insertEngagementRow: ${error.message}`)
 
   let contacts: ContactRow[] = []
-  if (input.contact?.first_name) {
-    const { data: contactRow, error: contactError } = await supabase.from('contacts').insert({
-      engagement_id: row.id,
-      first_name: input.contact.first_name,
-      last_name: input.contact.last_name || '',
-      email: input.contact.email || null,
-      phone: input.contact.phone || null,
-      title: input.contact.title || null,
-      company_id: input.company_id || null,
-      role: 'primary',
-      is_current_point_of_contact: true,
-      status: 'prospect_active',
-      watching: false,
-    }).select('*').single()
-    if (contactError) console.error('insertEngagementRow contact:', contactError.message)
-    else if (contactRow) contacts = [contactRow as ContactRow]
+  if (input.contacts?.length) {
+    const { data: contactRows, error: contactError } = await supabase.from('contacts').insert(
+      input.contacts.map(c => ({
+        engagement_id: row.id,
+        first_name: c.first_name,
+        last_name: c.last_name || '',
+        email: c.email || null,
+        phone: c.phone || null,
+        title: c.title || null,
+        // Preserve a contact's own company link (e.g. picked from another org) —
+        // only fall back to this engagement's company for genuinely new contacts.
+        company_id: c.company_id ?? input.company_id ?? null,
+        role: 'primary',
+        is_current_point_of_contact: c.is_current_point_of_contact ?? false,
+        status: 'prospect_active',
+        watching: false,
+      }))
+    ).select('*')
+    if (contactError) console.error('insertEngagementRow contacts:', contactError.message)
+    else if (contactRows) contacts = contactRows as ContactRow[]
   }
 
   return assembleEngagement(row as EngagementRow, contacts, [], [], [], [])
