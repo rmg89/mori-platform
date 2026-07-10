@@ -602,10 +602,10 @@ export default function DashboardPage() {
 
           {/* Greeting */}
           <div className="flex-shrink-0">
-            <p className="text-[11px] text-ink-300 uppercase tracking-[0.2em] font-medium mb-2">
+            <p suppressHydrationWarning className="text-[11px] text-ink-300 uppercase tracking-[0.2em] font-medium mb-2">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </p>
-            <h1 className="font-display text-5xl font-light text-ink leading-none tracking-tight">
+            <h1 suppressHydrationWarning className="font-display text-5xl font-light text-ink leading-none tracking-tight">
               {getGreeting()}.
             </h1>
             <div className="mt-4 w-16 h-px" style={{ background: 'linear-gradient(90deg, #C9A84C, transparent)' }} />
