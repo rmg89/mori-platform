@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import type { ProspectStep } from '@/types'
@@ -76,7 +77,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-white border border-ink-100 rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[85vh] overflow-y-auto" onClick={ev => ev.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -143,6 +144,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

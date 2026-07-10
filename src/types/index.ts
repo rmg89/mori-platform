@@ -410,6 +410,8 @@ export interface InvoiceSnapshot {
   contact_last_name?: string
   contact_title?: string
   contact_email?: string
+  contact_phone?: string
+  contact_address?: string
 }
 
 export interface Invoice {
