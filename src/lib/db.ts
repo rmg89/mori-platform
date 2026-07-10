@@ -476,6 +476,7 @@ export async function deleteEngagementRow(id: string): Promise<void> {
 
 export async function insertEngagementRow(input: {
   organization: string
+  company_id?: string
   prospect_step?: string
   event_type?: string
   source?: string
@@ -483,11 +484,12 @@ export async function insertEngagementRow(input: {
   event_city?: string
   fee?: number
   notes?: string
-  contact?: { first_name: string; last_name?: string; email?: string; phone?: string }
+  contact?: { first_name: string; last_name?: string; email?: string; phone?: string; title?: string }
 }): Promise<Engagement> {
   const now = new Date().toISOString()
   const { data: row, error } = await supabase.from('engagements').insert({
     organization: input.organization,
+    company_id: input.company_id || null,
     section: 'prospects',
     prospect_step: input.prospect_step ?? 'inquiry',
     event_type: input.event_type ?? 'speaking',
@@ -508,6 +510,8 @@ export async function insertEngagementRow(input: {
       last_name: input.contact.last_name || '',
       email: input.contact.email || null,
       phone: input.contact.phone || null,
+      title: input.contact.title || null,
+      company_id: input.company_id || null,
       role: 'primary',
       is_current_point_of_contact: true,
       status: 'prospect_active',

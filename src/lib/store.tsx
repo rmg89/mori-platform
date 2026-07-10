@@ -36,13 +36,14 @@ interface StoreActions {
   // Create
   addProspect: (input: {
     organization: string
+    company_id?: string
     prospect_step?: ProspectStep
     source?: string
     topic?: string
     event_city?: string
     fee?: number
     notes?: string
-    contact?: { first_name: string; last_name?: string; email?: string; phone?: string }
+    contact?: { first_name: string; last_name?: string; email?: string; phone?: string; title?: string }
   }) => Promise<Engagement>
 
   // Archive / delete
@@ -368,13 +369,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const addProspect = useCallback(async (input: {
     organization: string
+    company_id?: string
     prospect_step?: ProspectStep
     source?: string
     topic?: string
     event_city?: string
     fee?: number
     notes?: string
-    contact?: { first_name: string; last_name?: string; email?: string; phone?: string }
+    contact?: { first_name: string; last_name?: string; email?: string; phone?: string; title?: string }
   }) => {
     const engagement = await insertEngagementRow(input)
     setEngagements(prev => [engagement, ...prev])
