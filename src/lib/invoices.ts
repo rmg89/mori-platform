@@ -56,6 +56,7 @@ export async function fetchInvoices(opts: {
 export async function setInvoiceStatus(invoice: Invoice, status: InvoiceStatus): Promise<void> {
   const now = new Date().toISOString()
   const patch: Record<string, unknown> = { status }
+  if (status === 'finalized') patch.finalized_at = now
   if (status === 'sent') patch.sent_at = now
   if (status === 'paid') patch.paid_at = now
 
@@ -66,15 +67,22 @@ export async function setInvoiceStatus(invoice: Invoice, status: InvoiceStatus):
 
   const engagementPatch: Record<string, unknown> =
     invoice.type === 'deposit'
-      ? status === 'sent' ? { deposit_invoice_sent_at: now }
+      ? status === 'finalized' ? { deposit_finalized_at: now }
+        : status === 'sent' ? { deposit_invoice_sent_at: now }
         : status === 'paid' ? { deposit_received_at: now }
         : {}
-      : status === 'sent' ? { invoice_sent_at: now }
+      : status === 'finalized' ? { invoice_finalized_at: now }
+        : status === 'sent' ? { invoice_sent_at: now }
         : status === 'paid' ? { payment_received_at: now }
         : {}
 
   if (Object.keys(engagementPatch).length === 0) return
   await supabase.from('engagements').update(engagementPatch).eq('id', invoice.engagement_id)
+}
+
+// Convenience wrapper — marks an invoice reviewed/ready-to-send.
+export function finalizeInvoice(invoice: Invoice): Promise<void> {
+  return setInvoiceStatus(invoice, 'finalized')
 }
 
 // Finds the most recent invoice row for an engagement + type (used when the
@@ -90,6 +98,38 @@ export async function findLatestInvoice(engagementId: string, type: InvoiceKind)
     .maybeSingle()
   if (error) throw new Error(`findLatestInvoice: ${error.message}`)
   return data as Invoice | null
+}
+
+// Idempotent auto-draft — called the moment an invoice/deposit is flagged as
+// needed. Reuses whatever's already in flight (draft/finalized/sent) for that
+// engagement + type; only starts a new one if none exists yet or the last one
+// already closed out (paid), e.g. a repeat deposit on the same engagement.
+export async function ensureDraftInvoice(input: {
+  engagementId: string
+  type: InvoiceKind
+  organization: string
+  amount: number
+  dueAt?: string
+  snapshot: InvoiceSnapshot
+}): Promise<Invoice> {
+  const existing = await findLatestInvoice(input.engagementId, input.type)
+  if (existing && existing.status !== 'paid') return existing
+  return createInvoice(input)
+}
+
+// Merges field edits into an invoice's snapshot (and keeps the denormalized
+// organization/amount columns used by the Invoices list in sync).
+export async function updateInvoiceSnapshot(invoice: Invoice, patch: Partial<InvoiceSnapshot>): Promise<Invoice> {
+  const snapshot = { ...invoice.snapshot, ...patch }
+  const amount = invoice.type === 'deposit' ? snapshot.deposit_amount ?? invoice.amount : snapshot.fee ?? invoice.amount
+  const { data, error } = await supabase
+    .from('invoices')
+    .update({ snapshot, organization: snapshot.organization, amount })
+    .eq('id', invoice.id)
+    .select('*')
+    .single()
+  if (error) throw new Error(`updateInvoiceSnapshot: ${error.message}`)
+  return data as Invoice
 }
 
 export function buildInvoiceSnapshot(client: Engagement): InvoiceSnapshot {

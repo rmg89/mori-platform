@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, updateCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact } from '@/lib/db'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -32,6 +32,18 @@ interface StoreActions {
   moveToWrapUp: (id: string) => void
   confirmBookingReview: (id: string) => void
   confirmWrapUpReview: (id: string) => void
+
+  // Create
+  addProspect: (input: {
+    organization: string
+    prospect_step?: ProspectStep
+    source?: string
+    topic?: string
+    event_city?: string
+    fee?: number
+    notes?: string
+    contact?: { first_name: string; last_name?: string; email?: string; phone?: string }
+  }) => Promise<Engagement>
 
   // Archive / delete
   archiveEngagement: (id: string, reason?: string) => void
@@ -352,6 +364,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const deleteEngagement = useCallback((id: string) => {
     setEngagements(prev => prev.filter(e => e.id !== id))
     deleteEngagementRow(id).catch(onWriteError)
+  }, [])
+
+  const addProspect = useCallback(async (input: {
+    organization: string
+    prospect_step?: ProspectStep
+    source?: string
+    topic?: string
+    event_city?: string
+    fee?: number
+    notes?: string
+    contact?: { first_name: string; last_name?: string; email?: string; phone?: string }
+  }) => {
+    const engagement = await insertEngagementRow(input)
+    setEngagements(prev => [engagement, ...prev])
+    return engagement
   }, [])
 
   const toggleEngagementFlag = useCallback((id: string, flag: EngagementFlag) => {
@@ -685,6 +712,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       engagements, reviewItems, companies, loading, error, saveStatus, saveError,
       updateEngagement, setProspectStep,
       confirmProspect, declineProspect, moveToWrapUp, confirmBookingReview, confirmWrapUpReview,
+      addProspect,
       archiveEngagement, deleteEngagement,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,

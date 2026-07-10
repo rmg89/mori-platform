@@ -2,12 +2,13 @@
 import { useState, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
-import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, PostEventMediaType, primaryContact } from '@/types'
+import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, PostEventMediaType, Invoice, primaryContact } from '@/types'
 import { formatDate, getInitials, formatRelativeDue } from '@/lib/utils'
 import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2, History, ChevronDown, ChevronUp, Flag, Bell, BellOff, Download } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 import ArchiveModal from '@/components/ArchiveModal'
+import InvoiceEditModal from '@/components/InvoiceEditModal'
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -35,7 +36,7 @@ function elapsed(dateStr: string): string {
 }
 
 const FLAG_STAGES: Record<PostEventFlag, { id: string; label: string }[]> = {
-  invoice:     [{ id: 'sent', label: 'Sent' }, { id: 'partial_payment', label: 'Partial payment' }, { id: 'paid', label: 'Paid' }],
+  invoice:     [{ id: 'finalized', label: 'Finalized' }, { id: 'sent', label: 'Sent' }, { id: 'partial_payment', label: 'Partial payment' }, { id: 'paid', label: 'Paid' }],
   thank_you:   [{ id: 'sent', label: 'Sent' }],
   testimonial: [{ id: 'requested', label: 'Requested' }, { id: 'received', label: 'Received' }],
   media:       [{ id: 'received', label: 'Received' }, { id: 'uploaded', label: 'Uploaded' }, { id: 'processed', label: 'Processed' }],
@@ -352,6 +353,7 @@ export default function WrapUpDetailPage() {
   const [linkUrl, setLinkUrl] = useState('')
   const [linkDescription, setLinkDescription] = useState('')
   const [invoiceDownloading, setInvoiceDownloading] = useState(false)
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
 
   const e = allEngagements.find(eng => eng.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
@@ -381,15 +383,19 @@ export default function WrapUpDetailPage() {
     setInvoiceDownloading(true)
     try {
       const { generateInvoice } = await import('@/lib/documents')
-      const { createInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
-      const inv = await createInvoice({
-        engagementId: e.id,
-        type: 'invoice',
-        organization: e.organization,
-        amount: e.fee,
-        snapshot: buildInvoiceSnapshot(e),
-      })
-      const blob = await generateInvoice(e, inv.invoice_number)
+      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+      const { fetchBusinessProfile } = await import('@/lib/business')
+      const [inv, business] = await Promise.all([
+        ensureDraftInvoice({
+          engagementId: e.id,
+          type: 'invoice',
+          organization: e.organization,
+          amount: e.fee,
+          snapshot: buildInvoiceSnapshot(e),
+        }),
+        fetchBusinessProfile(),
+      ])
+      const blob = await generateInvoice(e, inv.invoice_number, business)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -398,6 +404,33 @@ export default function WrapUpDetailPage() {
       URL.revokeObjectURL(url)
     } finally {
       setInvoiceDownloading(false)
+    }
+  }
+
+  async function handleEditInvoice() {
+    if (!e) return
+    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    let inv = await findLatestInvoice(engagementId, 'invoice')
+    if (!inv && e.fee) {
+      inv = await ensureDraftInvoice({
+        engagementId: e.id, type: 'invoice', organization: e.organization,
+        amount: e.fee, snapshot: buildInvoiceSnapshot(e),
+      })
+    }
+    if (inv) setEditingInvoice(inv)
+  }
+
+  async function handleAddFlag(flagId: PostEventFlag) {
+    setPostEventFlagNeeded(engagementId, flagId)
+    if (flagId === 'invoice' && e?.fee) {
+      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+      await ensureDraftInvoice({
+        engagementId: e.id,
+        type: 'invoice',
+        organization: e.organization,
+        amount: e.fee,
+        snapshot: buildInvoiceSnapshot(e),
+      })
     }
   }
 
@@ -415,8 +448,8 @@ export default function WrapUpDetailPage() {
       if (done.includes(flagId)) setPostEventFlagNeeded(engagementId, flagId)
     }
 
-    // Mirror sent/paid onto the matching invoices-table row so the central Invoices page agrees
-    if (flagId === 'invoice' && (stageId === 'sent' || stageId === 'paid')) {
+    // Mirror finalized/sent/paid onto the matching invoices-table row so the central Invoices page agrees
+    if (flagId === 'invoice' && (stageId === 'finalized' || stageId === 'sent' || stageId === 'paid')) {
       const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
       const inv = await findLatestInvoice(engagementId, 'invoice')
       if (inv) await setInvoiceStatus(inv, stageId)
@@ -560,14 +593,22 @@ export default function WrapUpDetailPage() {
                           )
                         })()}
                         {e.fee ? (
-                          <button
-                            onClick={handleInvoiceDownload}
-                            disabled={invoiceDownloading}
-                            className="flex items-center gap-1.5 text-xs font-medium text-gold hover:text-gold-dark border border-gold/30 hover:border-gold/60 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50"
-                          >
-                            <Download size={11} />
-                            {invoiceDownloading ? 'Generating…' : 'Download Invoice'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleInvoiceDownload}
+                              disabled={invoiceDownloading}
+                              className="flex items-center gap-1.5 text-xs font-medium text-gold hover:text-gold-dark border border-gold/30 hover:border-gold/60 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50"
+                            >
+                              <Download size={11} />
+                              {invoiceDownloading ? 'Generating…' : 'Download Invoice'}
+                            </button>
+                            <button
+                              onClick={handleEditInvoice}
+                              className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all"
+                            >
+                              Edit Details
+                            </button>
+                          </div>
                         ) : (
                           <p className="text-[10px] text-ink-300 italic">Set a speaking fee to enable invoice generation.</p>
                         )}
@@ -771,7 +812,7 @@ export default function WrapUpDetailPage() {
                     <span className="text-sm text-ink-400 font-medium">{flag.label}</span>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
-                        onClick={() => setPostEventFlagNeeded(engagementId, flag.id as PostEventFlag)}
+                        onClick={() => handleAddFlag(flag.id as PostEventFlag)}
                         className="flex items-center gap-1 text-[11px] font-medium text-ink-400 hover:text-ink bg-white border border-ink-100 hover:border-ink-200 px-2 py-1 rounded-md transition-all"
                       >
                         <Plus size={10} />Add
@@ -945,6 +986,14 @@ export default function WrapUpDetailPage() {
         onConfirm={() => { deleteEngagement(e.id); startTransition(() => router.push('/wrap-up')) }}
         onCancel={() => setDeleteModalOpen(false)}
       />
+
+      {editingInvoice && (
+        <InvoiceEditModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSaved={() => setEditingInvoice(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,11 +1,13 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { Engagement, PROSPECT_STEPS, primaryContact, getProspectStepLabel } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { Plus, AlertTriangle, Calendar, ArrowRight, Users, CheckCircle2, XCircle, ChevronDown, ChevronUp, Phone, Flag } from 'lucide-react'
 import Link from 'next/link'
 import { EngagementCall } from '@/types'
+import NewInquiryModal from '@/components/NewInquiryModal'
 
 // ─── Recently resolved (mock) ────────────────────────────────────────────────
 
@@ -249,7 +251,9 @@ function SectionHeader({
 
 export default function ProspectsPage() {
   const [resolvedOpen, setResolvedOpen] = useState(false)
+  const [newInquiryOpen, setNewInquiryOpen] = useState(false)
   const { engagements } = useStore()
+  const router = useRouter()
 
   const activeSteps = ['inquiry', 'outreach', 'in_contact']
   const prospects = engagements.filter(e =>
@@ -317,11 +321,19 @@ export default function ProspectsPage() {
               </div>
             )}
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-ink text-cream text-sm rounded-lg hover:bg-ink-700 transition-all">
+          <button onClick={() => setNewInquiryOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-ink text-cream text-sm rounded-lg hover:bg-ink-700 transition-all">
             <Plus size={16} /> New Inquiry
           </button>
         </div>
       </div>
+
+      {newInquiryOpen && (
+        <NewInquiryModal
+          onClose={() => setNewInquiryOpen(false)}
+          onCreated={id => router.push(`/prospects/${id}`)}
+        />
+      )}
 
       {/* ── Stats bar ── */}
       <div className="grid grid-cols-3 gap-3 mb-8">

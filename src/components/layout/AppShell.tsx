@@ -30,9 +30,9 @@ const NAV = [
   { href: '/prospects',   label: 'Prospects',   icon: UserSearch },
   { href: '/engagements', label: 'Engagements', icon: Handshake },
   { href: '/wrap-up',  label: 'Wrap-Up',  icon: Archive },
-  { href: '/invoices',    label: 'Invoices',    icon: Receipt },
   { href: '/review',      label: 'Review',      icon: ClipboardCheck },
   { href: '/companies',   label: 'Companies',   icon: Building2 },
+  { href: '/invoices',    label: 'Invoices',    icon: Receipt },
   { href: '/ai-tools',    label: 'AI Tools',    icon: Sparkles },
   { href: '/archive',     label: 'Archive',     icon: FolderArchive },
 ]

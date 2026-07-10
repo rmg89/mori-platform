@@ -1,7 +1,7 @@
 // Document generation using jsPDF
 // Templates are data-merge only — no AI, deterministic output
 
-import { Engagement, primaryContact } from '@/types'
+import { Engagement, BusinessProfile, primaryContact } from '@/types'
 type Client = Engagement
 
 function pc(client: Client) {
@@ -89,10 +89,11 @@ async function loadSignatureImage(): Promise<SignatureImage | null> {
 
 // ─── Invoice header — quiet, monochrome brand treatment ────────────────────────
 // Separate from the contract header so each can evolve independently.
-// Content starts at y = 128 after this call.
+// Content starts at y = 116 after this call. Business address/phone/fax now
+// live in the From/Billed-To two-column section below, not the header.
 
 function addInvoiceHeader(doc: any, title: string, signature: SignatureImage | null) {
-  const LOGO_TOP = 14, LOGO_MAX_H = 40, LOGO_MAX_W = 170
+  const LOGO_TOP = 14, LOGO_MAX_H = 44, LOGO_MAX_W = 170
 
   if (signature) {
     const scale = Math.min(LOGO_MAX_H / signature.height, LOGO_MAX_W / signature.width, 1)
@@ -105,33 +106,71 @@ function addInvoiceHeader(doc: any, title: string, signature: SignatureImage | n
     doc.text('Mori Taheripour', 50, LOGO_TOP + LOGO_MAX_H / 2 + 7)
   }
 
-  // Business address — small, muted
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(120, 117, 110)
-  doc.text('2425 L Street, NW, #409, Washington, DC  ·  510-385-7917', 50, 66)
-
   // Hairline rule
   doc.setDrawColor(205, 202, 196)
   doc.setLineWidth(0.5)
-  doc.line(50, 78, 562, 78)
+  doc.line(50, 70, 562, 70)
 
   // Document title — modest, ink
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(12.5)
   doc.setTextColor(80, 78, 72)
-  doc.text(title.toUpperCase(), 50, 96)
+  doc.text(title.toUpperCase(), 50, 88)
 
   // Single stronger rule to close the header
   doc.setDrawColor(15, 14, 12)
   doc.setLineWidth(0.6)
-  doc.line(50, 104, 562, 104)
+  doc.line(50, 96, 562, 96)
 
   // Reset all state so callers start clean
   doc.setDrawColor(15, 14, 12)
   doc.setLineWidth(0.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(15, 14, 12)
+}
+
+// ─── From / Billed To — two-column letterhead + client block ──────────────────
+// Left: the business's own letterhead info. Right: who the invoice is billed
+// to. Returns the y position to continue from.
+
+function addWrappedLine(doc: any, text: string, x: number, y: number, maxWidth: number, lineHeight = 13): number {
+  const lines = doc.splitTextToSize(text, maxWidth)
+  doc.text(lines, x, y)
+  return y + lines.length * lineHeight
+}
+
+function addFromBilledTo(doc: any, y: number, L: number, R: number, business: BusinessProfile, client: Client): number {
+  const rightX = L + (R - L) / 2 + 6
+  const colWidth = rightX - L - 12
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(140, 137, 130)
+  doc.text('FROM', L, y)
+  doc.text('BILLED TO', rightX, y)
+
+  let yLeft = y + 13
+  doc.setFontSize(10)
+  doc.setTextColor(15, 14, 12)
+  yLeft = addWrappedLine(doc, business.name, L, yLeft, colWidth)
+  doc.setTextColor(110, 107, 100)
+  if (business.address) yLeft = addWrappedLine(doc, business.address, L, yLeft, colWidth)
+  if (business.phone) yLeft = addWrappedLine(doc, business.phone, L, yLeft, colWidth)
+  if (business.fax) yLeft = addWrappedLine(doc, `Fax: ${business.fax}`, L, yLeft, colWidth)
+
+  const c = pc(client)
+  const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
+  let yRight = y + 13
+  doc.setFontSize(10)
+  doc.setTextColor(15, 14, 12)
+  yRight = addWrappedLine(doc, fullName, rightX, yRight, R - rightX)
+  doc.setTextColor(110, 107, 100)
+  if (c?.title) yRight = addWrappedLine(doc, c.title, rightX, yRight, R - rightX)
+  yRight = addWrappedLine(doc, client.organization || '—', rightX, yRight, R - rightX)
+  if (c?.email) yRight = addWrappedLine(doc, c.email, rightX, yRight, R - rightX)
+
+  doc.setTextColor(15, 14, 12)
+  return Math.max(yLeft, yRight) + 22
 }
 
 // ─── Contract / legacy header (used by generateContract) ──────────────────────
@@ -539,12 +578,12 @@ export function generateBriefingDocBytes(client: Client): Buffer {
 
 // ─── Invoice ──────────────────────────────────────────────────────────────────
 
-export async function generateInvoice(client: Client, invoiceNumber: string): Promise<Blob> {
+export async function generateInvoice(client: Client, invoiceNumber: string, business: BusinessProfile): Promise<Blob> {
   const doc = createDoc()
   const signature = await loadSignatureImage()
   addInvoiceHeader(doc, 'Invoice', signature)
 
-  let y = 128
+  let y = 116
   const L = 50, R = 562, W = 512
 
   // ── Meta row ──────────────────────────────────────────────────────────────
@@ -553,51 +592,20 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   doc.setTextColor(140, 137, 130)
   doc.text('INVOICE NUMBER', L, y)
   doc.text('INVOICE DATE', 230, y)
-  doc.text('PAYMENT DUE', 410, y)
   y += 12
   doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
-  doc.text(formatDate(new Date(Date.now() + 30 * 86400000).toISOString()), 410, y)
-  y += 28
+  y += 24
 
-  // ── Billed To ─────────────────────────────────────────────────────────────
+  // ── From / Billed To ──────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
   y += 14
 
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(140, 137, 130)
-  doc.text('BILLED TO', L, y)
-  y += 13
-
-  const c = pc(client)
-  const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
-  doc.setFontSize(10)
-  doc.setTextColor(15, 14, 12)
-  doc.text(fullName, L, y)
-  y += 15
-
-  if (c?.title) {
-    doc.setFontSize(10)
-    doc.setTextColor(110, 107, 100)
-    doc.text(c.title, L, y)
-    y += 13
-  }
-
-  doc.setFontSize(10)
-  doc.setTextColor(110, 107, 100)
-  doc.text(client.organization || '—', L, y)
-  y += 13
-
-  if (c?.email) {
-    doc.text(c.email, L, y)
-    y += 13
-  }
-  y += 34
+  y = addFromBilledTo(doc, y, L, R, business, client)
 
   // ── Line items ────────────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
@@ -689,12 +697,12 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
 
 // ─── Deposit Invoice ───────────────────────────────────────────────────────────
 
-export async function generateDepositInvoice(client: Client, invoiceNumber: string): Promise<Blob> {
+export async function generateDepositInvoice(client: Client, invoiceNumber: string, business: BusinessProfile): Promise<Blob> {
   const doc = createDoc()
   const signature = await loadSignatureImage()
   addInvoiceHeader(doc, 'Deposit Invoice', signature)
 
-  let y = 128
+  let y = 116
   const L = 50, R = 562, W = 512
 
   // ── Meta row ──────────────────────────────────────────────────────────────
@@ -703,50 +711,20 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   doc.setTextColor(140, 137, 130)
   doc.text('INVOICE NUMBER', L, y)
   doc.text('INVOICE DATE', 230, y)
-  doc.text('DEPOSIT DUE', 410, y)
   y += 12
   doc.setFontSize(10)
   doc.setTextColor(15, 14, 12)
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
-  doc.text(formatDate(new Date(Date.now() + 14 * 86400000).toISOString()), 410, y)
-  y += 28
+  y += 24
 
-  // ── Billed To ─────────────────────────────────────────────────────────────
+  // ── From / Billed To ──────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
   y += 14
 
-  doc.setFontSize(7.5)
-  doc.setTextColor(140, 137, 130)
-  doc.text('BILLED TO', L, y)
-  y += 13
-
-  const c = pc(client)
-  const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
-  doc.setFontSize(10)
-  doc.setTextColor(15, 14, 12)
-  doc.text(fullName, L, y)
-  y += 15
-
-  if (c?.title) {
-    doc.setFontSize(10)
-    doc.setTextColor(110, 107, 100)
-    doc.text(c.title, L, y)
-    y += 13
-  }
-
-  doc.setFontSize(10)
-  doc.setTextColor(110, 107, 100)
-  doc.text(client.organization || '—', L, y)
-  y += 13
-
-  if (c?.email) {
-    doc.text(c.email, L, y)
-    y += 13
-  }
-  y += 34
+  y = addFromBilledTo(doc, y, L, R, business, client)
 
   // ── Line items ────────────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)

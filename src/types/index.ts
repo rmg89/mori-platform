@@ -27,7 +27,7 @@ export type PostEventFlag = 'invoice' | 'thank_you' | 'testimonial' | 'media' | 
 export type Section = 'prospects' | 'engagements' | 'wrap-up'
 
 // ─── Wrap-Up Flag Stages ──────────────────────────────────────────────────────
-export type InvoiceStage = 'sent' | 'partial_payment' | 'paid'
+export type InvoiceStage = 'finalized' | 'sent' | 'partial_payment' | 'paid'
 export type ThankYouStage = 'sent'
 export type TestimonialStage = 'requested' | 'received'
 export type MediaStage = 'received' | 'uploaded' | 'processed'
@@ -269,10 +269,12 @@ export interface Engagement {
   post_event_testimonial_link?: string       // link to a testimonial (video, review, etc.)
   post_event_testimonial_text?: string       // testimonial text pasted directly
   invoice_sent_at?: string
+  invoice_finalized_at?: string
   wrap_up_review_needed?: boolean
   booking_review_needed?: boolean
   deposit_amount?: number
   deposit_invoice_sent_at?: string
+  deposit_finalized_at?: string
   deposit_received_at?: string
   payment_notes?: string
 
@@ -389,7 +391,7 @@ export interface GeneratedDocument {
 
 // ─── Invoices ─────────────────────────────────────────────────────────────────
 
-export type InvoiceStatus = 'draft' | 'sent' | 'paid'
+export type InvoiceStatus = 'draft' | 'finalized' | 'sent' | 'paid'
 export type InvoiceKind = 'invoice' | 'deposit'
 
 // Minimal snapshot of the fields generateInvoice/generateDepositInvoice read,
@@ -421,6 +423,7 @@ export interface Invoice {
   amount: number
   status: InvoiceStatus
   due_at?: string
+  finalized_at?: string
   sent_at?: string
   paid_at?: string
   snapshot: InvoiceSnapshot
@@ -432,6 +435,15 @@ export interface InstagramCaptionRequest {
   image_description: string
   topic_prompt: string
   tone?: 'professional' | 'inspiring' | 'conversational' | 'bold'
+}
+
+// ─── Business Profile (invoice letterhead) ─────────────────────────────────────
+
+export interface BusinessProfile {
+  name: string
+  address?: string
+  phone?: string
+  fax?: string
 }
 
 // ─── Company ──────────────────────────────────────────────────────────────────

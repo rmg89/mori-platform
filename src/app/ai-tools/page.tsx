@@ -108,6 +108,7 @@ export default function AIToolsPage() {
     try {
       const { generateInvoice, generateDepositInvoice } = await import('@/lib/documents')
       const { createInvoice } = await import('@/lib/invoices')
+      const { fetchBusinessProfile } = await import('@/lib/business')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockEngagement: any = {
         id: Date.now().toString(),
@@ -153,9 +154,10 @@ export default function AIToolsPage() {
         },
       })
 
+      const business = await fetchBusinessProfile()
       const blob = invoiceType === 'deposit'
-        ? await generateDepositInvoice(mockEngagement, inv.invoice_number)
-        : await generateInvoice(mockEngagement, inv.invoice_number)
+        ? await generateDepositInvoice(mockEngagement, inv.invoice_number, business)
+        : await generateInvoice(mockEngagement, inv.invoice_number, business)
 
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

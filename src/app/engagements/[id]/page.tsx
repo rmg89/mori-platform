@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect, useRef, useTransition, createContext, useContext } from 'react'
 import { useStore } from '@/lib/store'
 import {
-  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact
+  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact, Invoice
 } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import {
@@ -19,6 +19,7 @@ import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 import ArchiveModal from '@/components/ArchiveModal'
 import TimezoneSelect from '@/components/TimezoneSelect'
+import InvoiceEditModal from '@/components/InvoiceEditModal'
 import { TIMEZONE_OPTIONS } from '@/lib/timezone'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1038,20 +1039,53 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
 
   const sent = !!(e as any).deposit_invoice_sent_at
   const received = !!(e as any).deposit_received_at
+  const finalized = !!(e as any).deposit_finalized_at
   const amount = (e as any).deposit_amount as number | undefined
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
 
-  const status = received ? 'received' : sent ? 'sent' : 'pending'
+  const status = received ? 'received' : sent ? 'sent' : finalized ? 'finalized' : amount ? 'draft' : 'pending'
 
   function saveAmount() {
     const parsed = parseFloat(amountDraft.replace(/[^0-9.]/g, ''))
-    if (!isNaN(parsed)) save({ deposit_amount: parsed } as any)
+    if (!isNaN(parsed)) {
+      save({ deposit_amount: parsed } as any)
+      ensureDepositDraft(parsed)
+    }
     setEditingAmount(false)
   }
 
-  async function syncDepositInvoiceStatus(status: 'sent' | 'paid') {
+  async function ensureDepositDraft(depositAmount: number) {
+    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    await ensureDraftInvoice({
+      engagementId: e.id,
+      type: 'deposit',
+      organization: e.organization,
+      amount: depositAmount,
+      snapshot: buildInvoiceSnapshot(e),
+    })
+  }
+
+  async function syncDepositInvoiceStatus(status: 'finalized' | 'sent' | 'paid') {
     const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
     const inv = await findLatestInvoice(e.id, 'deposit')
     if (inv) await setInvoiceStatus(inv, status)
+  }
+
+  async function handleFinalize() {
+    save({ deposit_finalized_at: new Date().toISOString() } as any)
+    await syncDepositInvoiceStatus('finalized')
+  }
+
+  async function handleEditInvoice() {
+    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    let inv = await findLatestInvoice(e.id, 'deposit')
+    if (!inv && amount) {
+      inv = await ensureDraftInvoice({
+        engagementId: e.id, type: 'deposit', organization: e.organization,
+        amount, snapshot: buildInvoiceSnapshot(e),
+      })
+    }
+    if (inv) setEditingInvoice(inv)
   }
 
   function markSent() {
@@ -1068,15 +1102,19 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
 
   async function downloadDepositPdf() {
     const { generateDepositInvoice } = await import('@/lib/documents')
-    const { createInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
-    const inv = await createInvoice({
-      engagementId: e.id,
-      type: 'deposit',
-      organization: e.organization,
-      amount: amount ?? 0,
-      snapshot: buildInvoiceSnapshot(e),
-    })
-    const blob = await generateDepositInvoice(e, inv.invoice_number)
+    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const { fetchBusinessProfile } = await import('@/lib/business')
+    const [inv, business] = await Promise.all([
+      ensureDraftInvoice({
+        engagementId: e.id,
+        type: 'deposit',
+        organization: e.organization,
+        amount: amount ?? 0,
+        snapshot: buildInvoiceSnapshot(e),
+      }),
+      fetchBusinessProfile(),
+    ])
+    const blob = await generateDepositInvoice(e, inv.invoice_number, business)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1122,11 +1160,13 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
 
         {/* Status badge */}
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-          status === 'received' ? 'bg-sage/10 text-sage' :
-          status === 'sent'     ? 'bg-gold/10 text-gold-dark' :
+          status === 'received'  ? 'bg-sage/10 text-sage' :
+          status === 'sent'      ? 'bg-gold/10 text-gold-dark' :
+          status === 'finalized' ? 'bg-amber-50 text-amber-700' :
+          status === 'draft'     ? 'bg-parchment text-ink-400' :
           'bg-parchment text-ink-300'
         }`}>
-          {status === 'received' ? 'Received' : status === 'sent' ? 'Invoice Sent' : 'Not Sent'}
+          {status === 'received' ? 'Received' : status === 'sent' ? 'Invoice Sent' : status === 'finalized' ? 'Finalized' : status === 'draft' ? 'Draft' : 'Not Sent'}
         </span>
       </div>
 
@@ -1209,6 +1249,18 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
 
         {/* Actions */}
         <div className="flex flex-col gap-2 flex-shrink-0">
+          {amount && (
+            <button onClick={handleEditInvoice}
+              className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all">
+              Edit Details
+            </button>
+          )}
+          {amount && !finalized && !sent && (
+            <button onClick={handleFinalize}
+              className="flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-800 border border-amber-200 hover:border-amber-300 rounded-lg px-3 py-1.5 transition-all">
+              <Check size={11} /> Finalize
+            </button>
+          )}
           {amount && !sent && (
             <button onClick={handleGenerateAndSend} disabled={downloading}
               className="flex items-center gap-1.5 text-xs font-medium text-gold hover:text-gold-dark border border-gold/30 hover:border-gold/60 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
@@ -1237,6 +1289,14 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
           )}
         </div>
       </div>
+
+      {editingInvoice && (
+        <InvoiceEditModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSaved={() => setEditingInvoice(null)}
+        />
+      )}
     </div>
   )
 }

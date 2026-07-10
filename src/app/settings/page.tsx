@@ -1,10 +1,81 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AppShell from '@/components/layout/AppShell'
-import { BookUser, Shield, Plug, Users } from 'lucide-react'
+import { BookUser, Shield, Plug, Users, Receipt, Check } from 'lucide-react'
 import Link from 'next/link'
+import { fetchBusinessProfile, updateBusinessProfile } from '@/lib/business'
+import type { BusinessProfile } from '@/types'
 
-type Tab = 'users' | 'integrations'
+type Tab = 'users' | 'billing' | 'integrations'
+
+function BillingField({
+  label, value, onChange, placeholder,
+}: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string
+}) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">{label}</label>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full text-sm bg-parchment border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold/40 text-ink placeholder:text-ink-300 transition-all"
+      />
+    </div>
+  )
+}
+
+function BillingTab() {
+  const [profile, setProfile] = useState<BusinessProfile>({ name: '' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    fetchBusinessProfile().then(p => { setProfile(p); setLoading(false) })
+  }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await updateBusinessProfile(profile)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <p className="text-sm text-ink-400">Loading…</p>
+
+  return (
+    <div className="bg-white border border-ink-100 rounded-xl p-5 max-w-md">
+      <div className="flex items-center gap-2 mb-4">
+        <Receipt size={14} className="text-ink-400" />
+        <p className="text-sm font-semibold text-ink">Invoice Letterhead</p>
+      </div>
+      <p className="text-xs text-ink-400 mb-4">
+        Shown on every generated invoice — the business name, address, and contact details next to the client's billing info.
+      </p>
+      <div className="space-y-3">
+        <BillingField label="Business name" value={profile.name} onChange={v => setProfile(p => ({ ...p, name: v }))} placeholder="MT Global Strategies" />
+        <BillingField label="Address" value={profile.address ?? ''} onChange={v => setProfile(p => ({ ...p, address: v }))} placeholder="2425 L Street, NW, #409, Washington, DC" />
+        <div className="grid grid-cols-2 gap-3">
+          <BillingField label="Phone" value={profile.phone ?? ''} onChange={v => setProfile(p => ({ ...p, phone: v }))} placeholder="510-385-7917" />
+          <BillingField label="Fax" value={profile.fax ?? ''} onChange={v => setProfile(p => ({ ...p, fax: v }))} placeholder="202-223-1655" />
+        </div>
+      </div>
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="mt-5 flex items-center gap-1.5 text-xs font-medium text-white bg-ink hover:bg-ink-700 px-4 py-2 rounded-lg transition-all disabled:opacity-40"
+      >
+        {saved ? <><Check size={12} /> Saved</> : saving ? 'Saving…' : 'Save'}
+      </button>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('users')
@@ -21,6 +92,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-1 mb-8 border-b border-ink-100">
           {([
             { id: 'users', label: 'Users & Permissions', icon: Users },
+            { id: 'billing', label: 'Billing', icon: Receipt },
             { id: 'integrations', label: 'Integrations', icon: Plug },
           ] as { id: Tab; label: string; icon: React.ElementType }[]).map(t => (
             <button
@@ -83,6 +155,9 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* Billing tab */}
+        {tab === 'billing' && <BillingTab />}
 
         {/* Integrations tab */}
         {tab === 'integrations' && (

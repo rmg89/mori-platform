@@ -52,9 +52,11 @@ interface EngagementRow {
   briefing_complete: boolean
   briefing_complete_at: string | null
   invoice_sent_at: string | null
+  invoice_finalized_at: string | null
   payment_received_at: string | null
   deposit_amount: number | null
   deposit_invoice_sent_at: string | null
+  deposit_finalized_at: string | null
   deposit_received_at: string | null
   payment_notes: string | null
   thank_you_sent: boolean
@@ -279,6 +281,8 @@ function derivePostEventFlags(row: EngagementRow): {
   if (row.invoice_sent_at) {
     done.push('invoice')
     stages.invoice = row.payment_received_at ? 'paid' : 'sent'
+  } else if (row.invoice_finalized_at) {
+    stages.invoice = 'finalized'
   }
   if (row.thank_you_sent)        done.push('thank_you')
   if (row.testimonial_requested) done.push('testimonial')
@@ -364,10 +368,12 @@ function assembleEngagement(
     briefing_complete_at: row.briefing_complete_at ?? undefined,
     briefing_notes: briefingNotes.map(mapBriefingNote),
     invoice_sent_at: row.invoice_sent_at ?? undefined,
+    invoice_finalized_at: row.invoice_finalized_at ?? undefined,
     wrap_up_review_needed: row.wrap_up_review_needed ?? false,
     booking_review_needed: row.booking_review_needed ?? false,
     deposit_amount: row.deposit_amount ?? undefined,
     deposit_invoice_sent_at: row.deposit_invoice_sent_at ?? undefined,
+    deposit_finalized_at: row.deposit_finalized_at ?? undefined,
     deposit_received_at: row.deposit_received_at ?? undefined,
     payment_notes: row.payment_notes ?? undefined,
 
@@ -466,6 +472,52 @@ export async function updateEngagementRow(id: string, patch: Record<string, unkn
 export async function deleteEngagementRow(id: string): Promise<void> {
   const { error } = await supabase.from('engagements').delete().eq('id', id)
   if (error) throw new Error(`deleteEngagementRow: ${error.message}`)
+}
+
+export async function insertEngagementRow(input: {
+  organization: string
+  prospect_step?: string
+  event_type?: string
+  source?: string
+  topic?: string
+  event_city?: string
+  fee?: number
+  notes?: string
+  contact?: { first_name: string; last_name?: string; email?: string; phone?: string }
+}): Promise<Engagement> {
+  const now = new Date().toISOString()
+  const { data: row, error } = await supabase.from('engagements').insert({
+    organization: input.organization,
+    section: 'prospects',
+    prospect_step: input.prospect_step ?? 'inquiry',
+    event_type: input.event_type ?? 'speaking',
+    source: input.source || null,
+    topic: input.topic || null,
+    event_city: input.event_city || null,
+    fee: input.fee ?? null,
+    notes: input.notes || null,
+    created_at: now, updated_at: now, last_activity_at: now,
+  }).select('*').single()
+  if (error) throw new Error(`insertEngagementRow: ${error.message}`)
+
+  let contacts: ContactRow[] = []
+  if (input.contact?.first_name) {
+    const { data: contactRow, error: contactError } = await supabase.from('contacts').insert({
+      engagement_id: row.id,
+      first_name: input.contact.first_name,
+      last_name: input.contact.last_name || '',
+      email: input.contact.email || null,
+      phone: input.contact.phone || null,
+      role: 'primary',
+      is_current_point_of_contact: true,
+      status: 'prospect_active',
+      watching: false,
+    }).select('*').single()
+    if (contactError) console.error('insertEngagementRow contact:', contactError.message)
+    else if (contactRow) contacts = [contactRow as ContactRow]
+  }
+
+  return assembleEngagement(row as EngagementRow, contacts, [], [], [], [])
 }
 
 export async function insertContact(engagement_id: string, contact: Omit<ContactRow, 'id'>): Promise<string | null> {

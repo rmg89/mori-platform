@@ -6,12 +6,14 @@ import { fetchInvoices, setInvoiceStatus, snapshotToClient } from '@/lib/invoice
 import type { Invoice, InvoiceStatus, InvoiceKind } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { Download } from 'lucide-react'
+import InvoiceEditModal from '@/components/InvoiceEditModal'
 
 const PAGE_SIZE = 30
 
 const STATUS_TABS: { id: InvoiceStatus | 'all'; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'draft', label: 'Draft' },
+  { id: 'finalized', label: 'Finalized' },
   { id: 'sent', label: 'Sent' },
   { id: 'paid', label: 'Paid' },
 ]
@@ -22,11 +24,26 @@ const TYPE_TABS: { id: InvoiceKind | 'all'; label: string }[] = [
   { id: 'deposit', label: 'Deposit' },
 ]
 
+// draft → finalized → sent → paid
+const NEXT_STATUS: Record<InvoiceStatus, InvoiceStatus | null> = {
+  draft: 'finalized',
+  finalized: 'sent',
+  sent: 'paid',
+  paid: null,
+}
+const NEXT_STATUS_LABEL: Record<InvoiceStatus, string> = {
+  draft: 'Finalize',
+  finalized: 'Mark Sent',
+  sent: 'Mark Paid',
+  paid: '',
+}
+
 function StatusBadge({ status }: { status: InvoiceStatus }) {
   const cls = status === 'paid' ? 'bg-sage/10 text-sage'
     : status === 'sent' ? 'bg-gold/10 text-gold-dark'
+    : status === 'finalized' ? 'bg-amber-50 text-amber-700'
     : 'bg-parchment text-ink-300'
-  const label = status === 'paid' ? 'Paid' : status === 'sent' ? 'Sent' : 'Draft'
+  const label = status === 'paid' ? 'Paid' : status === 'sent' ? 'Sent' : status === 'finalized' ? 'Finalized' : 'Draft'
   return <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cls}`}>{label}</span>
 }
 
@@ -57,6 +74,7 @@ export default function InvoicesPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -90,13 +108,16 @@ export default function InvoicesPage() {
     }
   }
 
-  async function handleMarkStatus(inv: Invoice, status: InvoiceStatus) {
+  async function handleAdvanceStatus(inv: Invoice) {
+    const status = NEXT_STATUS[inv.status]
+    if (!status) return
     setUpdatingId(inv.id)
     try {
       await setInvoiceStatus(inv, status)
       const now = new Date().toISOString()
       setRows(prev => prev.map(r => r.id === inv.id ? {
         ...r, status,
+        finalized_at: status === 'finalized' ? now : r.finalized_at,
         sent_at: status === 'sent' ? now : r.sent_at,
         paid_at: status === 'paid' ? now : r.paid_at,
       } : r))
@@ -109,10 +130,12 @@ export default function InvoicesPage() {
     setDownloadingId(inv.id)
     try {
       const { generateInvoice, generateDepositInvoice } = await import('@/lib/documents')
+      const { fetchBusinessProfile } = await import('@/lib/business')
       const client = snapshotToClient(inv)
+      const business = await fetchBusinessProfile()
       const blob = inv.type === 'deposit'
-        ? await generateDepositInvoice(client, inv.invoice_number)
-        : await generateInvoice(client, inv.invoice_number)
+        ? await generateDepositInvoice(client, inv.invoice_number, business)
+        : await generateInvoice(client, inv.invoice_number, business)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -184,11 +207,19 @@ export default function InvoicesPage() {
                   <div className="flex-shrink-0 flex items-center gap-2">
                     {inv.status !== 'paid' && (
                       <button
-                        onClick={() => handleMarkStatus(inv, inv.status === 'draft' ? 'sent' : 'paid')}
+                        onClick={() => setEditingInvoice(inv)}
+                        className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2.5 py-1.5 transition-all"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {inv.status !== 'paid' && (
+                      <button
+                        onClick={() => handleAdvanceStatus(inv)}
                         disabled={updatingId === inv.id}
                         className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2.5 py-1.5 transition-all disabled:opacity-40"
                       >
-                        {inv.status === 'draft' ? 'Mark Sent' : 'Mark Paid'}
+                        {NEXT_STATUS_LABEL[inv.status]}
                       </button>
                     )}
                     <button
@@ -214,6 +245,14 @@ export default function InvoicesPage() {
             {loadingMore ? 'Loading…' : `Load more (${count - rows.length} remaining)`}
           </button>
         </div>
+      )}
+
+      {editingInvoice && (
+        <InvoiceEditModal
+          invoice={editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSaved={updated => setRows(prev => prev.map(r => r.id === updated.id ? updated : r))}
+        />
       )}
     </div>
   )
