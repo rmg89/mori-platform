@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Check, Plus } from 'lucide-react'
+import { X, Check, Plus, Wand2, Loader2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { getInitials } from '@/lib/utils'
 import type { ProspectStep, EngagementContact } from '@/types'
@@ -37,6 +37,9 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
   const [newOrgFormOpen, setNewOrgFormOpen] = useState(false)
   const [newOrgWebsite, setNewOrgWebsite] = useState('')
   const [newOrgIndustry, setNewOrgIndustry] = useState('')
+  const [newOrgAiSuggested, setNewOrgAiSuggested] = useState(false)
+  const [lookingUpOrg, setLookingUpOrg] = useState(false)
+  const [lookupNote, setLookupNote] = useState<string | null>(null)
   const [creatingCompany, setCreatingCompany] = useState(false)
   const [contactMode, setContactMode] = useState<'search' | 'add'>('search')
   const [contactQuery, setContactQuery] = useState('')
@@ -86,6 +89,32 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
 
   const canSave = trimmedOrg.length > 0 && !saving
 
+  async function handleLookupOrg() {
+    if (!trimmedOrg || lookingUpOrg) return
+    setLookingUpOrg(true)
+    setLookupNote(null)
+    try {
+      const res = await fetch('/api/ai/enrich-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedOrg }),
+      })
+      if (!res.ok) throw new Error('Lookup request failed')
+      const data: { website: string | null; industry: string | null } = await res.json()
+      if (data.website || data.industry) {
+        if (data.website) setNewOrgWebsite(data.website)
+        if (data.industry) setNewOrgIndustry(data.industry)
+        setNewOrgAiSuggested(true)
+      } else {
+        setLookupNote('No public info found — enter manually.')
+      }
+    } catch {
+      setLookupNote('Lookup failed — enter manually.')
+    } finally {
+      setLookingUpOrg(false)
+    }
+  }
+
   async function handleCreateCompany() {
     if (!trimmedOrg || exactCompanyMatch || creatingCompany) return
     setCreatingCompany(true)
@@ -94,6 +123,8 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
       setNewOrgFormOpen(false)
       setNewOrgWebsite('')
       setNewOrgIndustry('')
+      setNewOrgAiSuggested(false)
+      setLookupNote(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create company')
     } finally {
@@ -177,10 +208,29 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
             ) : trimmedOrg && (
               newOrgFormOpen ? (
                 <div className="mt-2 space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
-                  <p className="text-[11px] text-ink-400">New organization — add what you know, the rest can be filled in later.</p>
-                  <input value={newOrgWebsite} onChange={e => setNewOrgWebsite(e.target.value)} placeholder="Website (optional)" type="url"
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-ink-400">New organization — add what you know, the rest can be filled in later.</p>
+                    <button type="button" onClick={handleLookupOrg} disabled={lookingUpOrg}
+                      className="flex items-center gap-1 text-[11px] font-medium text-gold hover:text-gold-dark transition-colors flex-shrink-0 disabled:opacity-50">
+                      {lookingUpOrg ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+                      {lookingUpOrg ? 'Looking up…' : 'Look up with AI'}
+                    </button>
+                  </div>
+                  {newOrgAiSuggested && (
+                    <p className="text-[10px] text-gold-dark bg-gold/10 border border-gold/20 rounded-md px-2 py-1 flex items-center gap-1">
+                      <Wand2 size={9} /> AI-suggested — please verify before saving
+                    </p>
+                  )}
+                  {lookupNote && <p className="text-[11px] text-ink-300 italic">{lookupNote}</p>}
+                  <input
+                    value={newOrgWebsite}
+                    onChange={e => { setNewOrgWebsite(e.target.value); setNewOrgAiSuggested(false) }}
+                    placeholder="Website (optional)" type="url"
                     className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
-                  <input value={newOrgIndustry} onChange={e => setNewOrgIndustry(e.target.value)} placeholder="Industry (optional)"
+                  <input
+                    value={newOrgIndustry}
+                    onChange={e => { setNewOrgIndustry(e.target.value); setNewOrgAiSuggested(false) }}
+                    placeholder="Industry (optional)"
                     className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <button type="button" onClick={() => setNewOrgFormOpen(false)} className="text-xs text-ink-300 hover:text-ink transition-colors">
