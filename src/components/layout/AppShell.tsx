@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, UserSearch, Handshake, Archive, FolderArchive,
-  ClipboardCheck, Sparkles, Settings, Building2,
+  ClipboardCheck, Sparkles, Settings, Building2, Receipt,
   CheckCircle2, Loader2, AlertCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -30,6 +30,7 @@ const NAV = [
   { href: '/prospects',   label: 'Prospects',   icon: UserSearch },
   { href: '/engagements', label: 'Engagements', icon: Handshake },
   { href: '/wrap-up',  label: 'Wrap-Up',  icon: Archive },
+  { href: '/invoices',    label: 'Invoices',    icon: Receipt },
   { href: '/review',      label: 'Review',      icon: ClipboardCheck },
   { href: '/companies',   label: 'Companies',   icon: Building2 },
   { href: '/ai-tools',    label: 'AI Tools',    icon: Sparkles },

@@ -387,6 +387,45 @@ export interface GeneratedDocument {
   version: number
 }
 
+// ─── Invoices ─────────────────────────────────────────────────────────────────
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid'
+export type InvoiceKind = 'invoice' | 'deposit'
+
+// Minimal snapshot of the fields generateInvoice/generateDepositInvoice read,
+// captured at generation time so a later re-download reproduces the original
+// PDF even if the live engagement has since changed.
+export interface InvoiceSnapshot {
+  organization: string
+  event_name?: string
+  topic?: string
+  event_date?: string
+  event_city?: string
+  fee?: number
+  deposit_amount?: number
+  travel_covered?: boolean
+  contact_first_name?: string
+  contact_last_name?: string
+  contact_title?: string
+  contact_email?: string
+}
+
+export interface Invoice {
+  id: string
+  created_at: string
+  engagement_id?: string
+  type: InvoiceKind
+  invoice_number: string
+  sequence_number: number
+  organization: string
+  amount: number
+  status: InvoiceStatus
+  due_at?: string
+  sent_at?: string
+  paid_at?: string
+  snapshot: InvoiceSnapshot
+}
+
 // ─── AI Types ─────────────────────────────────────────────────────────────────
 
 export interface InstagramCaptionRequest {

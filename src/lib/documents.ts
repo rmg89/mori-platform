@@ -53,17 +53,10 @@ function createDoc() {
   return doc
 }
 
-// Short, stable invoice number derived from an engagement id — 4 digits, no crypto needed.
-export function shortInvoiceNumber(id: string): string {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0
-  }
-  return String(hash % 10000).padStart(4, '0')
-}
-
-// Signature/logo image to use in place of the typed name in the invoice header.
-// Drop the file at public/signature.png — falls back to a plain text wordmark if absent.
+// Logo image to use in place of the typed name in the invoice header.
+// Drop the file at public/signature.png (any source format — it's re-encoded to
+// PNG via canvas so JPG/WebP/etc. all work) — falls back to a plain text
+// wordmark if absent.
 type SignatureImage = { dataUrl: string; width: number; height: number }
 
 async function loadSignatureImage(): Promise<SignatureImage | null> {
@@ -71,19 +64,24 @@ async function loadSignatureImage(): Promise<SignatureImage | null> {
     const res = await fetch('/signature.png')
     if (!res.ok) return null
     const blob = await res.blob()
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-    const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve({ width: img.width, height: img.height })
-      img.onerror = reject
-      img.src = dataUrl
-    })
-    return { dataUrl, width, height }
+    const objectUrl = URL.createObjectURL(blob)
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = reject
+        el.src = objectUrl
+      })
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      ctx.drawImage(img, 0, 0)
+      return { dataUrl: canvas.toDataURL('image/png'), width: img.naturalWidth, height: img.naturalHeight }
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
   } catch {
     return null
   }
@@ -91,42 +89,43 @@ async function loadSignatureImage(): Promise<SignatureImage | null> {
 
 // ─── Invoice header — quiet, monochrome brand treatment ────────────────────────
 // Separate from the contract header so each can evolve independently.
-// Content starts at y = 122 after this call.
+// Content starts at y = 128 after this call.
 
 function addInvoiceHeader(doc: any, title: string, signature: SignatureImage | null) {
+  const LOGO_TOP = 14, LOGO_MAX_H = 40, LOGO_MAX_W = 170
+
   if (signature) {
-    const maxH = 36, maxW = 210
-    const scale = Math.min(maxH / signature.height, maxW / signature.width, 1)
+    const scale = Math.min(LOGO_MAX_H / signature.height, LOGO_MAX_W / signature.width, 1)
     const w = signature.width * scale, h = signature.height * scale
-    doc.addImage(signature.dataUrl, 'PNG', 50, 44 - h, w, h)
+    doc.addImage(signature.dataUrl, 'PNG', 50, LOGO_TOP, w, h)
   } else {
-    doc.setFont('times', 'bold')
-    doc.setFontSize(19)
+    doc.setFont('times', 'normal')
+    doc.setFontSize(21)
     doc.setTextColor(15, 14, 12)
-    doc.text('Mori Taheripour', 50, 44)
+    doc.text('Mori Taheripour', 50, LOGO_TOP + LOGO_MAX_H / 2 + 7)
   }
 
-  // Credentials — small, muted
+  // Business address — small, muted
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(120, 117, 110)
-  doc.text('Wharton School  ·  Author, Bring Yourself  ·  Keynote Speaker  ·  Negotiation Expert', 50, 60)
+  doc.text('2425 L Street, NW, #409, Washington, DC  ·  510-385-7917', 50, 66)
 
   // Hairline rule
   doc.setDrawColor(205, 202, 196)
   doc.setLineWidth(0.5)
-  doc.line(50, 72, 562, 72)
+  doc.line(50, 78, 562, 78)
 
   // Document title — modest, ink
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setFontSize(12.5)
   doc.setTextColor(80, 78, 72)
-  doc.text(title.toUpperCase(), 50, 94)
+  doc.text(title.toUpperCase(), 50, 96)
 
   // Single stronger rule to close the header
   doc.setDrawColor(15, 14, 12)
   doc.setLineWidth(0.6)
-  doc.line(50, 102, 562, 102)
+  doc.line(50, 104, 562, 104)
 
   // Reset all state so callers start clean
   doc.setDrawColor(15, 14, 12)
@@ -545,19 +544,18 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   const signature = await loadSignatureImage()
   addInvoiceHeader(doc, 'Invoice', signature)
 
-  let y = 122
+  let y = 128
   const L = 50, R = 562, W = 512
 
   // ── Meta row ──────────────────────────────────────────────────────────────
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setTextColor(140, 137, 130)
   doc.text('INVOICE NUMBER', L, y)
   doc.text('INVOICE DATE', 230, y)
   doc.text('PAYMENT DUE', 410, y)
   y += 12
   doc.setFontSize(10.5)
-  doc.setFont('helvetica', 'normal')
   doc.setTextColor(15, 14, 12)
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
@@ -571,7 +569,7 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   y += 14
 
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setTextColor(140, 137, 130)
   doc.text('BILLED TO', L, y)
   y += 13
@@ -579,21 +577,18 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   const c = pc(client)
   const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
   doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 14, 12)
   doc.text(fullName, L, y)
   y += 15
 
   if (c?.title) {
     doc.setFontSize(9.5)
-    doc.setFont('helvetica', 'normal')
     doc.setTextColor(110, 107, 100)
     doc.text(c.title, L, y)
     y += 13
   }
 
   doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
   doc.setTextColor(110, 107, 100)
   doc.text(client.organization || '—', L, y)
   y += 13
@@ -602,19 +597,18 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
     doc.text(c.email, L, y)
     y += 13
   }
-  y += 26
+  y += 34
 
   // ── Line items ────────────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
-  y += 16
+  y += 22
 
   // Table header bar
   doc.setFillColor(248, 246, 242)
   doc.rect(L, y - 4, W, 22, 'F')
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(130, 127, 120)
   doc.text('DESCRIPTION', L + 8, y + 9)
   doc.text('AMOUNT', R - 8, y + 9, { align: 'right' })
@@ -623,13 +617,11 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   // Speaking fee line
   const eventLabel = client.event_name || client.topic || 'Speaking Engagement'
   doc.setFontSize(10.5)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 14, 12)
   doc.text('Keynote / Speaking Fee', L + 8, y)
   doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
   y += 14
 
-  doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(110, 107, 100)
   const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
@@ -640,7 +632,6 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   // Travel line (if applicable)
   if (client.travel_covered) {
     doc.setFontSize(10.5)
-    doc.setFont('helvetica', 'normal')
     doc.setTextColor(15, 14, 12)
     doc.text('Travel & Accommodation', L + 8, y)
     doc.text('—', R - 8, y, { align: 'right' })
@@ -659,11 +650,9 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   y += 15
 
   doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(140, 137, 130)
   doc.text('TOTAL DUE', 378, y)
 
-  doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
   doc.setTextColor(15, 14, 12)
   doc.text(formatCurrency(client.fee), R - 8, y, { align: 'right' })
@@ -676,34 +665,24 @@ export async function generateInvoice(client: Client, invoiceNumber: string): Pr
   y += 15
 
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(140, 137, 130)
-  doc.text('PAYMENT INSTRUCTIONS', L, y)
+  doc.text('BILLING INFORMATION', L, y)
   y += 14
 
   const payRows: [string, string][] = [
-    ['Wire / ACH', '[Bank name, routing & account — contact admin@moritaheripour.com]'],
-    ['Check', 'Payable to Mori Taheripour'],
-    ['Reference', `Please include invoice number ${invoiceNumber} in the payment memo`],
-    ['Questions', 'admin@moritaheripour.com'],
+    ['Wire / ACH', 'Wells Fargo Bank  ·  Acct Name: MT Global Strategies\nAcct #: 6352499294  ·  Routing #: 121000248'],
+    ['Check', 'Payable to MT Global Strategies'],
   ]
+  doc.setFont('helvetica', 'normal')
   for (const [label, value] of payRows) {
     doc.setFontSize(9)
-    doc.setFont('helvetica', 'bold')
     doc.setTextColor(40, 38, 34)
     doc.text(label, L, y)
-    doc.setFont('helvetica', 'normal')
     doc.setTextColor(100, 97, 90)
     const vLines = doc.splitTextToSize(s(value), 370)
     doc.text(vLines, L + 110, y)
     y += Math.max(vLines.length, 1) * 13 + 3
   }
-
-  y += 16
-  doc.setFontSize(9)
-  doc.setFont('times', 'italic')
-  doc.setTextColor(170, 167, 160)
-  doc.text('Be Confident. Be Curious. Bring Yourself.', L, y)
 
   addFooter(doc, 1)
   return doc.output('blob')
@@ -716,19 +695,18 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   const signature = await loadSignatureImage()
   addInvoiceHeader(doc, 'Deposit Invoice', signature)
 
-  let y = 122
+  let y = 128
   const L = 50, R = 562, W = 512
 
   // ── Meta row ──────────────────────────────────────────────────────────────
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont('helvetica', 'normal')
   doc.setTextColor(140, 137, 130)
   doc.text('INVOICE NUMBER', L, y)
   doc.text('INVOICE DATE', 230, y)
   doc.text('DEPOSIT DUE', 410, y)
   y += 12
   doc.setFontSize(10.5)
-  doc.setFont('helvetica', 'normal')
   doc.setTextColor(15, 14, 12)
   doc.text(invoiceNumber, L, y)
   doc.text(formatDate(new Date().toISOString()), 230, y)
@@ -742,7 +720,6 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   y += 14
 
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(140, 137, 130)
   doc.text('BILLED TO', L, y)
   y += 13
@@ -750,21 +727,18 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   const c = pc(client)
   const fullName = [c?.first_name, c?.last_name].filter(Boolean).join(' ') || '—'
   doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 14, 12)
   doc.text(fullName, L, y)
   y += 15
 
   if (c?.title) {
     doc.setFontSize(9.5)
-    doc.setFont('helvetica', 'normal')
     doc.setTextColor(110, 107, 100)
     doc.text(c.title, L, y)
     y += 13
   }
 
   doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
   doc.setTextColor(110, 107, 100)
   doc.text(client.organization || '—', L, y)
   y += 13
@@ -773,18 +747,17 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
     doc.text(c.email, L, y)
     y += 13
   }
-  y += 26
+  y += 34
 
   // ── Line items ────────────────────────────────────────────────────────────
   doc.setDrawColor(210, 208, 202)
   doc.setLineWidth(0.4)
   doc.line(L, y, R, y)
-  y += 16
+  y += 22
 
   doc.setFillColor(248, 246, 242)
   doc.rect(L, y - 4, W, 22, 'F')
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(130, 127, 120)
   doc.text('DESCRIPTION', L + 8, y + 9)
   doc.text('AMOUNT', R - 8, y + 9, { align: 'right' })
@@ -794,13 +767,11 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   const eventLabel = client.event_name || client.topic || 'Speaking Engagement'
 
   doc.setFontSize(10.5)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 14, 12)
   doc.text('Deposit — Speaking Fee', L + 8, y)
   doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
   y += 14
 
-  doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(110, 107, 100)
   const subDesc = s(`${eventLabel}  ·  ${formatDate(client.event_date)}${client.event_city ? '  ·  ' + client.event_city : ''}  ·  ${client.organization}`)
@@ -814,7 +785,6 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   // Total fee (context row — grayed)
   if (client.fee) {
     doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'normal')
     doc.setTextColor(140, 137, 130)
     doc.text('Total Speaking Fee', 375, y)
     doc.setTextColor(110, 107, 100)
@@ -829,10 +799,8 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   y += 14
 
   doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(140, 137, 130)
   doc.text('DEPOSIT DUE (THIS INVOICE)', 375, y)
-  doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
   doc.setTextColor(15, 14, 12)
   doc.text(formatCurrency(depositAmount), R - 8, y, { align: 'right' })
@@ -841,7 +809,6 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   // Balance row
   if (client.fee && client.fee > depositAmount) {
     doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'normal')
     doc.setTextColor(140, 137, 130)
     doc.text('Balance Due After Event', 375, y)
     doc.setTextColor(110, 107, 100)
@@ -852,7 +819,6 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
 
   // Confirming language
   doc.setFontSize(8.5)
-  doc.setFont('helvetica', 'italic')
   doc.setTextColor(130, 127, 120)
   const confirmLines = doc.splitTextToSize(
     s('This deposit confirms your engagement and is applied toward the total speaking fee. The remaining balance will be invoiced separately following the event.'),
@@ -868,34 +834,23 @@ export async function generateDepositInvoice(client: Client, invoiceNumber: stri
   y += 15
 
   doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
   doc.setTextColor(140, 137, 130)
-  doc.text('PAYMENT INSTRUCTIONS', L, y)
+  doc.text('BILLING INFORMATION', L, y)
   y += 14
 
   const payRows: [string, string][] = [
-    ['Wire / ACH', '[Bank name, routing & account — contact admin@moritaheripour.com]'],
-    ['Check', 'Payable to Mori Taheripour'],
-    ['Reference', `Please include invoice number ${invoiceNumber} in the payment memo`],
-    ['Questions', 'admin@moritaheripour.com'],
+    ['Wire / ACH', 'Wells Fargo Bank  ·  Acct Name: MT Global Strategies\nAcct #: 6352499294  ·  Routing #: 121000248'],
+    ['Check', 'Payable to MT Global Strategies'],
   ]
   for (const [label, value] of payRows) {
     doc.setFontSize(9)
-    doc.setFont('helvetica', 'bold')
     doc.setTextColor(40, 38, 34)
     doc.text(label, L, y)
-    doc.setFont('helvetica', 'normal')
     doc.setTextColor(100, 97, 90)
     const vLines = doc.splitTextToSize(s(value), 370)
     doc.text(vLines, L + 110, y)
     y += Math.max(vLines.length, 1) * 13 + 3
   }
-
-  y += 16
-  doc.setFontSize(9)
-  doc.setFont('times', 'italic')
-  doc.setTextColor(170, 167, 160)
-  doc.text('Be Confident. Be Curious. Bring Yourself.', L, y)
 
   addFooter(doc, 1)
   return doc.output('blob')

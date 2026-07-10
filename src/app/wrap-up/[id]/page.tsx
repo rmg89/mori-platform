@@ -380,9 +380,16 @@ export default function WrapUpDetailPage() {
     if (!e || !e.fee) return
     setInvoiceDownloading(true)
     try {
-      const { generateInvoice, shortInvoiceNumber } = await import('@/lib/documents')
-      const invoiceNum = `INV-${shortInvoiceNumber(e.id)}`
-      const blob = await generateInvoice(e, invoiceNum)
+      const { generateInvoice } = await import('@/lib/documents')
+      const { createInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+      const inv = await createInvoice({
+        engagementId: e.id,
+        type: 'invoice',
+        organization: e.organization,
+        amount: e.fee,
+        snapshot: buildInvoiceSnapshot(e),
+      })
+      const blob = await generateInvoice(e, inv.invoice_number)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -394,7 +401,7 @@ export default function WrapUpDetailPage() {
     }
   }
 
-  function handleStageClick(flagId: PostEventFlag, stageId: string) {
+  async function handleStageClick(flagId: PostEventFlag, stageId: string) {
     if (stageId === '') {
       // rewound all the way back — stay needed but clear stage
       updatePostEventStage(engagementId, { [flagId]: undefined } as any)
@@ -406,6 +413,13 @@ export default function WrapUpDetailPage() {
       setPostEventFlagDone(engagementId, flagId)
     } else {
       if (done.includes(flagId)) setPostEventFlagNeeded(engagementId, flagId)
+    }
+
+    // Mirror sent/paid onto the matching invoices-table row so the central Invoices page agrees
+    if (flagId === 'invoice' && (stageId === 'sent' || stageId === 'paid')) {
+      const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
+      const inv = await findLatestInvoice(engagementId, 'invoice')
+      if (inv) await setInvoiceStatus(inv, stageId)
     }
   }
 

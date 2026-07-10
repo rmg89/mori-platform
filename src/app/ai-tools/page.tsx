@@ -9,13 +9,6 @@ const TONES = [
   { id: 'bold',           label: 'Bold',           desc: 'Direct, powerful' },
 ]
 
-function todayInvoiceNumber(prefix: string) {
-  const d = new Date()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${prefix}-${mm}${dd}`
-}
-
 function Field({
   label, value, onChange, placeholder, type = 'text',
 }: {
@@ -93,12 +86,12 @@ export default function AIToolsPage() {
   const [invEventCity, setInvEventCity] = useState('')
   const [invFee, setInvFee] = useState('')
   const [invDepositAmount, setInvDepositAmount] = useState('')
-  const [invNumber, setInvNumber] = useState(() => todayInvoiceNumber('INV'))
   const [invGenerating, setInvGenerating] = useState(false)
+  const [invGeneratedNumber, setInvGeneratedNumber] = useState<string | null>(null)
 
   const handleTypeChange = (t: 'final' | 'deposit') => {
     setInvoiceType(t)
-    setInvNumber(todayInvoiceNumber(t === 'deposit' ? 'DEP' : 'INV'))
+    setInvGeneratedNumber(null)
   }
 
   const invFeeNum = parseFloat(invFee.replace(/[^0-9.]/g, '')) || 0
@@ -114,6 +107,7 @@ export default function AIToolsPage() {
     setInvGenerating(true)
     try {
       const { generateInvoice, generateDepositInvoice } = await import('@/lib/documents')
+      const { createInvoice } = await import('@/lib/invoices')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockEngagement: any = {
         id: Date.now().toString(),
@@ -139,9 +133,29 @@ export default function AIToolsPage() {
         }],
       }
 
+      const inv = await createInvoice({
+        type: invoiceType === 'deposit' ? 'deposit' : 'invoice',
+        organization: invOrg.trim(),
+        amount: invoiceType === 'deposit' ? invDepNum : invFeeNum,
+        snapshot: {
+          organization: invOrg.trim(),
+          event_name: invEventName.trim(),
+          topic: invEventName.trim(),
+          event_date: invEventDate || undefined,
+          event_city: invEventCity.trim() || undefined,
+          fee: invFeeNum,
+          deposit_amount: invDepNum || undefined,
+          travel_covered: false,
+          contact_first_name: invFirstName.trim() || undefined,
+          contact_last_name: invLastName.trim() || undefined,
+          contact_title: invTitle.trim() || undefined,
+          contact_email: invEmail.trim() || undefined,
+        },
+      })
+
       const blob = invoiceType === 'deposit'
-        ? await generateDepositInvoice(mockEngagement, invNumber)
-        : await generateInvoice(mockEngagement, invNumber)
+        ? await generateDepositInvoice(mockEngagement, inv.invoice_number)
+        : await generateInvoice(mockEngagement, inv.invoice_number)
 
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -149,6 +163,7 @@ export default function AIToolsPage() {
       a.download = `${invoiceType === 'deposit' ? 'deposit-invoice' : 'invoice'}-${invOrg.trim().toLowerCase().replace(/\s+/g, '-')}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+      setInvGeneratedNumber(inv.invoice_number)
     } finally {
       setInvGenerating(false)
     }
@@ -364,16 +379,6 @@ export default function AIToolsPage() {
               {invoiceType === 'deposit' && (
                 <Field label="Deposit amount *" value={invDepositAmount} onChange={setInvDepositAmount} placeholder="12500" />
               )}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">
-                  Invoice number
-                </label>
-                <input
-                  value={invNumber}
-                  onChange={e => setInvNumber(e.target.value)}
-                  className="w-full text-sm bg-parchment border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold/40 font-mono text-ink-700 placeholder:text-ink-300 transition-all"
-                />
-              </div>
             </div>
           </div>
 
@@ -388,6 +393,11 @@ export default function AIToolsPage() {
               <><Download size={14} /> Generate {invoiceType === 'deposit' ? 'Deposit Invoice' : 'Final Invoice'}</>
             )}
           </button>
+          {invGeneratedNumber && (
+            <p className="mt-2 text-xs text-ink-400 text-center">
+              Generated <span className="font-mono text-ink-700">{invGeneratedNumber}</span> — assigned automatically, sequential across all invoices.
+            </p>
+          )}
         </div>
       </div>
 

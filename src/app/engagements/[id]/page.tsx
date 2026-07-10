@@ -1048,20 +1048,35 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
     setEditingAmount(false)
   }
 
+  async function syncDepositInvoiceStatus(status: 'sent' | 'paid') {
+    const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
+    const inv = await findLatestInvoice(e.id, 'deposit')
+    if (inv) await setInvoiceStatus(inv, status)
+  }
+
   function markSent() {
     save({ deposit_invoice_sent_at: new Date().toISOString() } as any)
+    syncDepositInvoiceStatus('sent')
   }
   function markReceived() {
     save({ deposit_received_at: new Date().toISOString() } as any)
+    syncDepositInvoiceStatus('paid')
   }
   function undo(field: string) {
     save({ [field]: undefined } as any)
   }
 
   async function downloadDepositPdf() {
-    const { generateDepositInvoice, shortInvoiceNumber } = await import('@/lib/documents')
-    const invoiceNum = `DEP-${shortInvoiceNumber(e.id)}`
-    const blob = await generateDepositInvoice(e, invoiceNum)
+    const { generateDepositInvoice } = await import('@/lib/documents')
+    const { createInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const inv = await createInvoice({
+      engagementId: e.id,
+      type: 'deposit',
+      organization: e.organization,
+      amount: amount ?? 0,
+      snapshot: buildInvoiceSnapshot(e),
+    })
+    const blob = await generateDepositInvoice(e, inv.invoice_number)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
