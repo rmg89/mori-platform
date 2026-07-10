@@ -7,15 +7,16 @@ import { getInitials } from '@/lib/utils'
 import type { ProspectStep, EngagementContact } from '@/types'
 
 function Field({
-  label, value, onChange, placeholder, type = 'text',
+  label, value, onChange, placeholder, type = 'text', id,
 }: {
   label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; type?: string
+  placeholder?: string; type?: string; id?: string
 }) {
   return (
     <div>
       <label className="block text-[10px] font-bold uppercase tracking-widest text-ink-400 mb-1.5">{label}</label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -190,7 +191,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
         <div className="space-y-3">
           {/* Organization / company link */}
           <div>
-            <Field label="Organization" value={organization} onChange={setOrganization} placeholder="Canyon Ranch" />
+            <Field id="new-inquiry-organization" label="Organization" value={organization} onChange={setOrganization} placeholder="Canyon Ranch" />
             {companyMatches.length > 0 && (
               <div className="mt-1 border border-ink-100 rounded-lg overflow-hidden bg-white shadow-sm">
                 {companyMatches.map(c => (
@@ -236,15 +237,18 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                     <button type="button" onClick={() => setNewOrgFormOpen(false)} className="text-xs text-ink-300 hover:text-ink transition-colors">
                       Cancel
                     </button>
-                    <button type="button" onClick={handleCreateCompany} disabled={creatingCompany}
-                      className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+                    <button type="button" onClick={handleCreateCompany} disabled={creatingCompany || !trimmedOrg}
+                      className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       {creatingCompany ? 'Adding…' : 'Create organization'}
                     </button>
                   </div>
                 </div>
               ) : (
-                <button type="button" onClick={() => setNewOrgFormOpen(true)} disabled={!trimmedOrg}
-                  className="text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5 px-1 disabled:opacity-40 disabled:cursor-not-allowed">
+                <button type="button" onClick={() => {
+                  if (trimmedOrg) setNewOrgFormOpen(true)
+                  else document.getElementById('new-inquiry-organization')?.focus()
+                }}
+                  className="text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 mt-1.5 px-1">
                   <Plus size={11} /> Add new organization
                 </button>
               )
