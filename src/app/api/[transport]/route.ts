@@ -1,7 +1,22 @@
 import { createMcpHandler } from 'mcp-handler'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { timingSafeEqual } from 'crypto'
 import { scanEngagement } from '@/lib/ai-scan'
+
+// Gate every request behind MCP_SECRET_TOKEN (sent as "Authorization: Bearer <token>").
+// Without this, /api/[transport] lets anyone call any of the tools below —
+// including field edits, contact deletion, and engagement archiving — with no auth at all.
+function isAuthorized(req: Request): boolean {
+  const expected = process.env.MCP_SECRET_TOKEN
+  if (!expected) return false // fail closed if the token isn't configured
+
+  const provided = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  const a = Buffer.from(provided)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -671,4 +686,11 @@ const handler = createMcpHandler(
   }
 )
 
-export { handler as GET, handler as POST }
+async function authorizedHandler(req: Request) {
+  if (!isAuthorized(req)) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+  return handler(req)
+}
+
+export { authorizedHandler as GET, authorizedHandler as POST }
