@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
 import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow } from '@/lib/db'
+import { getBackwardTransition } from '@/lib/pipeline'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ interface StoreActions {
   confirmProspect: (id: string) => void
   declineProspect: (id: string) => void
   moveToWrapUp: (id: string) => void
+  moveEngagementBack: (id: string) => void
   confirmBookingReview: (id: string) => void
   confirmWrapUpReview: (id: string) => void
 
@@ -51,6 +53,7 @@ interface StoreActions {
 
   // Archive / delete
   archiveEngagement: (id: string, reason?: string) => void
+  unarchiveEngagement: (id: string) => void
   deleteEngagement: (id: string) => void
 
   // Engagement flags
@@ -380,6 +383,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const moveEngagementBack = useCallback((id: string) => {
+    const now = new Date().toISOString()
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const target = getBackwardTransition(e)
+      if (!target) return e
+      const patch: Record<string, unknown> = {
+        section: target.section, prospect_step: target.prospect_step, updated_at: now,
+      }
+      if (e.section === 'wrap-up') patch.wrap_up_review_needed = false
+      if (e.section === 'engagements') patch.booking_review_needed = false
+      updateEngagementRow(id, patch).catch(onWriteError)
+      return { ...e, ...patch, prospect_step: target.prospect_step ?? undefined } as Engagement
+    }))
+  }, [])
+
   const confirmBookingReview = useCallback((id: string) => {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, booking_review_needed: false, updated_at: new Date().toISOString() } : e
@@ -400,6 +419,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       e.id === id ? { ...e, archived: true, archived_at: now, archived_reason: reason, updated_at: now } : e
     ))
     updateEngagementRow(id, { archived: true, archived_at: now, ...(reason ? { archived_reason: reason } : {}) }).catch(onWriteError)
+  }, [])
+
+  const unarchiveEngagement = useCallback((id: string) => {
+    const now = new Date().toISOString()
+    setEngagements(prev => prev.map(e =>
+      e.id === id ? { ...e, archived: false, archived_at: undefined, updated_at: now } : e
+    ))
+    updateEngagementRow(id, { archived: false, archived_at: null }).catch(onWriteError)
   }, [])
 
   const deleteEngagement = useCallback((id: string) => {
@@ -777,9 +804,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     <StoreContext.Provider value={{
       engagements, reviewItems, companies: companiesWithLinks, loading, error, saveStatus, saveError,
       updateEngagement, setProspectStep,
-      confirmProspect, declineProspect, moveToWrapUp, confirmBookingReview, confirmWrapUpReview,
+      confirmProspect, declineProspect, moveToWrapUp, moveEngagementBack, confirmBookingReview, confirmWrapUpReview,
       addProspect,
-      archiveEngagement, deleteEngagement,
+      archiveEngagement, unarchiveEngagement, deleteEngagement,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
       updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, updatePostEventStage,

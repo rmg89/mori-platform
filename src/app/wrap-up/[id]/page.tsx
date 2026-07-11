@@ -4,11 +4,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { POST_EVENT_FLAGS, PostEventFlag, WrapUpFlagStages, PostEventMediaType, Invoice, primaryContact } from '@/types'
 import { formatDate, getInitials, formatRelativeDue } from '@/lib/utils'
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2, History, ChevronDown, ChevronUp, Flag, Bell, BellOff, Download } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Calendar, MapPin, Users, DollarSign, FileText, Plus, X, FolderArchive, Trash2, Image as ImageIcon, UploadCloud, StickyNote, Film, Music, Link2, History, ChevronDown, ChevronUp, Flag, Bell, BellOff, Download, Undo2 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 import ArchiveModal from '@/components/ArchiveModal'
+import UnarchiveButton from '@/components/UnarchiveButton'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
+import { getBackwardTransition } from '@/lib/pipeline'
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -343,10 +345,12 @@ export default function WrapUpDetailPage() {
     updatePostEventStage,
     confirmWrapUpReview,
     archiveEngagement,
+    moveEngagementBack,
     deleteEngagement,
   } = useStore()
   const [archiveModalOpen, setArchiveModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [moveBackModalOpen, setMoveBackModalOpen] = useState(false)
   const [, startTransition] = useTransition()
   const [mediaUploading, setMediaUploading] = useState(false)
   const [addingMediaType, setAddingMediaType] = useState<PostEventMediaType | null>(null)
@@ -358,6 +362,7 @@ export default function WrapUpDetailPage() {
   const e = allEngagements.find(eng => eng.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
 
+  const backwardTarget = getBackwardTransition(e)
   const engagementId = e.id
   const done = e.post_event_flags ?? []
   const needed = e.post_event_needed ?? []
@@ -936,25 +941,50 @@ export default function WrapUpDetailPage() {
       }} />
 
       {/* Archive */}
-      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
-        <div>
-          <p className="text-sm font-medium text-ink">Archive this engagement</p>
-          <p className="text-xs text-ink-400 mt-0.5">
-            {allDone
-              ? 'All wrap-up items are complete — archiving moves it out of the active list.'
-              : `${outstandingCount} item${outstandingCount === 1 ? '' : 's'} still outstanding.`}
-          </p>
+      {e.archived ? (
+        <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-ink">This record is archived</p>
+            {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
+          </div>
+          <UnarchiveButton engagementId={e.id} />
         </div>
-        <button
-          onClick={() => setArchiveModalOpen(true)}
-          className={`flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg transition-all flex-shrink-0 ${
-            allDone
-              ? 'text-white bg-ink hover:bg-ink-700'
-              : 'text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment'
-          }`}>
-          <FolderArchive size={13} /> {allDone ? 'Archive' : 'Archive Anyway'}
-        </button>
-      </div>
+      ) : (
+        <>
+          {backwardTarget && (
+            <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
+                <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
+              </div>
+              <button
+                onClick={() => setMoveBackModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment px-4 py-2 rounded-lg transition-all flex-shrink-0">
+                <Undo2 size={13} /> {backwardTarget.label}
+              </button>
+            </div>
+          )}
+          <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
+            <div>
+              <p className="text-sm font-medium text-ink">Archive this engagement</p>
+              <p className="text-xs text-ink-400 mt-0.5">
+                {allDone
+                  ? 'All wrap-up items are complete — archiving moves it out of the active list.'
+                  : `${outstandingCount} item${outstandingCount === 1 ? '' : 's'} still outstanding.`}
+              </p>
+            </div>
+            <button
+              onClick={() => setArchiveModalOpen(true)}
+              className={`flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg transition-all flex-shrink-0 ${
+                allDone
+                  ? 'text-white bg-ink hover:bg-ink-700'
+                  : 'text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment'
+              }`}>
+              <FolderArchive size={13} /> {allDone ? 'Archive' : 'Archive Anyway'}
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Delete */}
       <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
@@ -968,6 +998,15 @@ export default function WrapUpDetailPage() {
           <Trash2 size={13} /> Delete
         </button>
       </div>
+
+      <ConfirmModal
+        open={moveBackModalOpen}
+        title={backwardTarget?.label ?? 'Move backward'}
+        description={`This moves "${e.organization}" back to ${backwardTarget?.section}. Data entered since the last stage change is kept.`}
+        confirmLabel="Move back"
+        onConfirm={() => { moveEngagementBack(e.id); setMoveBackModalOpen(false); router.push(`/${backwardTarget?.section}`) }}
+        onCancel={() => setMoveBackModalOpen(false)}
+      />
 
       <ArchiveModal
         open={archiveModalOpen}

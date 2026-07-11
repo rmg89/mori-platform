@@ -4,6 +4,7 @@ import { Engagement, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import { ArrowRight, Calendar, MapPin } from 'lucide-react'
 import Link from 'next/link'
+import UnarchiveButton from '@/components/UnarchiveButton'
 
 const SECTION_PATH: Record<string, string> = {
   prospects: '/prospects',
@@ -40,6 +41,11 @@ function ArchiveCard({ engagement: e }: { engagement: Engagement }) {
               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-ink-50 border-ink-100 text-ink-400">
                 {SECTION_LABEL[e.section] ?? e.section}
               </span>
+              <UnarchiveButton
+                engagementId={e.id}
+                onClick={ev => { ev.preventDefault(); ev.stopPropagation() }}
+                className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full border border-ink-100 text-ink-400 hover:bg-ink hover:text-white hover:border-ink transition-all"
+              />
               <ArrowRight size={13} className="text-ink-200 group-hover:text-gold transition-all" />
             </div>
           </div>

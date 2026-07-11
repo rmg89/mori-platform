@@ -13,14 +13,16 @@ import {
   Clock, Wifi, Hotel, Plane, ExternalLink,
   Pencil, Check, X, Plus, Minus, Trash2, GripVertical, ChevronDown, ChevronUp,
   FileCheck, Upload, ArrowDown, Paperclip, Building2,
-  Receipt, History, Flag, Bell, BellOff, FolderArchive
+  Receipt, History, Flag, Bell, BellOff, FolderArchive, Undo2
 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 import ArchiveModal from '@/components/ArchiveModal'
+import UnarchiveButton from '@/components/UnarchiveButton'
 import TimezoneSelect from '@/components/TimezoneSelect'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
 import { TIMEZONE_OPTIONS } from '@/lib/timezone'
+import { getBackwardTransition } from '@/lib/pipeline'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2483,14 +2485,16 @@ function TimelinePanel({ e }: { e: Engagement }) {
 export default function EngagementDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement, archiveEngagement, setFieldStatus } = useStore()
+  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement, archiveEngagement, moveEngagementBack, setFieldStatus } = useStore()
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [archiveModalOpen, setArchiveModalOpen] = useState(false)
+  const [moveBackModalOpen, setMoveBackModalOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [, startTransition] = useTransition()
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
 
+  const backwardTarget = getBackwardTransition(e)
   const eventType = (e as any).event_type || 'speaking'
 
   const save = useCallback((patch: Partial<Engagement>) => {
@@ -2587,17 +2591,42 @@ export default function EngagementDetailPage() {
       }} />
 
       {/* Archive */}
-      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-        <div>
-          <p className="text-sm font-medium text-ink">Archive this engagement</p>
-          <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+      {e.archived ? (
+        <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-ink">This record is archived</p>
+            {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
+          </div>
+          <UnarchiveButton engagementId={e.id} />
         </div>
-        <button
-          onClick={() => setArchiveModalOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-          <FolderArchive size={13} /> Archive
-        </button>
-      </div>
+      ) : (
+        <>
+          {backwardTarget && (
+            <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
+                <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
+              </div>
+              <button
+                onClick={() => setMoveBackModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+                <Undo2 size={13} /> {backwardTarget.label}
+              </button>
+            </div>
+          )}
+          <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+            <div>
+              <p className="text-sm font-medium text-ink">Archive this engagement</p>
+              <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+            </div>
+            <button
+              onClick={() => setArchiveModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+              <FolderArchive size={13} /> Archive
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Delete */}
       <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
@@ -2611,6 +2640,15 @@ export default function EngagementDetailPage() {
           <Trash2 size={13} /> Delete
         </button>
       </div>
+
+      <ConfirmModal
+        open={moveBackModalOpen}
+        title={backwardTarget?.label ?? 'Move backward'}
+        description={`This moves "${e.organization}" back to ${backwardTarget?.section}. Data entered since the last stage change is kept.`}
+        confirmLabel="Move back"
+        onConfirm={() => { moveEngagementBack(e.id); setMoveBackModalOpen(false); startTransition(() => router.push(`/${backwardTarget?.section}`)) }}
+        onCancel={() => setMoveBackModalOpen(false)}
+      />
 
       <ArchiveModal
         open={archiveModalOpen}

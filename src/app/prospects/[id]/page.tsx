@@ -7,6 +7,7 @@ import { formatDate, getInitials } from '@/lib/utils'
 import { localInputToISO, formatCallDateTime, browserTimezone } from '@/lib/timezone'
 import TimezoneSelect from '@/components/TimezoneSelect'
 import ArchiveModal from '@/components/ArchiveModal'
+import UnarchiveButton from '@/components/UnarchiveButton'
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Circle,
   Phone, Edit3, Check, X, Plus, Trash2, FolderArchive
@@ -828,17 +829,27 @@ export default function ProspectDetailPage() {
       </div>
 
       {/* Archive */}
-      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-        <div>
-          <p className="text-sm font-medium text-ink">Archive this prospect</p>
-          <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+      {e.archived ? (
+        <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-ink">This record is archived</p>
+            {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
+          </div>
+          <UnarchiveButton engagementId={e.id} />
         </div>
-        <button
-          onClick={() => setArchiveModalOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-          <FolderArchive size={13} /> Archive
-        </button>
-      </div>
+      ) : (
+        <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-ink">Archive this prospect</p>
+            <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+          </div>
+          <button
+            onClick={() => setArchiveModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+            <FolderArchive size={13} /> Archive
+          </button>
+        </div>
+      )}
 
       {/* Delete */}
       <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { timingSafeEqual } from 'crypto'
 import { scanEngagement } from '@/lib/ai-scan'
+import { getBackwardTransition } from '@/lib/pipeline'
 
 // Gate every request behind MCP_SECRET_TOKEN (sent as "Authorization: Bearer <token>").
 // Without this, /api/[transport] lets anyone call any of the tools below —
@@ -676,6 +677,36 @@ const handler = createMcpHandler(
       await supabase.from('engagements').update({ briefing_pdf_url: publicUrl }).eq('id', engagement_id)
 
       return { content: [{ type: 'text' as const, text: `Briefing PDF for ${(eng as Record<string, unknown>).organization}: ${publicUrl}` }] }
+    })
+
+    // ── 28. move_engagement_backward ────────────────────────────────────────
+    server.registerTool('move_engagement_backward', {
+      title: 'Move Engagement Backward',
+      description: 'Move an engagement back one pipeline stage: confirmed engagement → prospects, wrap-up → confirmed engagements, or a declined prospect (parked in wrap-up) → prospects. Only changes section/prospect_step — does not overwrite any data entered since the forward move. Use when a stage change was made in error, or after rescheduling an event further out (move it back to Engagements, then update event_date there).',
+      inputSchema: { engagement_id: z.string() },
+    }, async ({ engagement_id }) => {
+      const { data: row, error: fetchErr } = await supabase.from('engagements')
+        .select('section,prospect_step,prospect_snapshot').eq('id', engagement_id).single()
+      if (fetchErr || !row) return { content: [{ type: 'text' as const, text: `Error: ${fetchErr?.message ?? 'not found'}` }] }
+      const target = getBackwardTransition(row as any)
+      if (!target) return { content: [{ type: 'text' as const, text: 'Already at the earliest stage (prospects) — cannot move back further.' }] }
+      const patch: Record<string, unknown> = { section: target.section, prospect_step: target.prospect_step, updated_at: new Date().toISOString() }
+      if (row.section === 'wrap-up') patch.wrap_up_review_needed = false
+      if (row.section === 'engagements') patch.booking_review_needed = false
+      const { error } = await supabase.from('engagements').update(patch).eq('id', engagement_id)
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: `Moved back to ${target.section}${target.prospect_step ? ` (${target.prospect_step})` : ''}.` }] }
+    })
+
+    // ── 29. unarchive_engagement ────────────────────────────────────────────
+    server.registerTool('unarchive_engagement', {
+      title: 'Unarchive Engagement',
+      description: 'Restore an archived engagement back into the active pipeline. Section/prospect_step are left as they were when archived — this does not change what stage the record is in, only whether it is archived.',
+      inputSchema: { engagement_id: z.string() },
+    }, async ({ engagement_id }) => {
+      const { error } = await supabase.from('engagements').update({ archived: false, archived_at: null, updated_at: new Date().toISOString() }).eq('id', engagement_id)
+      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      return { content: [{ type: 'text' as const, text: 'Engagement unarchived.' }] }
     })
 
   },
