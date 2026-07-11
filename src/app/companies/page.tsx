@@ -3,11 +3,16 @@ import { useStore } from '@/lib/store'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Company, POST_EVENT_FLAGS } from '@/types'
-import { Search, Eye, ArrowRight, Plus, BookUser, Building2 } from 'lucide-react'
+import { Search, Eye, ArrowRight, Plus, BookUser, Building2, CalendarClock } from 'lucide-react'
 import Link from 'next/link'
 import AddCompanyModal from '@/components/AddCompanyModal'
+import { isEngagementCurrent } from '@/lib/utils'
 
-type Filter = 'all' | 'prospects' | 'engagements' | 'wrap-up' | 'client' | 'expired' | 'watching'
+type Filter = 'all' | 'prospects' | 'engagements' | 'wrap-up' | 'client' | 'expired' | 'current' | 'watching'
+
+function hasCurrentEngagement(company: Company, engagements: any[]) {
+  return engagements.some(e => company.engagement_ids.includes(e.id) && isEngagementCurrent(e.event_date))
+}
 
 function getCompanyStage(company: Company, engagements: any[]) {
   const companyEngagements = engagements.filter(e => company.engagement_ids.includes(e.id))
@@ -33,6 +38,7 @@ const FILTERS: { id: Filter; label: string; icon?: boolean; dividerBefore?: bool
   { id: 'wrap-up', label: 'Wrap-Up' },
   { id: 'client', label: 'Client', dividerBefore: true },
   { id: 'expired', label: 'Expired' },
+  { id: 'current', label: 'Current', dividerBefore: true },
   { id: 'watching', label: 'Watching', icon: true, dividerBefore: true },
 ]
 
@@ -66,6 +72,7 @@ export default function CompaniesPage() {
 
     if (filter === 'all') return true
     if (filter === 'watching') return !!company.watching
+    if (filter === 'current') return hasCurrentEngagement(company, engagements)
     return getCompanyStage(company, engagements) === filter
   })
 
@@ -161,6 +168,7 @@ function CompanyRow({ company, engagements }: { company: Company; engagements: a
   const stage = getCompanyStage(company, engagements)
   const stageColor = STAGE_COLORS[stage] ?? STAGE_COLORS.expired
   const stageLabel = STAGE_LABELS[stage] ?? '—'
+  const isCurrent = hasCurrentEngagement(company, engagements)
 
   return (
     <Link
@@ -177,6 +185,11 @@ function CompanyRow({ company, engagements }: { company: Company; engagements: a
             {company.watching && (
               <span className="inline-flex items-center gap-0.5 text-[9px] text-blue-500 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide">
                 <Eye size={8} />Watching
+              </span>
+            )}
+            {isCurrent && (
+              <span className="inline-flex items-center gap-0.5 text-[9px] text-sage bg-sage/10 border border-sage/20 px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide">
+                <CalendarClock size={8} />Current
               </span>
             )}
           </p>

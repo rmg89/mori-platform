@@ -548,6 +548,11 @@ export async function upsertContact(contact: Partial<ContactRow> & { engagement_
   if (error) throw new Error(`upsertContact: ${error.message}`)
 }
 
+export async function deleteContactRow(id: string): Promise<void> {
+  const { error } = await supabase.from('contacts').delete().eq('id', id)
+  if (error) throw new Error(`deleteContactRow: ${error.message}`)
+}
+
 export async function fetchCompanies(): Promise<import('@/types').Company[]> {
   const { data, error } = await supabase.from('companies').select('*').order('name')
   if (error) { console.warn('fetchCompanies:', error.message); return [] }
@@ -567,6 +572,11 @@ export async function fetchCompanies(): Promise<import('@/types').Company[]> {
 export async function updateCompanyRow(id: string, patch: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.from('companies').update(patch).eq('id', id)
   if (error) throw new Error(`updateCompanyRow: ${error.message}`)
+}
+
+export async function deleteCompanyRow(id: string): Promise<void> {
+  const { error } = await supabase.from('companies').delete().eq('id', id)
+  if (error) throw new Error(`deleteCompanyRow: ${error.message}`)
 }
 
 export async function insertCompanyRow(input: { name: string; website?: string; industry?: string }): Promise<import('@/types').Company> {

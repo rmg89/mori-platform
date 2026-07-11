@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { format, parseISO, formatDistanceToNow, isPast } from 'date-fns'
+import { format, parseISO, formatDistanceToNow, isPast, startOfDay } from 'date-fns'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -26,6 +26,12 @@ export function formatRelativeDue(dateStr: string) {
     const distance = formatDistanceToNow(date, { addSuffix: true })
     return isPast(date) && distance.endsWith('ago') ? `overdue · ${distance}` : distance
   } catch { return dateStr }
+}
+
+// An engagement counts as "current" when it has an event date today or in the future.
+export function isEngagementCurrent(dateStr: string | undefined): boolean {
+  if (!dateStr) return false
+  try { return startOfDay(parseISO(dateStr)).getTime() >= startOfDay(new Date()).getTime() } catch { return false }
 }
 
 export function relativeTime(dateStr: string) {

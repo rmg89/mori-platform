@@ -1,27 +1,33 @@
 'use client'
 import { useStore } from '@/lib/store'
-import { useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useState, useTransition } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { PROSPECT_STEPS, ENGAGEMENT_FLAGS, primaryContact } from '@/types'
-import { formatDate, getInitials } from '@/lib/utils'
-import { ArrowLeft, Eye, EyeOff, Building2, Mail, Calendar, CheckCircle2, Circle, ArrowRight, AlertTriangle, Users, Plus } from 'lucide-react'
+import { formatDate, getInitials, isEngagementCurrent } from '@/lib/utils'
+import { ArrowLeft, Eye, EyeOff, Building2, Mail, Calendar, CheckCircle2, Circle, ArrowRight, AlertTriangle, Users, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import ConfirmModal from '@/components/ConfirmModal'
 
 type Tab = 'engagements' | 'contacts' | 'teams'
 
 export default function CompanyProfilePage() {
   const { id } = useParams()
-  const { companies, engagements: allEngagements } = useStore()
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const { companies, engagements: allEngagements, deleteCompany } = useStore()
   const company = companies.find(c => c.id === id)
   const [tab, setTab] = useState<Tab>('engagements')
   const [watching, setWatching] = useState(company?.watching ?? false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   if (!company) return <div className="p-8 text-ink-400">Company not found.</div>
 
-  const engagements = allEngagements.filter(e => company.engagement_ids.includes(e.id))
+  // company.engagement_ids isn't populated by the fetch — derive links directly
+  // from company_id instead of trusting that (always-empty) field.
+  const engagements = allEngagements.filter(e => e.company_id === company.id)
   const allContacts = engagements
-    .filter(e => company.engagement_ids.includes(e.id))
     .flatMap(e => e.contacts)
+    .concat(allEngagements.flatMap(e => e.contacts).filter(c => c.company_id === company.id))
     .filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i) // dedupe
 
   const hasHistory = engagements.some(e => e.section === 'wrap-up')
@@ -133,7 +139,14 @@ export default function CompanyProfilePage() {
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-ink">{e.event_name || e.topic || e.organization}</p>
+                              <p className="text-sm font-semibold text-ink flex items-center gap-2">
+                                {e.event_name || e.topic || e.organization}
+                                {isEngagementCurrent(e.event_date) && (
+                                  <span className="text-[9px] text-sage bg-sage/10 border border-sage/20 px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide flex-shrink-0">
+                                    Current
+                                  </span>
+                                )}
+                              </p>
                               <p className="text-xs text-ink-400">{pc?.first_name} {pc?.last_name}{e.event_date && ` · ${formatDate(e.event_date, 'MMM d, yyyy')}`}</p>
                               {e.alerts.length > 0 && (
                                 <span className="text-[10px] text-red-500 flex items-center gap-1 mt-1">
@@ -217,6 +230,35 @@ export default function CompanyProfilePage() {
           </button>
         </div>
       )}
+
+      {/* Delete */}
+      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-red-600">Delete this company</p>
+          <p className="text-xs text-red-400 mt-0.5">
+            Permanently removes "{company.name}". {engagements.length > 0 || allContacts.length > 0
+              ? `Unlinks it from ${engagements.length} engagement${engagements.length === 1 ? '' : 's'} and ${allContacts.length} contact${allContacts.length === 1 ? '' : 's'} — those records stay, just without this company. `
+              : ''}
+            This cannot be undone.
+          </p>
+        </div>
+        <button
+          onClick={() => setDeleteModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+          <Trash2 size={13} /> Delete
+        </button>
+      </div>
+
+      <ConfirmModal
+        open={deleteModalOpen}
+        title="Delete permanently?"
+        description={`This will permanently delete "${company.name}". This cannot be undone.`}
+        confirmLabel="Delete"
+        requireText="DELETE"
+        danger
+        onConfirm={() => { deleteCompany(company.id); startTransition(() => router.push('/companies')) }}
+        onCancel={() => setDeleteModalOpen(false)}
+      />
     </div>
   )
 }

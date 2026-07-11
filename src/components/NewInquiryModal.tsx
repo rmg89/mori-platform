@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Check, Plus, Wand2, Loader2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -56,6 +56,18 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const orgNameInputRef = useRef<HTMLInputElement>(null)
+  const contactFirstNameInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus explicitly (rather than relying on the autoFocus prop) — the trigger
+  // button that had focus gets unmounted in the same render that mounts these
+  // inputs, and the browser can drop focus to <body> in that swap.
+  useEffect(() => {
+    if (orgMode === 'add') orgNameInputRef.current?.focus()
+  }, [orgMode])
+  useEffect(() => {
+    if (contactMode === 'add') contactFirstNameInputRef.current?.focus()
+  }, [contactMode])
 
   // ── Company match/link ──────────────────────────────────────────────────────
   const trimmedOrg = organization.trim()
@@ -249,7 +261,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
               </div>
             ) : (
               <div className="space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
-                <input value={organization} onChange={e => setOrganization(e.target.value)} placeholder="Company name *" autoFocus
+                <input ref={orgNameInputRef} value={organization} onChange={e => setOrganization(e.target.value)} placeholder="Company name *"
                   className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
                 <div className="flex items-center justify-between gap-2">
                   <input
@@ -362,7 +374,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
             ) : (
               <div className="space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
                 <div className="grid grid-cols-2 gap-2">
-                  <input value={contactFirstName} onChange={e => setContactFirstName(e.target.value)} placeholder="First name *" autoFocus
+                  <input ref={contactFirstNameInputRef} value={contactFirstName} onChange={e => setContactFirstName(e.target.value)} placeholder="First name *"
                     className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
                   <input value={contactLastName} onChange={e => setContactLastName(e.target.value)} placeholder="Last name *"
                     className="text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />

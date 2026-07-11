@@ -1,11 +1,12 @@
 'use client'
-import { useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useState, useTransition } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store'
 import { primaryContact, ENGAGEMENT_FLAGS, EngagementFlag, POST_EVENT_FLAGS, PostEventFlag, ContactStatus } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
-import { ArrowLeft, Mail, Phone, Eye, EyeOff, ArrowRight, AlertTriangle, CheckCircle2, Circle, Building2 } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, Eye, EyeOff, ArrowRight, AlertTriangle, CheckCircle2, Circle, Building2, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import ConfirmModal from '@/components/ConfirmModal'
 
 const STATUS_LABELS: Record<ContactStatus, string> = {
   prospect_active: 'Prospect — Active',
@@ -20,8 +21,11 @@ const STATUS_COLORS: Record<ContactStatus, string> = {
 }
 
 export default function ContactProfilePage() {
-  const { engagements: allEngagements } = useStore()
+  const { engagements: allEngagements, deleteContact } = useStore()
   const { id } = useParams()
+  const router = useRouter()
+  const [, startTransition] = useTransition()
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   // Find the contact across all engagements
   const allContacts = allEngagements.flatMap(e =>
@@ -181,6 +185,32 @@ export default function ContactProfilePage() {
           })}
         </div>
       )}
+
+      {/* Delete */}
+      <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+        <div>
+          <p className="text-sm font-medium text-red-600">Delete this contact</p>
+          <p className="text-xs text-red-400 mt-0.5">
+            Permanently removes "{match.first_name} {match.last_name}". This cannot be undone.
+          </p>
+        </div>
+        <button
+          onClick={() => setDeleteModalOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+          <Trash2 size={13} /> Delete
+        </button>
+      </div>
+
+      <ConfirmModal
+        open={deleteModalOpen}
+        title="Delete permanently?"
+        description={`This will permanently delete "${match.first_name} ${match.last_name}". This cannot be undone.`}
+        confirmLabel="Delete"
+        requireText="DELETE"
+        danger
+        onConfirm={() => { deleteContact(match.id); startTransition(() => router.push('/contacts')) }}
+        onCancel={() => setDeleteModalOpen(false)}
+      />
     </div>
   )
 }

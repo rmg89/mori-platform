@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact } from '@/lib/db'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow } from '@/lib/db'
 import type { ReviewItem, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -96,9 +96,11 @@ interface StoreActions {
   // Companies
   updateCompany: (id: string, patch: Partial<Company>) => void
   createCompany: (input: { name: string; website?: string; industry?: string }) => Promise<Company>
+  deleteCompany: (id: string) => void
 
   // Contacts (global — updates all engagements sharing the same email)
   updateContact: (email: string, patch: Partial<EngagementContact>) => void
+  deleteContact: (id: string) => void
 }
 
 type Store = StoreState & StoreActions
@@ -200,6 +202,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return company
   }, [])
 
+  const deleteCompany = useCallback((id: string) => {
+    setCompanies(prev => prev.filter(c => c.id !== id))
+    // The company link is optional on both engagements and contacts — deleting the
+    // company unlinks it from either rather than deleting the records that used it.
+    setEngagements(prev => prev.map(e => ({
+      ...e,
+      company_id: e.company_id === id ? undefined : e.company_id,
+      contacts: e.contacts.map(c => c.company_id === id ? { ...c, company_id: undefined } : c),
+    })))
+    deleteCompanyRow(id).catch(onWriteError)
+  }, [])
+
   const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
     setEngagements((prev: Engagement[]) => {
       prev.forEach((e: Engagement) => {
@@ -216,6 +230,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ),
       }))
     })
+  }, [])
+
+  const deleteContact = useCallback((id: string) => {
+    setEngagements(prev => prev.map(e => ({ ...e, contacts: e.contacts.filter(c => c.id !== id) })))
+    deleteContactRow(id).catch(onWriteError)
   }, [])
 
   const updateEngagement = useCallback((id: string, patch: Partial<Engagement>) => {
@@ -733,9 +752,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setReviewItems(prev => prev.filter(r => r.id !== id))
   }, [])
 
+  // Derive each company's linked engagements/contacts fresh from the current
+  // engagements list, rather than trusting stored engagement_ids/contact_ids
+  // (which the DB layer never populates and would otherwise always read as
+  // empty, silently breaking every company-engagement association in the UI).
+  const companiesWithLinks = useMemo(() => {
+    return companies.map(c => {
+      const linkedEngagements = engagements.filter(e => e.company_id === c.id)
+      const contactIds = new Set<string>()
+      for (const e of linkedEngagements) {
+        for (const contact of e.contacts) {
+          if (contact.company_id === c.id) contactIds.add(contact.id)
+        }
+      }
+      return {
+        ...c,
+        engagement_ids: linkedEngagements.map(e => e.id),
+        contact_ids: Array.from(contactIds),
+      }
+    })
+  }, [companies, engagements])
+
   return (
     <StoreContext.Provider value={{
-      engagements, reviewItems, companies, loading, error, saveStatus, saveError,
+      engagements, reviewItems, companies: companiesWithLinks, loading, error, saveStatus, saveError,
       updateEngagement, setProspectStep,
       confirmProspect, declineProspect, moveToWrapUp, confirmBookingReview, confirmWrapUpReview,
       addProspect,
@@ -748,7 +788,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCall, updateCall, addComm, updateComm,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
-      updateCompany, createCompany, updateContact,
+      updateCompany, createCompany, deleteCompany, updateContact, deleteContact,
     }}>
       {children}
     </StoreContext.Provider>
