@@ -1,9 +1,11 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Company, POST_EVENT_FLAGS } from '@/types'
 import { Search, Eye, ArrowRight, Plus, BookUser, Building2 } from 'lucide-react'
 import Link from 'next/link'
+import AddCompanyModal from '@/components/AddCompanyModal'
 
 type Filter = 'all' | 'prospects' | 'engagements' | 'wrap-up' | 'client' | 'expired' | 'watching'
 
@@ -52,8 +54,10 @@ const STAGE_LABELS: Record<string, string> = {
 
 export default function CompaniesPage() {
   const { companies, engagements } = useStore()
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [addCompanyOpen, setAddCompanyOpen] = useState(false)
 
   const filtered = companies.filter(company => {
     const q = search.toLowerCase()
@@ -81,12 +85,20 @@ export default function CompaniesPage() {
             <BookUser size={14} />
             Contacts
           </Link>
-          <button className="flex items-center gap-2 px-4 py-2 bg-ink text-cream text-sm rounded-lg hover:bg-ink-700 transition-all">
+          <button onClick={() => setAddCompanyOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-ink text-cream text-sm rounded-lg hover:bg-ink-700 transition-all">
             <Plus size={16} />
             Add Company
           </button>
         </div>
       </div>
+
+      {addCompanyOpen && (
+        <AddCompanyModal
+          onClose={() => setAddCompanyOpen(false)}
+          onCreated={id => router.push(`/companies/${id}`)}
+        />
+      )}
 
       {/* Search + filters */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">

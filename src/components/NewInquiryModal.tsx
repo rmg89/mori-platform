@@ -242,10 +242,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                     ))}
                   </div>
                 )}
-                <button type="button" onClick={() => {
-                  if (trimmedOrg) setOrgMode('add')
-                  else document.getElementById('new-inquiry-organization')?.focus()
-                }}
+                <button type="button" onClick={() => setOrgMode('add')}
                   className="mt-1.5 text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 px-1">
                   <Plus size={11} /> Add new organization
                 </button>
