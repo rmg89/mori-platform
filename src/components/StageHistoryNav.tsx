@@ -15,12 +15,19 @@ const STAGE_LABEL: Record<Section, string> = {
 }
 const STAGE_ORDER: Section[] = ['prospects', 'engagements', 'wrap-up']
 
-// A record's stage history: prospects always happened, engagements only if it
-// was ever confirmed (a directly-declined prospect skips straight to wrap-up
-// and never gets an engagement_snapshot), wrap-up only once it's reached.
+// A record's stage history: prospects always happened; engagements happened
+// unless it was declined straight out of prospects (that skips engagements
+// entirely and goes straight to wrap-up); wrap-up only once it's reached.
+// Can't rely on engagement_snapshot alone to detect "was in engagements" —
+// that's only set by the manual moveToWrapUp action, not by the automatic
+// date-based transition in fetchAllEngagements(), which is how most records
+// actually reach wrap-up.
 export function getRecordStages(e: Engagement): Section[] {
   const stages: Section[] = ['prospects']
-  if (e.section === 'engagements' || e.engagement_snapshot != null) stages.push('engagements')
+  const declinedFromProspects = e.prospect_step === 'declined'
+  if (e.section === 'engagements' || (e.section === 'wrap-up' && !declinedFromProspects) || e.engagement_snapshot != null) {
+    stages.push('engagements')
+  }
   if (e.section === 'wrap-up') stages.push('wrap-up')
   return stages
 }
