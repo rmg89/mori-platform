@@ -1,5 +1,5 @@
 'use client'
-import { Engagement, OutgoingMaterial, IncomingMaterial, BriefingNote } from '@/types'
+import { Engagement, OutgoingMaterial, IncomingMaterial, BriefingNote, primaryContact } from '@/types'
 import { formatDate, getInitials } from '@/lib/utils'
 import {
   History, CheckCircle2, Circle, FileText, Receipt, Mic, Newspaper, Users, Radio,
@@ -122,7 +122,14 @@ export default function EngagementSnapshotView({ engagement: e }: { engagement: 
 
   const depositStatus = depositReceivedAt ? 'received' : depositInvoiceSentAt ? 'sent' : depositAmount ? 'draft' : 'pending'
 
-  const hasBriefingContent = purpose || audienceDescription || joinLink || arrivalTime || venueMapsLink || flightDetails || hotelName || runOfShow.length > 0 || briefingNotes.length > 0
+  // Matches getDefaultSections() on the live page: Venue/Travel/Run of Show
+  // only show when there's physical-event or travel data, everything else
+  // (header/contact/details/prepnotes) is always present — the Briefing
+  // Document card itself is never conditionally hidden on the live page.
+  const hasPhysical = e.event_format === 'in_person' || e.event_format === 'hybrid'
+  const hasTravel = !!(flightDetails || hotelName)
+  const hasRos = runOfShow.length > 0
+  const contact = primaryContact(e)
 
   return (
     <div className="p-8 max-w-4xl mx-auto animate-fade-in">
@@ -293,90 +300,122 @@ export default function EngagementSnapshotView({ engagement: e }: { engagement: 
         </div>
       </div>
 
-      {/* Briefing Document */}
-      {hasBriefingContent && (
-        <div className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-ink-100">
-            <FileText size={15} className="text-gold" />
-            <span className="text-sm font-semibold text-ink">Briefing Document</span>
-          </div>
-          <div className="px-6 py-5 space-y-5">
-            {(purpose || audienceDescription) && (
-              <div className="space-y-3">
-                <BRow label="Purpose" value={purpose} multiline />
-                <BRow label="Audience" value={audienceDescription} />
-              </div>
-            )}
-
-            {(venueMapsLink || arrivalTime) && (
-              <div className="space-y-3">
-                <BSectionHeader>Venue</BSectionHeader>
-                <BRow label="Maps Link" value={venueMapsLink} />
-                <BRow label="Arrival Time" value={arrivalTime} />
-              </div>
-            )}
-
-            {(flightDetails || hotelName || joinLink) && (
-              <div className="space-y-3">
-                <BSectionHeader>Travel</BSectionHeader>
-                {flightDetails && (
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300">Flight</span>
-                    <p className="text-xs text-ink bg-parchment/60 rounded-lg px-3 py-2 whitespace-pre-line font-mono">{flightDetails}</p>
-                  </div>
-                )}
-                <BRow label="Hotel" value={hotelName} />
-                <BRow label="Join Link" value={joinLink} />
-              </div>
-            )}
-
-            {runOfShow.length > 0 && (
-              <div className="space-y-3">
-                <BSectionHeader>Schedule / Run of Show</BSectionHeader>
-                <div className="rounded-xl border border-ink-100 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-parchment border-b border-ink-100">
-                        {runOfShow.some(r => r.date) && <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-28">Day</th>}
-                        <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-24">Time</th>
-                        <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300">What&apos;s Happening</th>
-                        <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-40">Her Role / Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {runOfShow.map((r, i) => (
-                        <tr key={i} className={`border-b border-ink-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-parchment/20'}`}>
-                          {runOfShow.some(row => row.date) && <td className="px-3 py-1.5 text-xs text-ink">{r.date}</td>}
-                          <td className="px-3 py-1.5 text-xs text-ink">{r.time}{r.end_time ? `–${r.end_time}` : ''}</td>
-                          <td className="px-3 py-1.5 text-xs text-ink">{r.what}</td>
-                          <td className="px-3 py-1.5 text-xs text-ink-400">{r.notes}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {briefingNotes.length > 0 && (
-              <div className="space-y-3">
-                <BSectionHeader>Briefing Notes</BSectionHeader>
-                <div className="space-y-3">
-                  {briefingNotes.map(n => (
-                    <div key={n.id} className="flex items-start gap-2 text-sm">
-                      {n.resolved ? <CheckCircle2 size={13} className="text-sage flex-shrink-0 mt-0.5" /> : <Circle size={13} className="text-ink-200 flex-shrink-0 mt-0.5" />}
-                      <div>
-                        <p className={n.resolved ? 'text-ink-400 line-through' : 'text-ink'}>{n.body}</p>
-                        <p className="text-[10px] text-ink-300 mt-0.5">{formatDate(n.created_at, 'MMM d, h:mm a')}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+      {/* Briefing Document — always shown, matching the live page */}
+      <div className="bg-white border border-ink-100 rounded-xl mb-6 overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-ink-100">
+          <FileText size={15} className="text-gold" />
+          <span className="text-sm font-semibold text-ink">Briefing Document</span>
         </div>
-      )}
+        <div className="px-6 py-5 space-y-5">
+          {/* Event / Date / Format */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+              <BRow label="Event" value={e.event_name || e.organization} />
+              <BRow label="Date / Time" value={[e.event_date ? formatDate(e.event_date) : undefined, (e as any).event_time].filter(Boolean).join(' | ') || undefined} />
+            </div>
+            <BRow label="Format" value={`${eventTypeLabel(eventType)} — ${hasPhysical ? `In-Person${e.event_city ? ` — ${e.event_city}` : ''}` : 'Virtual'}`} />
+            {!hasPhysical && joinLink && <BRow label="Join Link" value={joinLink} />}
+          </div>
+
+          {/* Primary Contact */}
+          <div className="space-y-3">
+            <BSectionHeader>Primary Contact</BSectionHeader>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+              <BRow label="Name / Title" value={contact ? `${contact.first_name} ${contact.last_name}${contact.title ? `  |  ${contact.title}` : ''}` : undefined} />
+              <div className="space-y-3">
+                <BRow label="Cell" value={contact?.phone} />
+                <BRow label="Email" value={contact?.email} />
+              </div>
+            </div>
+          </div>
+
+          {/* Event Details */}
+          <div className="space-y-3">
+            <BSectionHeader>Event Details</BSectionHeader>
+            <BRow label="Purpose" value={purpose} multiline />
+            <BRow label="Audience" value={audienceDescription || (e.audience_size ? `~${e.audience_size.toLocaleString()} attendees` : undefined)} />
+            <BRow label="Duration" value={e.session_length ? `${e.session_length} minutes` : undefined} />
+          </div>
+
+          {/* Venue — only for in-person/hybrid events, matching the live page */}
+          {hasPhysical && (
+            <div className="space-y-3">
+              <BSectionHeader>Venue</BSectionHeader>
+              <BRow label="Venue Name" value={e.event_location} />
+              <BRow label="Maps Link" value={venueMapsLink} />
+              <BRow label="Arrival Time" value={arrivalTime} />
+            </div>
+          )}
+
+          {/* Travel — only when there's travel data or a physical event */}
+          {(hasTravel || hasPhysical) && (
+            <div className="space-y-3">
+              <BSectionHeader>Travel Details</BSectionHeader>
+              {flightDetails && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300">Flight</span>
+                  <p className="text-xs text-ink bg-parchment/60 rounded-lg px-3 py-2 whitespace-pre-line font-mono">{flightDetails}</p>
+                </div>
+              )}
+              <BRow label="Hotel" value={hotelName} />
+            </div>
+          )}
+
+          {/* Schedule / Run of Show — only when there's run-of-show data */}
+          {hasRos && (
+            <div className="space-y-3">
+              <BSectionHeader>Schedule / Run of Show</BSectionHeader>
+              <div className="rounded-xl border border-ink-100 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-parchment border-b border-ink-100">
+                      {runOfShow.some(r => r.date) && <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-28">Day</th>}
+                      <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-24">Time</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300">What&apos;s Happening</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-ink-300 w-40">Her Role / Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runOfShow.map((r, i) => (
+                      <tr key={i} className={`border-b border-ink-50 last:border-0 ${i % 2 === 0 ? 'bg-white' : 'bg-parchment/20'}`}>
+                        {runOfShow.some(row => row.date) && <td className="px-3 py-1.5 text-xs text-ink">{r.date}</td>}
+                        <td className="px-3 py-1.5 text-xs text-ink">{r.time}{r.end_time ? `–${r.end_time}` : ''}</td>
+                        <td className="px-3 py-1.5 text-xs text-ink">{r.what}</td>
+                        <td className="px-3 py-1.5 text-xs text-ink-400">{r.notes}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Prep Notes */}
+          <div className="space-y-3">
+            <BSectionHeader>Prep Notes</BSectionHeader>
+            <BRow label="Topics" value={e.topic} multiline />
+            {e.notes && <BRow label="Additional Notes" value={e.notes} multiline />}
+            {!e.topic && !e.notes && <p className="text-sm text-ink-200 italic">No prep notes</p>}
+          </div>
+
+          {briefingNotes.length > 0 && (
+            <div className="space-y-3">
+              <BSectionHeader>Briefing Notes</BSectionHeader>
+              <div className="space-y-3">
+                {briefingNotes.map(n => (
+                  <div key={n.id} className="flex items-start gap-2 text-sm">
+                    {n.resolved ? <CheckCircle2 size={13} className="text-sage flex-shrink-0 mt-0.5" /> : <Circle size={13} className="text-ink-200 flex-shrink-0 mt-0.5" />}
+                    <div>
+                      <p className={n.resolved ? 'text-ink-400 line-through' : 'text-ink'}>{n.body}</p>
+                      <p className="text-[10px] text-ink-300 mt-0.5">{formatDate(n.created_at, 'MMM d, h:mm a')}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Timeline */}
       <div className="bg-white border border-ink-100 rounded-xl p-5">
