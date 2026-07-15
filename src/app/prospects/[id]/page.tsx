@@ -8,6 +8,8 @@ import { localInputToISO, formatCallDateTime, browserTimezone } from '@/lib/time
 import TimezoneSelect from '@/components/TimezoneSelect'
 import ArchiveModal from '@/components/ArchiveModal'
 import UnarchiveButton from '@/components/UnarchiveButton'
+import ProspectSnapshotView from '@/components/ProspectSnapshotView'
+import StageHistoryNav from '@/components/StageHistoryNav'
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Circle,
   Phone, Edit3, Check, X, Plus, Trash2, FolderArchive
@@ -553,6 +555,7 @@ export default function ProspectDetailPage() {
 
   const e = allEngagements.find(e => e.id === id)
   if (!e) return <div className="p-8 text-ink-400">Not found</div>
+  if (e.section !== 'prospects') return <ProspectSnapshotView engagement={e} />
 
   const currentStep = e.prospect_step ?? 'inquiry'
   const entrySteps = ['inquiry', 'outreach']
@@ -578,6 +581,8 @@ export default function ProspectDetailPage() {
       <Link href="/prospects" className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink mb-6 transition-all">
         <ArrowLeft size={14} /> Back to Prospects
       </Link>
+
+      <StageHistoryNav engagement={e} current="prospects" />
 
       <div className="flex items-start justify-between mb-6">
         <div>

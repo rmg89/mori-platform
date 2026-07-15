@@ -11,6 +11,7 @@ import ArchiveModal from '@/components/ArchiveModal'
 import UnarchiveButton from '@/components/UnarchiveButton'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
 import { getBackwardTransition } from '@/lib/pipeline'
+import StageHistoryNav from '@/components/StageHistoryNav'
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -466,6 +467,8 @@ export default function WrapUpDetailPage() {
       <Link href="/wrap-up" className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink mb-6 transition-all">
         <ArrowLeft size={14} /> Back to Wrap-Up
       </Link>
+
+      <StageHistoryNav engagement={e} current="wrap-up" />
 
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-1">

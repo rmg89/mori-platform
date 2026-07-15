@@ -23,6 +23,8 @@ import TimezoneSelect from '@/components/TimezoneSelect'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
 import { TIMEZONE_OPTIONS } from '@/lib/timezone'
 import { getBackwardTransition } from '@/lib/pipeline'
+import EngagementSnapshotView from '@/components/EngagementSnapshotView'
+import StageHistoryNav from '@/components/StageHistoryNav'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2503,6 +2505,7 @@ export default function EngagementDetailPage() {
   }, [e, updateEngagement])
 
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
+  if (e.section !== 'engagements') return <EngagementSnapshotView engagement={e} />
 
   const backwardTarget = getBackwardTransition(e)
   const eventType = (e as any).event_type || 'speaking'
@@ -2518,6 +2521,8 @@ export default function EngagementDetailPage() {
       <Link href="/engagements" className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink mb-6 transition-all">
         <ArrowLeft size={14} /> Back to Engagements
       </Link>
+
+      <StageHistoryNav engagement={e} current="engagements" />
 
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
