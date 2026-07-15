@@ -11,6 +11,31 @@ One entry per work session. Newest at the top.
 - Follow-ups / open questions:
 ```
 
+## 2026-07-11
+- Branch: `main` (no feature branch — committed and pushed directly, twice: `248c84f` and `f2ca9f7`).
+- What I did:
+  - Wired up the previously non-functional "New Inquiry" button on the Prospects/Dashboard pages: built `insertEngagementRow` (`src/lib/db.ts`), `addProspect` (`src/lib/store.tsx`), and a new `NewInquiryModal` component.
+  - Reworked Organization and Contact entry in that modal to search existing records first (with AI-assisted website lookup for new organizations via `/api/ai/enrich-company`, using Claude + web search — never fabricates, returns null instead of guessing) or add new, mirroring the existing pattern on the engagement detail page. Added support for multiple contacts per new prospect.
+  - Wired up a second, separately-broken "Add Company" button on `/companies` (had no click handler at all) with a new `AddCompanyModal`.
+  - Found and fixed several real bugs along the way (see Bugs found).
+  - Added "Current" engagement tracking: `isEngagementCurrent()` (event date today or in the future) in `src/lib/utils.ts`, surfaced as a badge on the company detail page and a filter + badge on the companies list.
+  - Ran `/test` against the full diff since session start (covering both this work and the parallel session's invoice-finalize/business-profile/delete-company-contact work) — reported two lists, no blocking issues found by reading, flagged migration-application status and PDF layout as needing a manual/preview check.
+- Bugs found:
+  - **Modal positioning broke inside `.animate-fade-in` page wrappers** — the wrapper's `transform` (from its fade-in keyframe) creates a CSS containing block, so any `position: fixed` modal inside it renders relative to the page container instead of the viewport, appearing far down the page. Fixed by rendering all four modals (`NewInquiryModal`, `ArchiveModal`, `ConfirmModal`, `InvoiceEditModal`) via `createPortal(..., document.body)`.
+  - **Dashboard greeting/date caused a React hydration mismatch** — `new Date().getHours()`/`.toLocaleDateString()` were called directly in render, computed once server-side (UTC) and again client-side (local timezone), producing different text and forcing React to discard and rebuild that part of the tree on every load. This is the likely cause of "clicks doing nothing" right after page load. Fixed with `suppressHydrationWarning` on those two nodes (the documented React/Next.js pattern for content that's expected to differ between server and client).
+  - **`company.engagement_ids`/`contact_ids` were always hardcoded to `[]`** in `src/lib/db.ts` (`fetchCompanies`, `insertCompanyRow`) — this silently broke the company detail page's Engagements/Contacts tabs for *every* company, not just newly created ones. Fixed by deriving both live from the current `engagements` state via `useMemo` in `store.tsx`.
+  - **`mapContact()` dropped `company_id`/`team_id`** when loading contacts from Supabase — meant a contact's own company link was invisible to the app, so selecting an existing contact from a different company during New Inquiry would get silently re-linked to the new engagement's company instead of keeping their real one. Fixed by mapping both fields through; also had to add `company_id`/`team_id` to the `ContactRow` interface, which was missing them entirely.
+  - **"+ Add new organization" only focused the input instead of opening the form when clicked with an empty field** — unlike "+ Add new contact", which always opens unconditionally. Looked exactly like the button doing nothing on first click, which is the natural way to use it. Fixed by removing the special case.
+  - **`autoFocus` silently lost focus to `<body>`** on both the new-organization and new-contact forms — the trigger button that had focus unmounts in the same render that mounts the autofocused input, and the browser drops focus to `<body>` in that swap before React's `autoFocus` commits. Fixed with an explicit `ref` + `useEffect(() => ref.current?.focus(), [mode])` instead.
+- Decisions:
+  - Any future "link existing or create new" UI (companies, contacts, or similar) should follow the pattern established here: default to a search view, an always-clickable (never conditionally-disabled) "+ Add new" entry point, and an explicit "Company name"/equivalent-required-field style form — not a single dual-purpose search/name field.
+  - AI-assisted data entry (company lookup) must use real web search and return `null`/unknown rather than ever letting the model guess a fact like a website URL — and any AI-filled field must show a "verify before saving" indicator in the UI, not look identical to manually-entered data.
+  - "Current" is defined as: engagement has an `event_date` of today or later. This is the definition to reuse anywhere "current" comes up next.
+- Follow-ups / open for next session:
+  - Confirm the three migrations touched/added this session (`add_business_profile.sql`, `add_invoice_finalized_status.sql`, `allow_delete_companies_contacts.sql`) have actually been run against the live Supabase database — flagged by `/test` as the top risk, not verifiable by reading the repo alone.
+  - Visually verify the PDF invoice layout changes in `src/lib/documents.ts` (header repositioning, new From/Billed-To two-column block) on an actual generated PDF — can't be confirmed by reading the jsPDF coordinate math alone.
+  - `ANTHROPIC_API_KEY` is still unset everywhere — confirmed again this session as intentional; billing is meant to be the client's own Anthropic account, not the developer's, whenever AI features are actually turned on.
+
 ## 2026-07-10 (2)
 - Branch: `main` (no feature branch — this session was deploy/infra investigation and cleanup, no app code changes committed).
 - What I did:

@@ -33,14 +33,14 @@ export default function ContactProfilePage() {
   )
   const match = allContacts.find(c => c.id === id)
 
+  const [watching, setWatching] = useState(match?.watching ?? false)
+
   if (!match) return <div className="p-8 text-ink-400">Contact not found.</div>
 
   // Get all engagements this contact appears in
   const contactEngagements = allEngagements.filter(e =>
     e.contacts.some(c => c.id === id)
   )
-
-  const [watching, setWatching] = useState(match.watching ?? false)
 
   const SECTION_LABELS: Record<string, string> = {
     prospects: 'Prospect',

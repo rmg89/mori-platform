@@ -2492,14 +2492,19 @@ export default function EngagementDetailPage() {
   const [showHidden, setShowHidden] = useState(false)
   const [, startTransition] = useTransition()
   const e = allEngagements.find(e => e.id === id)
+
+  // useCallback must run unconditionally on every render — calling it after an
+  // early return (below) changes the hook count between renders whenever `e`
+  // toggles found/not-found, which is exactly React errors #300/#310.
+  const save = useCallback((patch: Partial<Engagement>) => {
+    if (!e) return
+    updateEngagement(e.id, patch)
+  }, [e, updateEngagement])
+
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
 
   const backwardTarget = getBackwardTransition(e)
   const eventType = (e as any).event_type || 'speaking'
-
-  const save = useCallback((patch: Partial<Engagement>) => {
-    updateEngagement(e.id, patch)
-  }, [e.id, updateEngagement])
 
   return (
     <BriefingFieldContext.Provider value={{
