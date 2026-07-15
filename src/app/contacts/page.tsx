@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { EngagementContact, Engagement, ContactStatus } from '@/types'
 import { getInitials } from '@/lib/utils'
-import { Search, Mail, ArrowRight, Eye, Plus } from 'lucide-react'
+import { Search, Mail, ArrowRight, Eye, Plus, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react'
 import Link from 'next/link'
 import AddContactModal from '@/components/AddContactModal'
 
@@ -36,6 +36,16 @@ const STATUS_COLORS: Record<ContactStatus, string> = {
   client: 'text-gold bg-gold/10 border-gold/20',
 }
 
+type SortKey = 'contact' | 'organization' | 'role' | 'status'
+type SortDir = 'asc' | 'desc'
+
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'contact', label: 'Contact' },
+  { key: 'organization', label: 'Organization' },
+  { key: 'role', label: 'Role' },
+  { key: 'status', label: 'Status' },
+]
+
 type FilterStatus = ContactStatus | 'watching' | 'all'
 
 const FILTERS: { id: FilterStatus; label: string }[] = [
@@ -51,6 +61,17 @@ export default function ContactsPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterStatus>('all')
   const [addContactOpen, setAddContactOpen] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('contact')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   const all: ContactWithEngagement[] = [
     ...allEngagements.flatMap(e => e.contacts.map(c => ({ ...c, engagement: e }))),
@@ -75,6 +96,17 @@ export default function ContactsPage() {
       c.status === filter
     return matchesSearch && matchesFilter
   })
+
+  const sortValue = (c: ContactWithEngagement): string => {
+    switch (sortKey) {
+      case 'contact': return `${c.first_name} ${c.last_name}`
+      case 'organization': return orgLabel(c)
+      case 'role': return ROLE_LABELS[c.role] ?? c.role
+      case 'status': return c.status ? STATUS_LABELS[c.status] : ''
+    }
+  }
+  const dirMultiplier = sortDir === 'asc' ? 1 : -1
+  const sorted = filtered.slice().sort((a, b) => sortValue(a).localeCompare(sortValue(b)) * dirMultiplier)
 
   return (
     <div className="p-8 max-w-5xl mx-auto animate-fade-in">
@@ -123,18 +155,28 @@ export default function ContactsPage() {
       {/* Table */}
       <div className="bg-white border border-ink-100 rounded-xl overflow-hidden">
         <div className="grid grid-cols-[2fr_2fr_1fr_1fr_auto] border-b border-ink-100 px-5 py-2.5 bg-parchment">
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Contact</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Organization</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Role</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Status</span>
+          {SORT_COLUMNS.map(col => (
+            <button
+              key={col.key}
+              onClick={() => toggleSort(col.key)}
+              className="flex items-center gap-1 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hover:text-ink transition-colors text-left"
+            >
+              {col.label}
+              {sortKey === col.key ? (
+                sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
+              ) : (
+                <ChevronsUpDown size={11} className="text-ink-200" />
+              )}
+            </button>
+          ))}
           <span></span>
         </div>
 
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-ink-400">No contacts match your search.</div>
         ) : (
           <div className="divide-y divide-ink-50">
-            {filtered.map(c => (
+            {sorted.map(c => (
               <Link
                 key={c.id}
                 href={`/contacts/${c.id}`}

@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Search } from 'lucide-react'
+import { X, Search, Plus } from 'lucide-react'
 import { useStore } from '@/lib/store'
 
 interface AddContactModalProps {
@@ -9,16 +9,28 @@ interface AddContactModalProps {
 }
 
 export default function AddContactModal({ onClose }: AddContactModalProps) {
-  const { companies, createContact } = useStore()
+  const { companies, createContact, createCompany } = useStore()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [title, setTitle] = useState('')
+  const [companyMode, setCompanyMode] = useState<'search' | 'add'>('search')
   const [companyQuery, setCompanyQuery] = useState('')
   const [companyId, setCompanyId] = useState<string | undefined>(undefined)
+  const [newCompanyName, setNewCompanyName] = useState('')
+  const [newCompanyWebsite, setNewCompanyWebsite] = useState('')
+  const [creatingCompany, setCreatingCompany] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const companyNameInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus explicitly rather than relying on autoFocus — the "+ Add new company"
+  // trigger unmounts in the same render that mounts this input, and the browser
+  // can drop focus to <body> in that swap.
+  useEffect(() => {
+    if (companyMode === 'add') companyNameInputRef.current?.focus()
+  }, [companyMode])
 
   const trimmedFirst = firstName.trim()
   const canSave = trimmedFirst.length > 0 && !saving
@@ -27,6 +39,25 @@ export default function AddContactModal({ onClose }: AddContactModalProps) {
   const companyMatches = companyQuery.trim() && !selectedCompany
     ? companies.filter(c => c.name.toLowerCase().includes(companyQuery.trim().toLowerCase())).slice(0, 5)
     : []
+
+  const trimmedNewCompany = newCompanyName.trim()
+
+  async function handleCreateCompany() {
+    if (!trimmedNewCompany || creatingCompany) return
+    setCreatingCompany(true)
+    setError(null)
+    try {
+      const company = await createCompany({ name: trimmedNewCompany, website: newCompanyWebsite.trim() || undefined })
+      setCompanyId(company.id)
+      setCompanyMode('search')
+      setNewCompanyName('')
+      setNewCompanyWebsite('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create company')
+    } finally {
+      setCreatingCompany(false)
+    }
+  }
 
   async function handleSave() {
     if (!canSave) return
@@ -110,26 +141,51 @@ export default function AddContactModal({ onClose }: AddContactModalProps) {
                   <X size={13} />
                 </button>
               </div>
-            ) : (
-              <div className="relative">
-                <div className="flex items-center gap-2 bg-parchment border border-ink-100 rounded-lg px-3 py-2">
-                  <Search size={12} className="text-ink-300 flex-shrink-0" />
-                  <input
-                    value={companyQuery} onChange={e => setCompanyQuery(e.target.value)} placeholder="Search companies..."
-                    className="w-full text-sm bg-transparent outline-none text-ink placeholder:text-ink-300"
-                  />
-                </div>
-                {companyMatches.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border border-ink-100 rounded-lg shadow-md overflow-hidden">
-                    {companyMatches.map(c => (
-                      <button key={c.id} type="button"
-                        onClick={() => { setCompanyId(c.id); setCompanyQuery('') }}
-                        className="w-full text-left text-sm text-ink px-3 py-2 hover:bg-parchment transition-all">
-                        {c.name}
-                      </button>
-                    ))}
+            ) : companyMode === 'search' ? (
+              <div>
+                <div className="relative">
+                  <div className="flex items-center gap-2 bg-parchment border border-ink-100 rounded-lg px-3 py-2">
+                    <Search size={12} className="text-ink-300 flex-shrink-0" />
+                    <input
+                      value={companyQuery} onChange={e => setCompanyQuery(e.target.value)} placeholder="Search companies..."
+                      className="w-full text-sm bg-transparent outline-none text-ink placeholder:text-ink-300"
+                    />
                   </div>
-                )}
+                  {companyMatches.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-ink-100 rounded-lg shadow-md overflow-hidden">
+                      {companyMatches.map(c => (
+                        <button key={c.id} type="button"
+                          onClick={() => { setCompanyId(c.id); setCompanyQuery('') }}
+                          className="w-full text-left text-sm text-ink px-3 py-2 hover:bg-parchment transition-all">
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button type="button" onClick={() => setCompanyMode('add')}
+                  className="mt-1.5 text-xs text-gold hover:text-gold-dark transition-colors flex items-center gap-1 px-1">
+                  <Plus size={11} /> Add new company
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2 p-3 bg-parchment/60 rounded-lg border border-ink-100">
+                <input ref={companyNameInputRef} value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)}
+                  placeholder="Company name *"
+                  className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
+                <input value={newCompanyWebsite} onChange={e => setNewCompanyWebsite(e.target.value)}
+                  placeholder="Website (optional)" type="url"
+                  className="w-full text-sm text-ink bg-white border border-ink-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-gold/50 placeholder:text-ink-300" />
+                <div className="flex items-center justify-between pt-1">
+                  <button type="button" onClick={() => setCompanyMode('search')}
+                    className="text-xs text-ink-300 hover:text-ink transition-colors px-1">
+                    ‹ Search existing companies instead
+                  </button>
+                  <button type="button" onClick={handleCreateCompany} disabled={creatingCompany || !trimmedNewCompany}
+                    className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-200 hover:border-ink-400 bg-white rounded-lg px-3 py-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    {creatingCompany ? 'Adding…' : 'Create company'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
