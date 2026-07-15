@@ -15,7 +15,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - **PDF generation** (`src/lib/documents.ts`, jsPDF) — contracts, briefing docs, invoices, deposit invoices
 - **AI email reply drafting** (`src/app/api/ai/email-reply`) and **Instagram caption generation** (`src/app/api/ai/instagram-caption`) via Claude
 - **Automatic AI engagement scans** (`src/lib/ai-scan.ts`) — on decline, on move-to-confirmed, and on move-to-wrap-up, Claude flags which contract/materials/post-event items likely apply and drops a summary into that engagement's briefing notes
-- **MCP server** (`src/app/api/[transport]`) — 27 tools exposing the full pipeline (list/get/update engagements, contacts, companies, calls, materials, briefing notes, invoices, PDF generation) for direct use by Claude. Requires `Authorization: Bearer <MCP_SECRET_TOKEN>` on every request (added 2026-07-10; fails closed if the token env var is unset)
+- **MCP server** (`src/app/api/[transport]`) — 29 tools exposing the full pipeline (list/get/update engagements, contacts, companies, calls, materials, briefing notes, invoices, PDF generation, plus `move_engagement_backward`/`unarchive_engagement`) for direct use by Claude. Requires `Authorization: Bearer <MCP_SECRET_TOKEN>` on every request (added 2026-07-10; fails closed if the token env var is unset)
 - **Settings** (`src/app/settings`) — invoice letterhead / business profile editing (`src/lib/business.ts`, Billing tab), integrations status list; user management is a placeholder
 - **File upload** endpoint (`src/app/api/upload`)
 - **New Inquiry** (`src/components/NewInquiryModal.tsx`, launched from Prospects and Dashboard) — creates a prospect with search-or-create organization linking, AI-assisted website lookup for new organizations (`src/app/api/ai/enrich-company`, Claude + web search, never fabricates), and support for adding multiple contacts, each optionally linked to an existing or new company
@@ -23,6 +23,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - **Delete company / delete contact** — typed-confirmation delete that unlinks (rather than blocks on) any referencing engagements/contacts/comms (`supabase/migrations/allow_delete_companies_contacts.sql`)
 - **"Current" engagement tracking** (`src/lib/utils.ts` → `isEngagementCurrent`) — engagements with an `event_date` today or later are flagged "Current" on the company detail page and filterable on the Companies list
 - **Invoice finalize workflow** — `draft → finalized → sent → paid`, plus an invoice edit modal (`src/components/InvoiceEditModal.tsx`) for correcting snapshot fields after creation
+- **Un-archive, move backward, move to Wrap-Up manually** (`src/lib/pipeline.ts`, `src/components/UnarchiveButton.tsx`) — an archived record can be restored via a button on the Archive list or any detail page; a confirmed engagement or wrap-up record can be moved back one pipeline stage (restoring the frozen `prospect_step` from its snapshot); an engagement can be moved to Wrap-Up manually ahead of the automatic date-based transition. All three also exposed as MCP tools.
 
 ### Planned (committed)
 
@@ -46,7 +47,10 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - ~~"+ Add new organization" only focused the input instead of opening the form when clicked with an empty field~~ (unlike "+ Add new contact", which always opens) — looked exactly like the button not working. Fixed 2026-07-11.
 - ~~`autoFocus` lost focus to `<body>` on the new-organization/new-contact forms~~ — the trigger button unmounts in the same render that mounts the autofocused input. Fixed 2026-07-11 with explicit `ref` + `useEffect` focus.
 - `ANTHROPIC_API_KEY` is not set in any environment (local or Vercel). Not currently blocking — no AI feature is live yet per the client, and billing for it is meant to be the client's own Anthropic account, not the developer's — but `email-reply`, `instagram-caption`, `ai-scan`, and the New Inquiry AI company lookup will all fail at runtime (gracefully, with a visible error/fallback message) until it's added.
-- Not confirmed whether the three migrations touched 2026-07-11 (`add_business_profile.sql`, `add_invoice_finalized_status.sql`, `allow_delete_companies_contacts.sql`) have actually been run against the live Supabase database — flagged by `/test`, not verifiable from the repo alone.
+- Not confirmed whether `add_business_profile.sql`, `add_invoice_finalized_status.sql`, and `allow_delete_companies_contacts.sql` (all touched 2026-07-11) have actually been run against the live Supabase database — flagged by `/test`, not verifiable from the repo alone.
+- ~~`confirmed_at`/`declined_at` were missing from the live `engagements` table~~ — both are base `schema.sql` columns that `confirmProspect`/`declineProspect` have always written to, but were never actually present in production, causing a 400 ("Could not find the 'confirmed_at' column") when confirming a prospect. Fixed 2026-07-15 with `supabase/migrations/add_confirmed_declined_at.sql`, confirmed run against production.
+- ~~`EngagementDetailPage` called `useCallback` after an early `if (!e) return`~~ — changed the hook count between renders whenever the engagement lookup toggled found/not-found, surfacing as React errors #300/#310 in production. Fixed 2026-07-15 by hoisting the hook above the guard. Every other detail page was swept for the same pattern and is clean.
+- `StageHistoryNav.tsx`, `ProspectSnapshotView.tsx`, and `EngagementSnapshotView.tsx` were built but never wired into any route — nothing under `src/app/` imports them, and they duplicate functionality that's already live inline (`SnapshotPanel`/`WrapUpSnapshotPanel`). Not on `main` (left uncommitted deliberately). Needs a decision: finish and wire up, or delete.
 
 ## Test checklist
 
@@ -65,6 +69,12 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - [ ] Click "+ Add new organization" / "+ Add new contact" with the field completely empty (don't type anything first) and confirm the form opens immediately with the first input focused (regression: empty-field click + autoFocus)
 - [ ] Hard-refresh `/dashboard` and check the browser console for React hydration errors (#418/#423/#425) — should be none
 - [ ] Before trusting a pending file in `supabase/migrations/`, run it (or confirm it's already been run) directly in the Supabase SQL editor — its presence in the repo doesn't mean it's live
+- [ ] Confirm a prospect (writes `confirmed_at`) and decline a prospect (writes `declined_at`) and confirm both succeed with no 400 (regression: missing schema columns)
+- [ ] On an engagement's detail page, click Move Backward / Move to Wrap-Up / Archive in sequence without a full page reload between clicks, watching the browser console for React errors #300/#310 (regression: hooks called after an early return)
+- [ ] Move a *declined* prospect (parked in Wrap-Up) backward to Prospects specifically — distinct code path from a normal Wrap-Up record moving back to Engagements
+- [ ] Unarchive a record from the Archive *list* page itself (not just from a detail page) and confirm it doesn't also navigate you into the record
+- [ ] Delete a company and delete a contact end-to-end on a real (non-throwaway) record and confirm referencing engagements/contacts unlink cleanly rather than erroring
+- [ ] Before adding a new component, grep whether anything under `src/app/` actually imports it — a component can build and type-check clean while being fully unreachable (regression: `StageHistoryNav`/`ProspectSnapshotView`/`EngagementSnapshotView`)
 
 ## Decisions
 

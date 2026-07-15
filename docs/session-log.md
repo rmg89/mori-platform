@@ -11,6 +11,29 @@ One entry per work session. Newest at the top.
 - Follow-ups / open questions:
 ```
 
+## 2026-07-15
+- Branch: `add-unarchive-and-move-backward` — merged to `main` this session (`104ad5a`), branch deleted locally and on origin.
+- What I did:
+  - Built delete company / delete contact (typed-confirmation delete, unlinks rather than blocks on referencing engagements/contacts/comms; `supabase/migrations/allow_delete_companies_contacts.sql`). This ended up bundled into an earlier commit (`f2ca9f7`) alongside a concurrent session's work rather than its own reviewed branch — see Decisions.
+  - Ran `/test` against the un-archive / move-engagement-backward feature already on this branch (MCP tools `move_engagement_backward`/`unarchive_engagement`, `src/lib/pipeline.ts`, UI on the engagements/prospects/wrap-up/archive pages). Reported findings by reading only, no manual click-through yet at that point.
+  - Diagnosed a live production error reported by Mori: confirming a prospect threw a Supabase 400, `Could not find the 'confirmed_at' column of 'engagements' in the schema cache`. Root cause: `confirmed_at`/`declined_at` are base `schema.sql` columns that `confirmProspect`/`declineProspect` have always written to, but they were missing from the live table (never applied via an actual migration). Added `supabase/migrations/add_confirmed_declined_at.sql`; confirmed run against production this session.
+  - Diagnosed a second production error immediately after (React errors #300 then #310) — a genuine Rules-of-Hooks violation: `EngagementDetailPage` (`src/app/engagements/[id]/page.tsx`) called `useCallback` *after* its `if (!e) return` guard, so the hook count changes between renders whenever the engagement lookup toggles found/not-found. Fixed by hoisting the `useCallback` above the guard and guarding its body instead. Swept every other detail page (`companies/[id]`, `contacts/[id]`, `prospects/[id]`, `wrap-up/[id]`, advance-sheet) for the same pattern — all clean.
+  - Added a manual "Move to Wrap-Up" button on the engagement detail page, matching the existing Archive/Move Backward pattern — previously the *only* way to reach Wrap-Up was the automatic date-based transition in `fetchAllEngagements()`.
+  - Merged the branch into `main` (fast-forward, direct push — no PR) after confirming the migration had been run and testing had passed.
+- Bugs found:
+  - **`confirmed_at`/`declined_at` missing from the live `engagements` table** — see above. Fixed via migration, confirmed applied.
+  - **Hooks-order violation in `EngagementDetailPage`** causing React #300/#310 crashes — see above. Fixed.
+  - **Three new components never wired into any route**: `StageHistoryNav.tsx`, `ProspectSnapshotView.tsx`, `EngagementSnapshotView.tsx` (from the same branch's earlier work, by a concurrent session). They type-check and build clean but nothing imports them under `src/app/`; they also duplicate functionality that's already live inline (`SnapshotPanel`/`WrapUpSnapshotPanel`). Left uncommitted/untracked deliberately — not merged to `main`. Still need a decision: finish and wire up, or delete.
+  - **MCP tool count in docs was stale** — `CLAUDE.md`/`PROJECT.md` said "27 tools" but this branch added two (`move_engagement_backward`, `unarchive_engagement`), making it 29. Corrected in `PROJECT.md` this session.
+- Decisions:
+  - Mid-session, discovered another Claude Code session (likely the IDE panel) was editing this same working directory concurrently and had pushed a commit directly to `main`, bypassing branch/review. No data was lost, but it prompted tightening the global `~/.claude/CLAUDE.md` "Version control and shipping" rules: branch *before* the first edit (not after), and commit/push a branch without asking (only merging to `main` still requires explicit approval).
+  - Chose a direct fast-forward merge + push for this branch over opening a GitHub PR, since the diff had already been shown and approved in-session.
+- Follow-ups / open for next session:
+  - Decide the fate of `StageHistoryNav.tsx` / `ProspectSnapshotView.tsx` / `EngagementSnapshotView.tsx` (still sitting untracked locally, not on `main`).
+  - Still not confirmed whether `allow_delete_companies_contacts.sql`, `add_business_profile.sql`, and `add_invoice_finalized_status.sql` have been run against production — carried over from 2026-07-11, still open.
+  - Manual test coverage still needed: declining a prospect (writes `declined_at`, only spot-checked confirming so far), moving a *declined* prospect (parked in wrap-up) backward to Prospects specifically, unarchiving from the Archive *list* page itself (not just a detail page), and delete company/delete contact end-to-end on a real record (built 2026-07-11, never actually clicked on a live preview).
+  - `ANTHROPIC_API_KEY` is still unset everywhere — confirmed again as intentional (client's own Anthropic account, not the developer's).
+
 ## 2026-07-11
 - Branch: `main` (no feature branch — committed and pushed directly, twice: `248c84f` and `f2ca9f7`).
 - What I did:
