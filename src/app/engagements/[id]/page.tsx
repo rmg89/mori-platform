@@ -13,7 +13,7 @@ import {
   Clock, Wifi, Hotel, Plane, ExternalLink,
   Pencil, Check, X, Plus, Minus, Trash2, GripVertical, ChevronDown, ChevronUp,
   FileCheck, Upload, ArrowDown, Paperclip, Building2,
-  Receipt, History, Flag, Bell, BellOff, FolderArchive, Undo2
+  Receipt, History, Flag, Bell, BellOff, FolderArchive, Undo2, FastForward
 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
@@ -2485,10 +2485,11 @@ function TimelinePanel({ e }: { e: Engagement }) {
 export default function EngagementDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement, archiveEngagement, moveEngagementBack, setFieldStatus } = useStore()
+  const { engagements: allEngagements, updateEngagement, confirmBookingReview, deleteEngagement, archiveEngagement, moveEngagementBack, moveToWrapUp, setFieldStatus } = useStore()
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [archiveModalOpen, setArchiveModalOpen] = useState(false)
   const [moveBackModalOpen, setMoveBackModalOpen] = useState(false)
+  const [moveForwardModalOpen, setMoveForwardModalOpen] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [, startTransition] = useTransition()
   const e = allEngagements.find(e => e.id === id)
@@ -2606,8 +2607,19 @@ export default function EngagementDetailPage() {
         </div>
       ) : (
         <>
+          <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+            <div>
+              <p className="text-sm font-medium text-ink">Move to Wrap-Up</p>
+              <p className="text-xs text-ink-400 mt-0.5">Moves this record forward, ahead of the automatic transition on the event date. Nothing else is changed.</p>
+            </div>
+            <button
+              onClick={() => setMoveForwardModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+              <FastForward size={13} /> Move to Wrap-Up
+            </button>
+          </div>
           {backwardTarget && (
-            <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
+            <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
               <div>
                 <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
                 <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
@@ -2645,6 +2657,15 @@ export default function EngagementDetailPage() {
           <Trash2 size={13} /> Delete
         </button>
       </div>
+
+      <ConfirmModal
+        open={moveForwardModalOpen}
+        title="Move to Wrap-Up?"
+        description={`This moves "${e.organization}" to Wrap-Up now, ahead of its event date. Nothing else is changed.`}
+        confirmLabel="Move to Wrap-Up"
+        onConfirm={() => { moveToWrapUp(e.id); setMoveForwardModalOpen(false); startTransition(() => router.push('/wrap-up')) }}
+        onCancel={() => setMoveForwardModalOpen(false)}
+      />
 
       <ConfirmModal
         open={moveBackModalOpen}
