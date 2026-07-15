@@ -1,8 +1,7 @@
 'use client'
-import Link from 'next/link'
 import { Engagement, EngagementCall, EngagementContact, CommEntry } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { ArrowLeft, History, Phone } from 'lucide-react'
+import { History, Phone } from 'lucide-react'
 import StageHistoryNav from './StageHistoryNav'
 
 const STEP_LABELS: Record<string, string> = {
@@ -54,11 +53,9 @@ export default function ProspectSnapshotView({ engagement: e }: { engagement: En
 
   return (
     <div className="p-8 max-w-4xl mx-auto animate-fade-in">
-      <Link href="/prospects" className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink mb-6 transition-all">
-        <ArrowLeft size={14} /> Back to Prospects
-      </Link>
-
-      <StageHistoryNav engagement={e} current="prospects" />
+      <div className="mb-6">
+        <StageHistoryNav engagement={e} current="prospects" />
+      </div>
 
       <div className="mb-6">
         <h1 className="font-display text-3xl font-semibold text-ink">{e.event_name || e.organization}</h1>

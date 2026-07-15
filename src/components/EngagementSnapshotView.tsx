@@ -1,8 +1,7 @@
 'use client'
-import Link from 'next/link'
 import { Engagement, OutgoingMaterial, IncomingMaterial, BriefingNote } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { ArrowLeft, History, CheckCircle2, Circle } from 'lucide-react'
+import { History, CheckCircle2, Circle } from 'lucide-react'
 import StageHistoryNav from './StageHistoryNav'
 
 function str(snap: Record<string, unknown>, key: string): string | undefined {
@@ -60,11 +59,9 @@ export default function EngagementSnapshotView({ engagement: e }: { engagement: 
 
   return (
     <div className="p-8 max-w-4xl mx-auto animate-fade-in">
-      <Link href="/engagements" className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink mb-6 transition-all">
-        <ArrowLeft size={14} /> Back to Engagements
-      </Link>
-
-      <StageHistoryNav engagement={e} current="engagements" />
+      <div className="mb-6">
+        <StageHistoryNav engagement={e} current="engagements" />
+      </div>
 
       <div className="mb-6">
         <h1 className="font-display text-3xl font-semibold text-ink">{e.event_name || e.organization}</h1>
