@@ -12,7 +12,11 @@ export function getBackwardTransition(
   e: Pick<Engagement, 'section' | 'prospect_step' | 'prospect_snapshot'>
 ): BackwardTarget | null {
   if (e.section === 'engagements') {
-    const step = (e.prospect_snapshot?.prospect_step as ProspectStep | undefined) ?? 'confirmed'
+    // Fall back to 'in_contact', not 'confirmed' — the Prospects list only shows
+    // active steps (inquiry/outreach/in_contact), so 'confirmed' silently vanishes
+    // from every list. Missing prospect_snapshot happens for engagements confirmed
+    // via the move_to_confirmed MCP tool, which doesn't write one.
+    const step = (e.prospect_snapshot?.prospect_step as ProspectStep | undefined) ?? 'in_contact'
     return { section: 'prospects', prospect_step: step, label: 'Move back to Prospects' }
   }
   if (e.section === 'wrap-up') {
