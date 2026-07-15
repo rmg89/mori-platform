@@ -92,7 +92,7 @@ interface EngagementRow {
 
 interface ContactRow {
   id: string
-  engagement_id: string
+  engagement_id: string | null
   first_name: string
   last_name: string | null
   email: string | null
@@ -535,17 +535,25 @@ export async function insertEngagementRow(input: {
   return assembleEngagement(row as EngagementRow, contacts, [], [], [], [])
 }
 
-export async function insertContact(engagement_id: string, contact: Omit<ContactRow, 'id'>): Promise<string | null> {
+export async function insertContact(engagement_id: string | null, contact: Omit<ContactRow, 'id' | 'engagement_id'>): Promise<string | null> {
   const { data, error } = await supabase.from('contacts').insert({ ...contact, engagement_id }).select('id').single()
   if (error) { console.error('insertContact:', error.message); return null }
   return data.id
 }
 
-export async function upsertContact(contact: Partial<ContactRow> & { engagement_id: string }): Promise<void> {
+export async function upsertContact(contact: Partial<ContactRow> & { engagement_id: string | null }): Promise<void> {
   // Only upsert if the id looks like a real UUID (not a temp id from the UI)
   if (!contact.id || /^(new_|lnk_)/.test(contact.id)) return
   const { error } = await supabase.from('contacts').upsert(contact)
   if (error) throw new Error(`upsertContact: ${error.message}`)
+}
+
+// Contacts with no engagement_id — created directly from the Contacts directory,
+// not as part of a prospect/engagement.
+export async function fetchUnassignedContacts(): Promise<EngagementContact[]> {
+  const { data, error } = await supabase.from('contacts').select('*').is('engagement_id', null)
+  if (error) throw new Error(`fetchUnassignedContacts: ${error.message}`)
+  return (data as ContactRow[]).map(mapContact)
 }
 
 export async function deleteContactRow(id: string): Promise<void> {

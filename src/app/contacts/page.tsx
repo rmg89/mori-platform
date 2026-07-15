@@ -3,10 +3,11 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { EngagementContact, Engagement, ContactStatus } from '@/types'
 import { getInitials } from '@/lib/utils'
-import { Search, Mail, ArrowRight, Eye } from 'lucide-react'
+import { Search, Mail, ArrowRight, Eye, Plus } from 'lucide-react'
 import Link from 'next/link'
+import AddContactModal from '@/components/AddContactModal'
 
-type ContactWithEngagement = EngagementContact & { engagement: Engagement }
+type ContactWithEngagement = EngagementContact & { engagement?: Engagement }
 
 const ROLE_LABELS: Record<string, string> = {
   primary: 'Primary', bureau: 'Bureau', legal: 'Legal',
@@ -46,13 +47,18 @@ const FILTERS: { id: FilterStatus; label: string }[] = [
 ]
 
 export default function ContactsPage() {
-  const { engagements: allEngagements } = useStore()
+  const { engagements: allEngagements, unassignedContacts, companies } = useStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterStatus>('all')
+  const [addContactOpen, setAddContactOpen] = useState(false)
 
-  const all: ContactWithEngagement[] = allEngagements.flatMap(e =>
-    e.contacts.map(c => ({ ...c, engagement: e }))
-  )
+  const all: ContactWithEngagement[] = [
+    ...allEngagements.flatMap(e => e.contacts.map(c => ({ ...c, engagement: e }))),
+    ...unassignedContacts,
+  ]
+
+  const orgLabel = (c: ContactWithEngagement) =>
+    c.engagement?.organization ?? companies.find(co => co.id === c.company_id)?.name ?? ''
 
   const filtered = all.filter(c => {
     const q = search.toLowerCase()
@@ -60,7 +66,7 @@ export default function ContactsPage() {
       c.first_name.toLowerCase().includes(q) ||
       c.last_name.toLowerCase().includes(q) ||
       c.email.toLowerCase().includes(q) ||
-      c.engagement.organization.toLowerCase().includes(q) ||
+      orgLabel(c).toLowerCase().includes(q) ||
       (c.title ?? '').toLowerCase().includes(q)
     )
     const matchesFilter =
@@ -72,10 +78,17 @@ export default function ContactsPage() {
 
   return (
     <div className="p-8 max-w-5xl mx-auto animate-fade-in">
-      <div className="mb-8">
-        <h1 className="font-display text-3xl font-semibold text-ink">Contacts</h1>
-        <p className="text-ink-400 text-sm mt-1">{all.length} contacts across {allEngagements.length} engagements</p>
-        <div className="accent-line mt-3 w-24" />
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-ink">Contacts</h1>
+          <p className="text-ink-400 text-sm mt-1">{all.length} contacts</p>
+          <div className="accent-line mt-3 w-24" />
+        </div>
+        <button
+          onClick={() => setAddContactOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-medium text-white bg-ink hover:bg-ink-700 px-4 py-2 rounded-lg transition-all flex-shrink-0">
+          <Plus size={13} /> Add Contact
+        </button>
       </div>
 
       {/* Search + filters */}
@@ -123,7 +136,7 @@ export default function ContactsPage() {
           <div className="divide-y divide-ink-50">
             {filtered.map(c => (
               <Link
-                key={`${c.id}-${c.engagement.id}`}
+                key={c.id}
                 href={`/contacts/${c.id}`}
                 className="grid grid-cols-[2fr_2fr_1fr_1fr_auto] px-5 py-3.5 hover:bg-parchment transition-all group items-center"
               >
@@ -154,7 +167,7 @@ export default function ContactsPage() {
 
                 {/* Organization */}
                 <div className="min-w-0">
-                  <p className="text-sm text-ink truncate">{c.engagement.organization}</p>
+                  <p className="text-sm text-ink truncate">{orgLabel(c) || <span className="text-ink-200">—</span>}</p>
                   {c.title && <p className="text-xs text-ink-400 truncate">{c.title}</p>}
                 </div>
 
@@ -182,6 +195,8 @@ export default function ContactsPage() {
           </div>
         )}
       </div>
+
+      {addContactOpen && <AddContactModal onClose={() => setAddContactOpen(false)} />}
     </div>
   )
 }
