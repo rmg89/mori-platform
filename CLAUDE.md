@@ -9,7 +9,7 @@ A custom business-operations platform for Mori Taheripour (client: MT Global Str
 ## Stack
 
 - **Frontend**: Next.js 14.2.5 (App Router), React 18, TypeScript, Tailwind CSS
-- **Backend/data**: Supabase (Postgres), via `src/lib/supabase.ts` — an anon client for the browser and a service-role `supabaseAdmin()` for server routes. Base schema in `supabase/schema.sql`, incremental changes in `supabase/migrations/`.
+- **Backend/data**: Supabase (Postgres), via `src/lib/supabase.ts` — an anon client for the browser and a service-role `supabaseAdmin()` for server routes. Base schema in `supabase/schema.sql`, incremental changes in `supabase/migrations/`. The repo is linked to the real Supabase project (ref `jwdxuorpcppsjcomvhch`) via the Supabase CLI (`npx supabase migration list` shows local-vs-remote status — this is the actual source of truth for what's live, not `schema.sql`). New schema changes: `npx supabase migration new <name>`, edit the file, `npx supabase db push --dry-run` to preview, then `npx supabase db push`.
 - **Auth**: not implemented. No middleware, no Supabase Auth wiring. The Settings page's Users tab says "Team management coming soon... once auth is fully configured."
 - **AI**: Anthropic Claude API (`@anthropic-ai/sdk`) via `src/lib/ai-client.ts`. Model id comes from the `ANTHROPIC_AI_MODEL` env var (currently `claude-haiku-4-5-20251001`), with a clear error if the configured model 404s. Used for:
   - Email reply drafts (`src/app/api/ai/email-reply`)
@@ -41,6 +41,7 @@ Manual test checklist lives in [PROJECT.md](PROJECT.md).
 - **`src/lib/db.ts` is the real data layer**, despite the filename suggesting something generic — it maps raw Supabase rows into the app's `Engagement` shape, including deriving flags/alerts from boolean columns (e.g. `engagement_flags`, `post_event_flags`, overdue-invoice and event-approaching alerts).
 - **Engagements auto-transition on read.** `fetchAllEngagements()` (`src/lib/db.ts`) updates any confirmed engagement whose `event_date` has passed to `wrap-up` as a side effect of fetching, and fires an async AI scan for each one. This runs on every dashboard/pipeline load, not on a schedule.
 - **`README.md` is stale.** It describes an earlier demo-mode version of the app (mock data in `src/lib/mock-data.ts`, a `pipeline/` + `inbox/` route structure). That file no longer exists — the app now reads live from Supabase and the routes are `prospects/`, `engagements/`, `wrap-up/`, `companies/`, `contacts/`, `invoices/`, `archive/`, `review/`. Don't trust the README's architecture section.
+- **`schema.sql` calls the comms table `comms`; the live table is actually named `communications`**, matching `db.ts` and every migration after the rename except `schema.sql` itself, which was never updated. Confirmed 2026-07-15 when `allow_delete_companies_contacts.sql` failed against the real database referencing `comms`. `schema.sql` is a snapshot, not a live source of truth — same caution as the `confirmed_at`/`declined_at` column gap below.
 
 ## Related docs
 
