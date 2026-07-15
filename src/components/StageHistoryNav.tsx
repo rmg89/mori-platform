@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { History } from 'lucide-react'
 import { Engagement, Section } from '@/types'
 
 const STAGE_PATH: Record<Section, string> = {
@@ -29,21 +30,25 @@ export default function StageHistoryNav({ engagement, current }: { engagement: E
   if (stages.length <= 1) return null
 
   return (
-    <div className="flex items-center gap-1.5 mb-6">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-300 mr-1">History</span>
-      {STAGE_ORDER.filter(s => stages.includes(s)).map(stage => {
-        const isCurrent = stage === current
-        return isCurrent ? (
-          <span key={stage} className="text-xs font-medium px-3 py-1 rounded-full border bg-ink text-cream border-ink">
-            {STAGE_LABEL[stage]}
-          </span>
-        ) : (
-          <Link key={stage} href={`${STAGE_PATH[stage]}/${engagement.id}`}
-            className="text-xs font-medium px-3 py-1 rounded-full border bg-parchment text-ink-400 border-ink-100 hover:border-gold/40 hover:text-ink transition-all">
-            {STAGE_LABEL[stage]}
-          </Link>
-        )
-      })}
+    <div className="bg-white border border-ink-100 rounded-xl p-5">
+      <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-3 flex items-center gap-1.5">
+        <History size={12} /> Stage History
+      </p>
+      <div className="flex items-center gap-2">
+        {STAGE_ORDER.filter(s => stages.includes(s)).map(stage => {
+          const isCurrent = stage === current
+          return isCurrent ? (
+            <span key={stage} className="text-sm font-medium px-4 py-1.5 rounded-full border bg-ink text-cream border-ink">
+              {STAGE_LABEL[stage]}
+            </span>
+          ) : (
+            <Link key={stage} href={`${STAGE_PATH[stage]}/${engagement.id}`}
+              className="text-sm font-medium px-4 py-1.5 rounded-full border bg-parchment text-ink-400 border-ink-100 hover:border-gold/40 hover:text-ink transition-all">
+              {STAGE_LABEL[stage]}
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }
