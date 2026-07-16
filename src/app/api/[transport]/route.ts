@@ -443,7 +443,16 @@ const handler = createMcpHandler(
         notes: z.string().optional(),
       },
     }, async ({ engagement_id, direction, label, url, notes }) => {
-      const { error } = await supabase.from('materials').insert({ engagement_id, direction, label, url, note: notes, done: false, received: false, added_at: new Date().toISOString() })
+      // A material added with a link or notes already attached has effectively been
+      // received — match the UI's own captureLink/captureNote behavior instead of
+      // always leaving it flagged as outstanding.
+      const now = new Date().toISOString()
+      const hasContent = !!(url || notes)
+      const received = direction === 'incoming' && hasContent
+      const { error } = await supabase.from('materials').insert({
+        engagement_id, direction, label, url, note: notes,
+        done: false, received, received_at: received ? now : null, added_at: now,
+      })
       if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
       return { content: [{ type: 'text' as const, text: `Material "${label}" added.` }] }
     })

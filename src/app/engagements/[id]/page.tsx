@@ -567,7 +567,7 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
       {/* Logged notes — footnote style below input */}
       {(open.length > 0 || resolved.length > 0) && (
         <div className="mt-3 pt-3 border-t border-ink-50 space-y-1.5">
-          {open.map(note => (
+          {[...open].reverse().map(note => (
             <div key={note.id} className="group/note flex items-start gap-2">
               <div className="flex-1 bg-parchment/60 rounded-lg px-3 py-2">
                 <p className="text-xs leading-relaxed text-ink-500 whitespace-pre-line">{note.body}</p>
@@ -588,7 +588,7 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
               </button>
               {showResolved && (
                 <div className="space-y-1.5 mt-1.5">
-                  {resolved.map(note => (
+                  {[...resolved].reverse().map(note => (
                     <div key={note.id} className="group/note flex items-start gap-2 opacity-40">
                       <div className="flex-1 bg-parchment/40 rounded-lg px-3 py-1.5">
                         <p className="text-xs line-through text-ink-300 whitespace-pre-line">{note.body}</p>
