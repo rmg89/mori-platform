@@ -797,14 +797,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const refreshed = await fetchAllEngagements()
         setEngagements(refreshed)
       } else if (resolvedAction === 'add_to_existing' && item.ai_suggested_engagement_id) {
-        await insertContact(item.ai_suggested_engagement_id, {
+        // insertContact logs and returns null on failure rather than throwing —
+        // check explicitly so a DB error doesn't get silently marked "confirmed".
+        const contactId = await insertContact(item.ai_suggested_engagement_id, {
           engagement_id: item.ai_suggested_engagement_id,
           first_name: item.from_name,
           last_name: null,
           email: item.from_email,
           phone: null,
           title: null,
-          role: 'contact',
+          role: 'unknown',
           is_current_point_of_contact: false,
           status: 'prospect_active',
           watching: false,
@@ -812,6 +814,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           company_id: null,
           team_id: null,
         })
+        if (!contactId) throw new Error('Failed to add contact to engagement')
         const refreshed = await fetchAllEngagements()
         setEngagements(refreshed)
       } else if (resolvedAction === 'update_prospect' && item.ai_suggested_engagement_id) {
