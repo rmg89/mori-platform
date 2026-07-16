@@ -43,6 +43,16 @@ One entry per work session. Newest at the top.
   - Manual click-through still needed on `add-contact-button` once its migration runs: create a standalone contact, create-company-inline, sort every column on both Contacts and Companies pages.
   - `ANTHROPIC_API_KEY` still unset everywhere — unchanged, confirmed intentional in prior sessions.
 
+## 2026-07-15 (3)
+- Branch: `fix-contact-search-dropdown` — still open, not merged to `main`.
+- What I did:
+  - Fixed the contact-search dropdown in `NewInquiryModal` staying open after picking a name — it defaulted to showing the first 6 results even with an empty query, so clearing the query on selection didn't hide it. Added a `contactSearchOpen` state that opens on focus and closes immediately on selection.
+- Bugs found:
+  - **Contact-search dropdown never closed after selecting a contact** — fixed, see above.
+- Decisions: none.
+- Follow-ups / open for next session:
+  - Not merged yet — needs a manual preview click-through (search, select, confirm the list closes and reopens only on refocus) before merging.
+
 ## 2026-07-15
 - Branch: `add-unarchive-and-move-backward` — merged to `main` this session (`104ad5a`), branch deleted locally and on origin.
 - What I did:

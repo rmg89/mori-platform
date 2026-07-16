@@ -55,6 +55,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - `StageHistoryNav.tsx`, `ProspectSnapshotView.tsx`, and `EngagementSnapshotView.tsx` were built but never wired into any route — nothing under `src/app/` imports them, and they duplicate functionality that's already live inline (`SnapshotPanel`/`WrapUpSnapshotPanel`). Not on `main` (left uncommitted deliberately). Needs a decision: finish and wire up, or delete.
 - **`prospect_step: 'confirmed'` fallback bug**: `getBackwardTransition()` (`src/lib/pipeline.ts`) fell back to `'confirmed'` when an engagement had no `prospect_snapshot` (true for anything confirmed via the `move_to_confirmed` MCP tool) — `'confirmed'` is excluded from the Prospects list's active-steps filter, so the record silently vanished from every list after being moved backward. Fixed on `fix-prospect-backward-fallback` (not yet merged); falls back to `'in_contact'` instead.
 - **`contacts.engagement_id` is `NOT NULL` on the live table**, contradicting `schema.sql` (shows it nullable) — found via a direct insert test against production. Blocks the new Add Contact feature (`add-contact-button` branch) until `supabase/migrations/allow_contacts_without_engagement.sql` is run.
+- ~~The contact-search dropdown in `NewInquiryModal` stayed open after picking a name~~ — it defaulted to showing the first 6 results even with an empty query, so clearing the query on selection didn't hide the list. Fixed 2026-07-15 on branch `fix-contact-search-dropdown` (**not yet merged to `main`**) with a `contactSearchOpen` state that closes on selection and only reopens on focus.
 
 ## Test checklist
 
@@ -81,6 +82,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - [ ] Before adding a new component, grep whether anything under `src/app/` actually imports it — a component can build and type-check clean while being fully unreachable (regression: `StageHistoryNav`/`ProspectSnapshotView`/`EngagementSnapshotView`)
 - [ ] Confirm an engagement via the `move_to_confirmed` MCP tool (not the UI), then move it back to Prospects — confirm it lands in `inquiry`/`outreach`/`in_contact` and shows up in the Prospects list, not silently `confirmed` and invisible (regression: `getBackwardTransition` fallback)
 - [ ] Create a standalone contact (Add Contact button, no engagement) and confirm it saves and shows up in the Contacts directory, sorts correctly by every column, and that "create new company" inline also works (regression: `contacts.engagement_id` NOT NULL / new feature end-to-end)
+- [ ] In New Inquiry, type in the contact search field, pick a result, and confirm the results list closes and doesn't reopen until you click/focus the field again (regression: dropdown defaulting to showing results even on an empty query)
 
 ## Decisions
 
