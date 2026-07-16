@@ -1,6 +1,5 @@
 -- ============================================================
 -- Mori Platform — Migration: Review queue for inbound-email triage
--- Run this in Supabase SQL Editor
 -- ============================================================
 
 create table if not exists review_items (
