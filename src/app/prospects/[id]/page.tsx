@@ -360,10 +360,11 @@ function CallRow({ call, engagementId, label }: {
 }) {
   const { updateCall } = useStore()
   const [scheduling, setScheduling] = useState(false)
+  const [editingDetails, setEditingDetails] = useState(false)
   const [schedDate, setSchedDate] = useState('')
   const [schedTime, setSchedTime] = useState('')
   const [schedTz, setSchedTz] = useState(() => browserTimezone())
-  const [format, setFormat] = useState<'phone' | 'video' | 'in_person'>('video')
+  const [format, setFormat] = useState<'phone' | 'video' | 'in_person'>(call.format ?? 'video')
   const [details, setDetails] = useState(call.details ?? '')
   const [requestedDate, setRequestedDate] = useState(
     call.requested_at ? call.requested_at.slice(0, 10) : ''
@@ -379,9 +380,27 @@ function CallRow({ call, engagementId, label }: {
     setScheduling(false)
   }
 
+  const openDetailsEditor = () => {
+    setFormat(call.format ?? 'video')
+    setDetails(call.details ?? '')
+    setEditingDetails(true)
+  }
+
+  const saveDetails = () => {
+    updateCall(engagementId, call.id, { format, details: details || undefined })
+    setEditingDetails(false)
+  }
+
   const handleStatusClick = (s: 'requested' | 'scheduled' | 'completed') => {
-    if (s === 'scheduled' && call.status !== 'scheduled') {
-      setScheduling(true)
+    if (s === call.status) return
+    if (s === 'scheduled') {
+      if (call.scheduled_at) {
+        // already has a date/time on file (e.g. rescinding an accidental "Completed") — just
+        // restore that status instead of forcing the user back through the scheduling form
+        updateCall(engagementId, call.id, { status: 'scheduled' })
+      } else {
+        setScheduling(true)
+      }
       return
     }
     if (s === 'completed') {
@@ -449,9 +468,54 @@ function CallRow({ call, engagementId, label }: {
       </div>
 
       {/* Existing details */}
-      {call.details && !scheduling && (
-        <div className="pl-5 text-[11px] text-ink-400 bg-parchment/60 rounded-lg px-3 py-2">
-          {call.details}
+      {call.details && !scheduling && !editingDetails && (
+        <div className="pl-5 flex items-start gap-2">
+          <div className="flex-1 text-[11px] text-ink-400 bg-parchment/60 rounded-lg px-3 py-2">
+            {formatIcon} {call.details}
+          </div>
+          <button onClick={openDetailsEditor}
+            className="flex-shrink-0 text-ink-300 hover:text-ink-500 p-1" title="Edit call info">
+            <Edit3 size={11} />
+          </button>
+        </div>
+      )}
+      {!call.details && !scheduling && !editingDetails && (
+        <div className="pl-5">
+          <button onClick={openDetailsEditor}
+            className="text-[11px] font-medium text-ink-300 hover:text-gold-dark transition-all">
+            + Add call info (link, phone, location)
+          </button>
+        </div>
+      )}
+
+      {/* Inline details-only editor (format + link/phone/location, no rescheduling) */}
+      {editingDetails && !scheduling && (
+        <div className="pl-5 space-y-2.5 border-t border-ink-50 pt-2.5">
+          <p className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Call info</p>
+          <div className="flex gap-2">
+            {(['phone', 'video', 'in_person'] as const).map(f => (
+              <button key={f} onClick={() => setFormat(f)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                  format === f ? 'bg-ink text-cream border-ink' : 'bg-white text-ink-400 border-ink-100 hover:border-ink-300'
+                }`}>
+                {f === 'in_person' ? 'In Person' : f === 'video' ? 'Video' : 'Phone'}
+              </button>
+            ))}
+          </div>
+          <textarea value={details} onChange={e => setDetails(e.target.value)}
+            placeholder="Link, phone number, who's calling, any other details..."
+            rows={2}
+            className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold resize-none bg-white" />
+          <div className="flex gap-2">
+            <button onClick={saveDetails}
+              className="text-xs font-medium text-white bg-ink px-4 py-1.5 rounded-lg hover:bg-ink-700 transition-all">
+              Save
+            </button>
+            <button onClick={() => setEditingDetails(false)}
+              className="text-xs font-medium text-ink-400 px-4 py-1.5 rounded-lg hover:text-ink transition-all">
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
