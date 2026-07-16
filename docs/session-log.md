@@ -11,6 +11,48 @@ One entry per work session. Newest at the top.
 - Follow-ups / open questions:
 ```
 
+## 2026-07-15 (2)
+- Branches: three opened this session, all still open (not merged):
+  - `fix-prospect-backward-fallback` — pushed, ready to merge, no known blockers.
+  - `add-contact-button` — pushed, but blocked (see Follow-ups).
+  - `chore/supabase-cli-setup` — pushed, `/test`-reviewed, build confirmed green on Vercel, ready to merge.
+- What I did:
+  - Diagnosed and fixed a React error #300 crash on deleting a contact (`contacts/[id]/page.tsx`): a `useState` hook was declared *after* the `if (!match) return` guard, so hook count changed between renders whenever the contact was deleted mid-session. This fix ended up bundled into a concurrent session's commit (`1acf6ba`) on `main` rather than its own branch — the working directory was shared with another active Claude Code session for part of this session.
+  - Diagnosed a shared-working-directory incident: found `main` had been merged/pushed without going through this session. Initially misdiagnosed as an unauthorized-push problem; the user corrected this — the push was authorized via a different session. Root cause is actually commit-time contamination: concurrent sessions sharing one working tree means `git commit` in one session can sweep up another session's uncommitted edits, regardless of which branch is "supposed" to own them. Hardened the global `~/.claude/CLAUDE.md` "Multiple tasks and merge conflicts" section: worktree-per-task is now the assumed default whenever concurrent sessions might be active, plus a mandatory git-state preflight (`git status`/`git branch --show-current`/`git log -3`) before any git action.
+  - `fix-prospect-backward-fallback`: fixed `getBackwardTransition()` (`src/lib/pipeline.ts`) falling back to `prospect_step: 'confirmed'` when an engagement had no `prospect_snapshot` (true for anything confirmed via the `move_to_confirmed` MCP tool) — `'confirmed'` is excluded from the Prospects list's active-steps filter, so the record silently vanished from every list after being moved backward. Now falls back to `'in_contact'`, matching the existing wrap-up/declined branch.
+  - `add-contact-button`: built a standalone "Add Contact" entry point on the Contacts directory (previously had none, unlike Companies). Required loosening the data model — contacts were strictly children of an engagement (`engagement_id` fk) with no path to create one independently; user chose to make contacts genuinely independent rather than requiring an engagement pick. Added `unassignedContacts` state + `createContact` action (`store.tsx`), a `fetchUnassignedContacts`/widened `insertContact`/`upsertContact` in `db.ts`, and `AddContactModal.tsx` (mirrors `AddCompanyModal.tsx`, plus inline "create new company" like `NewInquiryModal`'s pattern). Also added sortable column headers (Contact/Organization/Role/Status) to the Contacts page and (Company/Industry/Stage/Contacts) to the Companies page, and a "Companies" nav link on the Contacts page mirroring the existing "Contacts" link on the Companies page.
+  - `chore/supabase-cli-setup`: adopted real Supabase CLI migration tracking after repeated "was this migration actually run" incidents (three separate times this project has hit undetected schema/live drift). Installed the CLI as a devDependency, linked the project (ref `jwdxuorpcppsjcomvhch`), renamed all 15 existing migration files to CLI-compliant timestamps (ordered by actual first-commit date from git history), and ran `supabase db push` (dry-run shown and explicitly approved first) to reconcile the remote ledger. All 15 turned out to be fully idempotent, so the push was safe regardless of prior state; confirmed via the `NOTICE ... already exists, skipping` output that 13 of them really were already live. Confirmed explicitly with the user (via AskUserQuestion) and wrote a durable autonomy policy into the global CLAUDE.md: additive/idempotent migrations get applied without asking from now on (mirrors git branch-push), destructive/one-way ones always stop for approval first (mirrors merge-to-main).
+  - Ran `/test` twice: once on the (since-merged) unarchive/move-backward branch's newest commits, once on `chore/supabase-cli-setup`. Both read-only, no sign-off given.
+  - Discussed (no code): whether to integrate HubSpot for email parsing. Recommendation given — don't; finish the already-stubbed native Microsoft Graph integration instead, since HubSpot's contact-association value only pays off if contacts are duplicated into HubSpot too, which reopens a two-system sync problem this platform was built to avoid.
+- Bugs found:
+  - **React #300 on contacts delete** — `useState` after an early return in `contacts/[id]/page.tsx`. Fixed (landed via a concurrent session's commit on `main`).
+  - **`prospect_step: 'confirmed'` fallback bug** — engagements moved backward to Prospects with no `prospect_snapshot` vanished from the Prospects list. Fixed on `fix-prospect-backward-fallback`, not yet merged.
+  - **`contacts.engagement_id` is `NOT NULL` live**, contradicting `schema.sql` (which shows it nullable) — found via a direct insert test against production before building further on the wrong assumption. Migration written (`allow_contacts_without_engagement.sql`) but not yet applied — this branch predates the CLI tooling setup, so it wasn't run through `supabase db push`. Add Contact will 400 until this runs.
+  - **`allow_delete_companies_contacts.sql` referenced a table named `comms`; the live table (and every other migration, and `db.ts`) calls it `communications`** — `schema.sql` is stale on this point, never updated after a live rename. This is almost certainly why the delete-company FK error was still happening even after the migration was believed run. Found and fixed during the Supabase CLI reconciliation; confirmed applied to production.
+  - **Confirmed via this session's CLI reconciliation**: `add_business_profile.sql`, `add_invoice_finalized_status.sql`, and `allow_delete_companies_contacts.sql` (all flagged "not confirmed" since 2026-07-11) had in fact never been applied to production before this session. All three are now applied and tracked.
+- Decisions:
+  - Contacts become genuinely independent of engagements (not just linkable-to-existing) — user's explicit choice, presented as a tradeoff between a smaller "must pick an engagement" change and this larger one.
+  - Do not adopt HubSpot for email parsing; finish the native Microsoft Graph integration instead (see above).
+  - Adopted Supabase CLI migration tracking as standard practice going forward, with an explicit, user-confirmed autonomy split for future migrations (additive = auto-apply, destructive = always ask) — written into the global CLAUDE.md, not just this project's.
+  - Worktree-per-task is now the assumed default for any concurrent-session-prone project, written into the global CLAUDE.md, not just this project's.
+  - Considered and explicitly rejected: a `pre-push` git hook blocking direct pushes to `main`. Was based on a misdiagnosis (thought a push had been unauthorized; it hadn't) and was reverted once corrected — noting this so it isn't proposed again for the same reason.
+- Follow-ups / open for next session:
+  - **`add-contact-button` is blocked**: run `supabase/migrations/allow_contacts_without_engagement.sql` (needs a rebase onto `main` after `chore/supabase-cli-setup` merges, so it goes through the CLI properly instead of the old manual-SQL-editor path).
+  - Merge order: recommend `chore/supabase-cli-setup` first (no dependencies), then rebase `fix-prospect-backward-fallback` and `add-contact-button` onto the new `main` before merging each — all three share the same `origin/main` ancestor and will likely conflict on `CLAUDE.md`/`PROJECT.md`.
+  - `StageHistoryNav.tsx`/`ProspectSnapshotView.tsx`/`EngagementSnapshotView.tsx` still undecided (carried over, not touched this session) — a different concurrent session (`wire-stage-history-nav`) appeared to be actively working on this area during this session.
+  - Manual click-through still needed on `add-contact-button` once its migration runs: create a standalone contact, create-company-inline, sort every column on both Contacts and Companies pages.
+  - `ANTHROPIC_API_KEY` still unset everywhere — unchanged, confirmed intentional in prior sessions.
+
+## 2026-07-15 (3)
+- Branch: `fix-contact-search-dropdown` — still open, not merged to `main`.
+- What I did:
+  - Fixed the contact-search dropdown in `NewInquiryModal` staying open after picking a name — it defaulted to showing the first 6 results even with an empty query, so clearing the query on selection didn't hide it. Added a `contactSearchOpen` state that opens on focus and closes immediately on selection.
+- Bugs found:
+  - **Contact-search dropdown never closed after selecting a contact** — fixed, see above.
+- Decisions: none.
+- Follow-ups / open for next session:
+  - Not merged yet — needs a manual preview click-through (search, select, confirm the list closes and reopens only on refocus) before merging.
+
 ## 2026-07-15
 - Branch: `add-unarchive-and-move-backward` — merged to `main` this session (`104ad5a`), branch deleted locally and on origin.
 - What I did:

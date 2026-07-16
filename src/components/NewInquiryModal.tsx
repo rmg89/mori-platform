@@ -43,6 +43,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
   const [creatingCompany, setCreatingCompany] = useState(false)
   const [contactMode, setContactMode] = useState<'search' | 'add'>('search')
   const [contactQuery, setContactQuery] = useState('')
+  const [contactSearchOpen, setContactSearchOpen] = useState(false)
   const [selectedContacts, setSelectedContacts] = useState<EngagementContact[]>([])
   const [contactFirstName, setContactFirstName] = useState('')
   const [contactLastName, setContactLastName] = useState('')
@@ -147,6 +148,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
   function handleSelectExistingContact(c: EngagementContact) {
     setSelectedContacts(prev => [...prev, { ...c, id: `lnk_${Date.now()}_${prev.length}`, is_current_point_of_contact: prev.length === 0 }])
     setContactQuery('')
+    setContactSearchOpen(false)
   }
 
   function handleAddManualContact() {
@@ -324,10 +326,11 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                 <input
                   value={contactQuery}
                   onChange={e => setContactQuery(e.target.value)}
+                  onFocus={() => setContactSearchOpen(true)}
                   placeholder="Search by name, title, or email…"
                   className="w-full text-sm bg-parchment border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold/40 text-ink placeholder:text-ink-300 transition-all"
                 />
-                {(orgResults.length > 0 || otherResults.length > 0) ? (
+                {contactSearchOpen && (orgResults.length > 0 || otherResults.length > 0) ? (
                   <div className="mt-1.5 space-y-1 max-h-40 overflow-y-auto border border-ink-100 rounded-lg p-1.5">
                     {orgResults.map(h => (
                       <button key={h.contact.id} onClick={() => handleSelectExistingContact(h.contact)}
@@ -363,7 +366,7 @@ export default function NewInquiryModal({ onClose, onCreated }: NewInquiryModalP
                       </>
                     )}
                   </div>
-                ) : trimmedQuery ? (
+                ) : contactSearchOpen && trimmedQuery ? (
                   <p className="text-xs text-ink-300 italic px-1 mt-1.5">No matching contacts found.</p>
                 ) : null}
                 <button onClick={() => setContactMode('add')}
