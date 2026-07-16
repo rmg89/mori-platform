@@ -92,6 +92,7 @@ interface StoreActions {
   // Briefing notes
   addBriefingNote: (engagementId: string, note: BriefingNote) => void
   resolveBriefingNote: (engagementId: string, noteId: string) => void
+  unresolveBriefingNote: (engagementId: string, noteId: string) => void
   deleteBriefingNote: (engagementId: string, noteId: string) => void
 
   // Field statuses
@@ -791,6 +792,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateBriefingNoteRow(noteId, { resolved: true }).catch(onWriteError)
   }, [])
 
+  const unresolveBriefingNote = useCallback((engagementId: string, noteId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        briefing_notes: (e.briefing_notes ?? []).map(n => n.id === noteId ? { ...n, resolved: false } : n),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    updateBriefingNoteRow(noteId, { resolved: false }).catch(onWriteError)
+  }, [])
+
   const deleteBriefingNote = useCallback((engagementId: string, noteId: string) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== engagementId) return e
@@ -857,7 +870,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm, updateComm,
-      addBriefingNote, resolveBriefingNote, deleteBriefingNote,
+      addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
       updateCompany, createCompany, deleteCompany, updateContact, deleteContact,

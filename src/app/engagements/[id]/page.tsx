@@ -496,7 +496,7 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
 // ─── Briefing Zone ────────────────────────────────────────────────────────────
 
 function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: Partial<Engagement>) => void; briefingComplete: boolean }) {
-  const { addBriefingNote, resolveBriefingNote, deleteBriefingNote } = useStore()
+  const { addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote } = useStore()
   const [draft, setDraft] = useState('')
   const [showResolved, setShowResolved] = useState(false)
   const notes: BriefingNote[] = e.briefing_notes ?? []
@@ -515,6 +515,10 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
 
   function resolveNote(id: string) {
     resolveBriefingNote(e.id, id)
+  }
+
+  function unresolveNote(id: string) {
+    unresolveBriefingNote(e.id, id)
   }
 
   return (
@@ -599,10 +603,16 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
                       <div className="flex-1 bg-parchment/40 rounded-lg px-3 py-1.5">
                         <p className="text-xs line-through text-ink-300 whitespace-pre-line">{note.body}</p>
                       </div>
-                      <button onClick={() => removeNote(note.id)} title="Delete"
-                        className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors flex-shrink-0">
-                        <X size={13} />
-                      </button>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => unresolveNote(note.id)} title="Mark unresolved"
+                          className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-gold-dark hover:border-gold/40 hover:bg-gold/8 transition-colors">
+                          <Undo2 size={13} />
+                        </button>
+                        <button onClick={() => removeNote(note.id)} title="Delete"
+                          className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors">
+                          <X size={13} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
