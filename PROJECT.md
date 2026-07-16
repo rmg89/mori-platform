@@ -31,7 +31,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 
 ### Planned (committed)
 
-- **Briefing Document / materials fixes** (`fix-engagement-detail` branch, pushed, `/test`-reviewed three times, main merged in and re-verified) — see Known bugs below for the individual fixes; not yet merged to `main` pending explicit confirmation of the manual-check items (resolve/unresolve persisting after reload, `add_material` via a live MCP call).
+- **Briefing Document / materials fixes** (`fix-engagement-detail` branch, pushed, `/test`-reviewed four times) — see Known bugs below for the individual fixes. Not yet merged: blocked on a real merge conflict against the current `main` (`email-review-pipeline` merged after this branch forked — `src/lib/store.tsx` needs `Promise.all`/`confirmReviewItem` reconciled, not just a mechanical keep-both) plus explicit confirmation of the manual-check items (resolve/unresolve persisting after reload, `add_material` via a live MCP call).
 
 ### Maybe / someday
 
@@ -104,6 +104,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - [ ] Add a material via the `add_material` MCP tool with a `url` set on an incoming material, then confirm the engagement detail page shows it as received (not overdue) — no code path ever tested this before it shipped broken (regression: `add_material` hardcoding `received: false`)
 - [ ] Add a briefing note, resolve it, delete one, and unresolve a resolved one — then hard-refresh after each and confirm the change actually survived (regression: briefing notes silently never reached Supabase; separately, RLS blocked anon writes to `briefing_notes` with no anon policy)
 - [ ] Add a briefing note and, in the same session before any reload, immediately try to resolve or delete that same note — confirm it works rather than erroring on an invalid/mismatched id (regression: client-generated note ids weren't real UUIDs; `addComm`/`addCall` use a similar temp-id pattern and haven't been individually verified against this same failure mode)
+- [ ] Before any `/wrap` merge attempt, re-check `git merge-tree` (or an actual `git merge --no-commit`, then abort) against the *current* `origin/main` tip specifically — don't reuse a merge-check from earlier in the same session, since `main` moving mid-session can turn a clean/trivial merge into a real conflict (regression: `fix-engagement-detail`'s merge went from 1 trivial import-line conflict to 4 files, one with real logic, after `email-review-pipeline` merged to `main` mid-session)
 
 ## Decisions
 
