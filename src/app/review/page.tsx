@@ -20,28 +20,21 @@ const ACTION_COLORS: Record<ReviewAction, string> = {
 }
 
 export default function ReviewPage() {
-  const { reviewItems } = useStore()
-  const [items, setItems] = useState(reviewItems)
+  const { reviewItems, confirmReviewItem } = useStore()
 
-  const pending = items.filter(i => !i.confirmed_at)
-  const confirmed = items.filter(i => i.confirmed_at)
+  const pending = reviewItems.filter(i => !i.confirmed_at)
+  const confirmed = reviewItems.filter(i => i.confirmed_at)
 
   const prospects = pending.filter(i => i.state === 'ai_sorted' && i.ai_suggested_action === 'create_prospect')
   const ignores = pending.filter(i => i.state === 'ai_sorted' && i.ai_suggested_action === 'ignore')
   const undecided = pending.filter(i => i.state === 'needs_review')
 
   function confirm(id: string, action?: ReviewAction) {
-    setItems(prev => prev.map(i => i.id === id
-      ? { ...i, ai_suggested_action: action ?? i.ai_suggested_action, confirmed_by: 'admin@moritaheripour.com', confirmed_at: new Date().toISOString() }
-      : i
-    ))
+    confirmReviewItem(id, 'admin@moritaheripour.com', action)
   }
 
   function confirmAll(ids: string[]) {
-    setItems(prev => prev.map(i => ids.includes(i.id)
-      ? { ...i, confirmed_by: 'admin@moritaheripour.com', confirmed_at: new Date().toISOString() }
-      : i
-    ))
+    ids.forEach(id => confirmReviewItem(id, 'admin@moritaheripour.com'))
   }
 
   return (
