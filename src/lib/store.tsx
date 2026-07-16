@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow } from '@/lib/db-client'
+import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted } from '@/lib/db-client'
 import { getBackwardTransition } from '@/lib/pipeline'
-import type { ReviewItem, Company } from '@/types'
+import type { ReviewItem, ReviewAction, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ interface StoreActions {
   setFieldStatus: (id: string, field: string, status: 'needed' | 'not_needed' | null) => void
 
   // Review
-  confirmReviewItem: (id: string, confirmedBy: string) => void
+  confirmReviewItem: (id: string, confirmedBy: string, action?: ReviewAction) => void
   dismissReviewItem: (id: string) => void
 
   // Companies
@@ -151,8 +151,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
   useEffect(() => {
-    Promise.all([fetchAllEngagements(), fetchCompanies(), fetchUnassignedContacts()])
-      .then(([engData, coData, contactData]) => {
+    Promise.all([fetchAllEngagements(), fetchCompanies(), fetchReviewItems(), fetchUnassignedContacts()])
+      .then(([engData, coData, reviewData, contactData]) => {
         // Preserve any records created locally (e.g. via the New Inquiry modal)
         // while this initial fetch was still in flight — don't let a stale
         // snapshot wipe out state that already moved on.
@@ -164,6 +164,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const fetchedIds = new Set(coData.map(c => c.id))
           return [...coData, ...prev.filter(c => !fetchedIds.has(c.id))]
         })
+        setReviewItems(reviewData)
         setUnassignedContacts(prev => {
           const fetchedIds = new Set(contactData.map(c => c.id))
           return [...contactData, ...prev.filter(c => !fetchedIds.has(c.id))]
@@ -822,15 +823,87 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const confirmReviewItem = useCallback((id: string, confirmedBy: string) => {
-    setReviewItems(prev => prev.map(r =>
-      r.id === id ? { ...r, confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() } : r
-    ))
-  }, [])
+  const confirmReviewItem = useCallback(async (id: string, confirmedBy: string, action?: ReviewAction) => {
+    const item = reviewItems.find(r => r.id === id)
+    if (!item) return
+    const resolvedAction = action ?? item.ai_suggested_action
+    const now = new Date().toISOString()
 
-  const dismissReviewItem = useCallback((id: string) => {
-    setReviewItems(prev => prev.filter(r => r.id !== id))
-  }, [])
+    try {
+      if (resolvedAction === 'create_prospect') {
+        const extracted = await fetchReviewItemExtracted(id)
+        await insertEngagementRow({
+          organization: (extracted?.organization as string) || item.from_name,
+          source: 'email',
+          topic: extracted?.topic as string | undefined,
+          event_city: extracted?.event_city as string | undefined,
+          event_type: extracted?.event_type as string | undefined,
+          fee: extracted?.fee as number | undefined,
+          contacts: [{
+            first_name: (extracted?.contact_first_name as string) || item.from_name,
+            last_name: extracted?.contact_last_name as string | undefined,
+            email: item.from_email,
+            title: extracted?.contact_title as string | undefined,
+            is_current_point_of_contact: true,
+          }],
+        })
+        const refreshed = await fetchAllEngagements()
+        setEngagements(refreshed)
+      } else if (resolvedAction === 'add_to_existing' && item.ai_suggested_engagement_id) {
+        // insertContact logs and returns null on failure rather than throwing —
+        // check explicitly so a DB error doesn't get silently marked "confirmed".
+        const contactId = await insertContact(item.ai_suggested_engagement_id, {
+          first_name: item.from_name,
+          last_name: null,
+          email: item.from_email,
+          phone: null,
+          title: null,
+          role: 'unknown',
+          is_current_point_of_contact: false,
+          status: 'prospect_active',
+          watching: false,
+          notes: null,
+          company_id: null,
+          team_id: null,
+        })
+        if (!contactId) throw new Error('Failed to add contact to engagement')
+        const refreshed = await fetchAllEngagements()
+        setEngagements(refreshed)
+      } else if (resolvedAction === 'update_prospect' && item.ai_suggested_engagement_id) {
+        const extracted = await fetchReviewItemExtracted(id)
+        const patch: Record<string, unknown> = {}
+        if (extracted?.topic) patch.topic = extracted.topic
+        if (extracted?.event_city) patch.event_city = extracted.event_city
+        if (extracted?.fee != null) patch.fee = extracted.fee
+        if (Object.keys(patch).length) {
+          await updateEngagementRow(item.ai_suggested_engagement_id, patch)
+          const refreshed = await fetchAllEngagements()
+          setEngagements(refreshed)
+        }
+      }
+
+      await updateReviewItemRow(id, { confirmed_by: confirmedBy, confirmed_at: now, ai_suggested_action: resolvedAction })
+      setReviewItems(prev => prev.map(r => r.id === id
+        ? { ...r, ai_suggested_action: resolvedAction ?? r.ai_suggested_action, confirmed_by: confirmedBy, confirmed_at: now }
+        : r
+      ))
+    } catch (err) {
+      onWriteError(err)
+    }
+  }, [reviewItems, onWriteError])
+
+  const dismissReviewItem = useCallback(async (id: string) => {
+    const now = new Date().toISOString()
+    try {
+      await updateReviewItemRow(id, { confirmed_by: 'system', confirmed_at: now, ai_suggested_action: 'ignore' })
+      setReviewItems(prev => prev.map(r => r.id === id
+        ? { ...r, ai_suggested_action: 'ignore', confirmed_by: 'system', confirmed_at: now }
+        : r
+      ))
+    } catch (err) {
+      onWriteError(err)
+    }
+  }, [onWriteError])
 
   // Derive each company's linked engagements/contacts fresh from the current
   // engagements list, rather than trusting stored engagement_ids/contact_ids

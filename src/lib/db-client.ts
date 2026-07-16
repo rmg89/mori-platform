@@ -6,7 +6,7 @@
 // the matching API route instead of Supabase directly.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { Engagement, EngagementContact, Company } from '@/types'
+import type { Engagement, EngagementContact, Company, ReviewItem } from '@/types'
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -90,6 +90,28 @@ export async function insertComm(comm: Record<string, unknown>): Promise<void> {
 
 export async function updateCommRow(id: string, patch: Record<string, unknown>): Promise<void> {
   await req(`/api/communications/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export async function fetchReviewItems(): Promise<ReviewItem[]> {
+  try {
+    return await req('/api/review-items')
+  } catch (err) {
+    console.warn('fetchReviewItems:', err)
+    return []
+  }
+}
+
+export async function updateReviewItemRow(id: string, patch: Record<string, unknown>): Promise<void> {
+  await req(`/api/review-items/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export async function fetchReviewItemExtracted(id: string): Promise<Record<string, unknown> | null> {
+  try {
+    return await req(`/api/review-items/${id}/extracted`)
+  } catch (err) {
+    console.warn('fetchReviewItemExtracted:', err)
+    return null
+  }
 }
 
 export async function upsertCall(call: Record<string, unknown> & { engagement_id: string }): Promise<void> {
