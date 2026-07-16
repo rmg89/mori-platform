@@ -9,3 +9,6 @@ build/
 
 .vercel
 .env*.local
+
+.claude/worktrees/
+.claude/scheduled_tasks.lock

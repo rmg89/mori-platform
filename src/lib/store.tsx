@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted } from '@/lib/db'
+import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted } from '@/lib/db'
 import { getBackwardTransition } from '@/lib/pipeline'
 import type { ReviewItem, ReviewAction, Company } from '@/types'
 
@@ -14,6 +14,7 @@ interface StoreState {
   engagements: Engagement[]
   reviewItems: ReviewItem[]
   companies: Company[]
+  unassignedContacts: EngagementContact[]
   loading: boolean
   error: string | null
   saveStatus: SaveStatus
@@ -104,6 +105,10 @@ interface StoreActions {
   // Contacts (global — updates all engagements sharing the same email)
   updateContact: (email: string, patch: Partial<EngagementContact>) => void
   deleteContact: (id: string) => void
+  createContact: (input: {
+    first_name: string; last_name?: string; email?: string; phone?: string; title?: string
+    company_id?: string
+  }) => Promise<void>
 }
 
 type Store = StoreState & StoreActions
@@ -118,6 +123,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [unassignedContacts, setUnassignedContacts] = useState<EngagementContact[]>([])
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -145,8 +151,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
   useEffect(() => {
-    Promise.all([fetchAllEngagements(), fetchCompanies(), fetchReviewItems()])
-      .then(([engData, coData, reviewData]) => {
+    Promise.all([fetchAllEngagements(), fetchCompanies(), fetchReviewItems(), fetchUnassignedContacts()])
+      .then(([engData, coData, reviewData, contactData]) => {
         // Preserve any records created locally (e.g. via the New Inquiry modal)
         // while this initial fetch was still in flight — don't let a stale
         // snapshot wipe out state that already moved on.
@@ -159,6 +165,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return [...coData, ...prev.filter(c => !fetchedIds.has(c.id))]
         })
         setReviewItems(reviewData)
+        setUnassignedContacts(prev => {
+          const fetchedIds = new Set(contactData.map(c => c.id))
+          return [...contactData, ...prev.filter(c => !fetchedIds.has(c.id))]
+        })
         setLoading(false)
       })
       .catch(err => {
@@ -215,14 +225,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       company_id: e.company_id === id ? undefined : e.company_id,
       contacts: e.contacts.map(c => c.company_id === id ? { ...c, company_id: undefined } : c),
     })))
+    setUnassignedContacts(prev => prev.map(c => c.company_id === id ? { ...c, company_id: undefined } : c))
     deleteCompanyRow(id).catch(onWriteError)
   }, [])
 
   const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
+    const lower = email.toLowerCase()
     setEngagements((prev: Engagement[]) => {
       prev.forEach((e: Engagement) => {
         e.contacts.forEach((c: EngagementContact) => {
-          if (c.email.toLowerCase() === email.toLowerCase()) {
+          if (c.email.toLowerCase() === lower) {
             upsertContact({ id: c.id, engagement_id: e.id, ...patch } as never).catch(onWriteError)
           }
         })
@@ -230,16 +242,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return prev.map((e: Engagement) => ({
         ...e,
         contacts: e.contacts.map((c: EngagementContact) =>
-          c.email.toLowerCase() === email.toLowerCase() ? { ...c, ...patch } : c
+          c.email.toLowerCase() === lower ? { ...c, ...patch } : c
         ),
       }))
+    })
+    setUnassignedContacts(prev => {
+      prev.forEach(c => {
+        if (c.email.toLowerCase() === lower) {
+          upsertContact({ id: c.id, engagement_id: null, ...patch } as never).catch(onWriteError)
+        }
+      })
+      return prev.map(c => c.email.toLowerCase() === lower ? { ...c, ...patch } : c)
     })
   }, [])
 
   const deleteContact = useCallback((id: string) => {
     setEngagements(prev => prev.map(e => ({ ...e, contacts: e.contacts.filter(c => c.id !== id) })))
+    setUnassignedContacts(prev => prev.filter(c => c.id !== id))
     deleteContactRow(id).catch(onWriteError)
   }, [])
+
+  const createContact = useCallback(async (input: {
+    first_name: string; last_name?: string; email?: string; phone?: string; title?: string
+    company_id?: string
+  }) => {
+    const id = await insertContact(null, {
+      first_name: input.first_name,
+      last_name: input.last_name || '',
+      email: input.email || null,
+      phone: input.phone || null,
+      title: input.title || null,
+      role: 'primary',
+      is_current_point_of_contact: false,
+      status: null,
+      watching: false,
+      notes: null,
+      company_id: input.company_id ?? null,
+      team_id: null,
+    })
+    if (!id) { onWriteError(new Error('Failed to create contact')); return }
+    setUnassignedContacts(prev => [...prev, {
+      id,
+      first_name: input.first_name,
+      last_name: input.last_name ?? '',
+      email: input.email ?? '',
+      phone: input.phone,
+      title: input.title,
+      role: 'primary',
+      is_current_point_of_contact: false,
+      watching: false,
+      company_id: input.company_id,
+    }])
+  }, [onWriteError])
 
   const updateEngagement = useCallback((id: string, patch: Partial<Engagement>) => {
     setEngagements(prev => prev.map(e =>
@@ -255,7 +309,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       contacts.forEach(c => {
         if (/^(new_|lnk_)/.test(c.id)) {
           insertContact(id, {
-            engagement_id: id,
             first_name: c.first_name,
             last_name: c.last_name ?? '',
             email: c.email ?? null,
@@ -800,7 +853,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // insertContact logs and returns null on failure rather than throwing —
         // check explicitly so a DB error doesn't get silently marked "confirmed".
         const contactId = await insertContact(item.ai_suggested_engagement_id, {
-          engagement_id: item.ai_suggested_engagement_id,
           first_name: item.from_name,
           last_name: null,
           email: item.from_email,
@@ -876,7 +928,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      engagements, reviewItems, companies: companiesWithLinks, loading, error, saveStatus, saveError,
+      engagements, reviewItems, companies: companiesWithLinks, unassignedContacts, loading, error, saveStatus, saveError,
       updateEngagement, setProspectStep,
       confirmProspect, declineProspect, moveToWrapUp, moveEngagementBack, confirmBookingReview, confirmWrapUpReview,
       addProspect,
@@ -889,7 +941,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCall, updateCall, addComm, updateComm,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
-      updateCompany, createCompany, deleteCompany, updateContact, deleteContact,
+      updateCompany, createCompany, deleteCompany, updateContact, deleteContact, createContact,
     }}>
       {children}
     </StoreContext.Provider>

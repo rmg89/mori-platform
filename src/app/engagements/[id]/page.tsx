@@ -23,6 +23,8 @@ import TimezoneSelect from '@/components/TimezoneSelect'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
 import { TIMEZONE_OPTIONS } from '@/lib/timezone'
 import { getBackwardTransition } from '@/lib/pipeline'
+import EngagementSnapshotView from '@/components/EngagementSnapshotView'
+import StageHistoryNav from '@/components/StageHistoryNav'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2503,6 +2505,7 @@ export default function EngagementDetailPage() {
   }, [e, updateEngagement])
 
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
+  if (e.section !== 'engagements') return <EngagementSnapshotView engagement={e} />
 
   const backwardTarget = getBackwardTransition(e)
   const eventType = (e as any).event_type || 'speaking'
@@ -2596,66 +2599,72 @@ export default function EngagementDetailPage() {
         audience_size: e.audience_size,
       }} />
 
-      {/* Archive */}
-      {e.archived ? (
-        <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-          <div>
-            <p className="text-sm font-medium text-ink">This record is archived</p>
-            {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
-          </div>
-          <UnarchiveButton engagementId={e.id} />
-        </div>
-      ) : (
-        <>
-          <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-            <div>
-              <p className="text-sm font-medium text-ink">Move to Wrap-Up</p>
-              <p className="text-xs text-ink-400 mt-0.5">Moves this record forward, ahead of the automatic transition on the event date. Nothing else is changed.</p>
-            </div>
-            <button
-              onClick={() => setMoveForwardModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-              <FastForward size={13} /> Move to Wrap-Up
-            </button>
-          </div>
-          {backwardTarget && (
-            <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-              <div>
-                <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
-                <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
-              </div>
-              <button
-                onClick={() => setMoveBackModalOpen(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-                <Undo2 size={13} /> {backwardTarget.label}
-              </button>
-            </div>
-          )}
-          <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-            <div>
-              <p className="text-sm font-medium text-ink">Archive this engagement</p>
-              <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
-            </div>
-            <button
-              onClick={() => setArchiveModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-              <FolderArchive size={13} /> Archive
-            </button>
-          </div>
-        </>
-      )}
+      {/* Manage record: stage history, move forward/back, archive/unarchive */}
+      <div className="mt-6 space-y-3">
+        <StageHistoryNav engagement={e} current="engagements" />
 
-      {/* Delete */}
-      <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
-        <div>
-          <p className="text-sm font-medium text-red-600">Delete this engagement</p>
-          <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+        <div className="bg-white border border-ink-100 rounded-xl divide-y divide-ink-100">
+          {e.archived ? (
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
+              <div>
+                <p className="text-sm font-medium text-ink">This record is archived</p>
+                {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
+              </div>
+              <UnarchiveButton engagementId={e.id} />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3 px-5 py-4">
+                <div>
+                  <p className="text-sm font-medium text-ink">Move to Wrap-Up</p>
+                  <p className="text-xs text-ink-400 mt-0.5">Moves this record forward, ahead of the automatic transition on the event date. Nothing else is changed.</p>
+                </div>
+                <button
+                  onClick={() => setMoveForwardModalOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+                  <FastForward size={13} /> Move to Wrap-Up
+                </button>
+              </div>
+              {backwardTarget && (
+                <div className="flex items-center justify-between gap-3 px-5 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
+                    <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
+                  </div>
+                  <button
+                    onClick={() => setMoveBackModalOpen(true)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+                    <Undo2 size={13} /> {backwardTarget.label}
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 px-5 py-4">
+                <div>
+                  <p className="text-sm font-medium text-ink">Archive this engagement</p>
+                  <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+                </div>
+                <button
+                  onClick={() => setArchiveModalOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+                  <FolderArchive size={13} /> Archive
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        <button
-          onClick={() => setDeleteModalOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
-          <Trash2 size={13} /> Delete
-        </button>
+
+        {/* Delete */}
+        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-red-600">Delete this engagement</p>
+            <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+          </div>
+          <button
+            onClick={() => setDeleteModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
       </div>
 
       <ConfirmModal
