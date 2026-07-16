@@ -389,8 +389,8 @@ export default function WrapUpDetailPage() {
     setInvoiceDownloading(true)
     try {
       const { generateInvoice } = await import('@/lib/documents')
-      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
-      const { fetchBusinessProfile } = await import('@/lib/business')
+      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
+      const { fetchBusinessProfile } = await import('@/lib/business-client')
       const [inv, business] = await Promise.all([
         ensureDraftInvoice({
           engagementId: e.id,
@@ -415,7 +415,7 @@ export default function WrapUpDetailPage() {
 
   async function handleEditInvoice() {
     if (!e) return
-    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
     let inv = await findLatestInvoice(engagementId, 'invoice')
     if (!inv && e.fee) {
       inv = await ensureDraftInvoice({
@@ -429,7 +429,7 @@ export default function WrapUpDetailPage() {
   async function handleAddFlag(flagId: PostEventFlag) {
     setPostEventFlagNeeded(engagementId, flagId)
     if (flagId === 'invoice' && e?.fee) {
-      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
       await ensureDraftInvoice({
         engagementId: e.id,
         type: 'invoice',
@@ -456,7 +456,7 @@ export default function WrapUpDetailPage() {
 
     // Mirror finalized/sent/paid onto the matching invoices-table row so the central Invoices page agrees
     if (flagId === 'invoice' && (stageId === 'finalized' || stageId === 'sent' || stageId === 'paid')) {
-      const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
+      const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices-client')
       const inv = await findLatestInvoice(engagementId, 'invoice')
       if (inv) await setInvoiceStatus(inv, stageId)
     }
@@ -696,15 +696,15 @@ export default function WrapUpDetailPage() {
                                 if (files.length === 0) return
                                 setMediaUploading(true)
                                 try {
-                                  const { supabase } = await import('@/lib/supabase')
                                   for (const file of files) {
-                                    const path = `${engagementId}/wrapup/${Date.now()}-${file.name}`
-                                    const { data, error } = await supabase.storage
-                                      .from('materials')
-                                      .upload(path, file, { contentType: file.type })
-                                    if (!error && data) {
-                                      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
-                                      addPostEventMedia(engagementId, { type: 'photo', name: file.name, url: publicUrl })
+                                    const formData = new FormData()
+                                    formData.append('file', file)
+                                    formData.append('engagement_id', engagementId)
+                                    formData.append('folder', 'wrapup')
+                                    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                                    if (res.ok) {
+                                      const { url } = await res.json()
+                                      addPostEventMedia(engagementId, { type: 'photo', name: file.name, url })
                                     }
                                   }
                                 } finally {

@@ -1,7 +1,7 @@
 import { createMcpHandler } from 'mcp-handler'
-import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { timingSafeEqual } from 'crypto'
+import { supabaseAdmin } from '@/lib/supabase'
 import { scanEngagement } from '@/lib/ai-scan'
 import { getBackwardTransition } from '@/lib/pipeline'
 
@@ -19,10 +19,7 @@ function isAuthorized(req: Request): boolean {
   return timingSafeEqual(a, b)
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const supabase = supabaseAdmin()
 
 function engSummary(e: Record<string, unknown>) {
   return {

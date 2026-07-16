@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import AppShell from '@/components/layout/AppShell'
 import { BookUser, Shield, Plug, Users, Receipt, Check } from 'lucide-react'
 import Link from 'next/link'
-import { fetchBusinessProfile, updateBusinessProfile } from '@/lib/business'
+import { fetchBusinessProfile, updateBusinessProfile } from '@/lib/business-client'
 import type { BusinessProfile } from '@/types'
 
 type Tab = 'users' | 'billing' | 'integrations'

@@ -1,12 +1,11 @@
+"use client"
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Mori Platform — Business profile (invoice letterhead: name/address/phone/fax)
-// Single-row table, id fixed at 1. Server-only, uses the service-role client.
+// Mori Platform — client-side business profile access
+// Same function names/signatures as business.ts (now server-only).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { supabaseAdmin } from '@/lib/supabase'
 import type { BusinessProfile } from '@/types'
-
-const supabase = supabaseAdmin()
 
 const FALLBACK: BusinessProfile = {
   name: 'MT Global Strategies',
@@ -16,17 +15,23 @@ const FALLBACK: BusinessProfile = {
 }
 
 export async function fetchBusinessProfile(): Promise<BusinessProfile> {
-  const { data, error } = await supabase.from('business_profile').select('*').eq('id', 1).maybeSingle()
-  if (error || !data) return FALLBACK
-  return {
-    name: data.name ?? FALLBACK.name,
-    address: data.address ?? undefined,
-    phone: data.phone ?? undefined,
-    fax: data.fax ?? undefined,
+  try {
+    const res = await fetch('/api/business-profile')
+    if (!res.ok) return FALLBACK
+    return await res.json()
+  } catch {
+    return FALLBACK
   }
 }
 
 export async function updateBusinessProfile(patch: Partial<BusinessProfile>): Promise<void> {
-  const { error } = await supabase.from('business_profile').upsert({ id: 1, ...patch, updated_at: new Date().toISOString() })
-  if (error) throw new Error(`updateBusinessProfile: ${error.message}`)
+  const res = await fetch('/api/business-profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? `updateBusinessProfile: ${res.status}`)
+  }
 }

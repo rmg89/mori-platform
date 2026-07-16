@@ -1,17 +1,17 @@
-"use client"
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Mori Platform — Supabase data layer
+// Mori Platform — Supabase data layer (server-only, uses the service-role client)
 // Fetches from Supabase and maps rows into the Engagement shape the app expects.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import type {
   Engagement, EngagementContact, CommEntry, EngagementCall,
   OutgoingMaterial, IncomingMaterial, BriefingNote,
   EngagementFlag, MediaFlag, PostEventFlag, WrapUpFlagStages,
   EngagementAlert,
 } from '@/types'
+
+const supabase = supabaseAdmin()
 
 // ─── Row types (raw Supabase shapes) ─────────────────────────────────────────
 
@@ -418,7 +418,7 @@ function assembleEngagement(
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function fetchAllEngagements(): Promise<Engagement[]> {
+export async function fetchAllEngagements(origin: string): Promise<Engagement[]> {
   // Auto-transition any confirmed engagement whose event date has passed into wrap-up
   const today = new Date().toISOString().split('T')[0]
   const { data: transitioned } = await supabase
@@ -430,7 +430,7 @@ export async function fetchAllEngagements(): Promise<Engagement[]> {
     .select('id')
 
   ;(transitioned ?? []).forEach((row: { id: string }) => {
-    fetch('/api/ai/scan-engagement', {
+    fetch(`${origin}/api/ai/scan-engagement`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ engagement_id: row.id, scan_type: 'wrapup' }),

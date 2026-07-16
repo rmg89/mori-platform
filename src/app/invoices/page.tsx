@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
-import { fetchInvoices, setInvoiceStatus, snapshotToClient } from '@/lib/invoices'
+import { fetchInvoices, setInvoiceStatus, snapshotToClient } from '@/lib/invoices-client'
 import type { Invoice, InvoiceStatus, InvoiceKind } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { Download } from 'lucide-react'
@@ -130,7 +130,7 @@ export default function InvoicesPage() {
     setDownloadingId(inv.id)
     try {
       const { generateInvoice, generateDepositInvoice } = await import('@/lib/documents')
-      const { fetchBusinessProfile } = await import('@/lib/business')
+      const { fetchBusinessProfile } = await import('@/lib/business-client')
       const client = snapshotToClient(inv)
       const business = await fetchBusinessProfile()
       const blob = inv.type === 'deposit'
