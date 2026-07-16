@@ -614,3 +614,18 @@ export async function upsertCall(call: Partial<CallRow> & { engagement_id: strin
   if (error) throw new Error(`upsertCall: ${error.message}`)
 }
 
+export async function insertBriefingNoteRow(note: Omit<BriefingNoteRow, 'id'>): Promise<void> {
+  const { error } = await supabase.from('briefing_notes').insert(note)
+  if (error) throw new Error(`insertBriefingNoteRow: ${error.message}`)
+}
+
+export async function updateBriefingNoteRow(id: string, patch: Partial<BriefingNoteRow>): Promise<void> {
+  const { error } = await supabase.from('briefing_notes').update(patch).eq('id', id)
+  if (error) throw new Error(`updateBriefingNoteRow: ${error.message}`)
+}
+
+export async function deleteBriefingNoteRow(id: string): Promise<void> {
+  const { error } = await supabase.from('briefing_notes').delete().eq('id', id)
+  if (error) throw new Error(`deleteBriefingNoteRow: ${error.message}`)
+}
+

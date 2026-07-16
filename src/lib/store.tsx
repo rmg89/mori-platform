@@ -1,8 +1,8 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
-import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow } from '@/lib/db'
+import { Engagement, EngagementContact, EngagementCall, CommEntry, BriefingNote, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow, insertBriefingNoteRow, updateBriefingNoteRow, deleteBriefingNoteRow } from '@/lib/db'
 import { getBackwardTransition } from '@/lib/pipeline'
 import type { ReviewItem, Company } from '@/types'
 
@@ -88,6 +88,11 @@ interface StoreActions {
   // Comms
   addComm: (engagementId: string, comm: CommEntry) => void
   updateComm: (engagementId: string, commId: string, patch: Partial<CommEntry>) => void
+
+  // Briefing notes
+  addBriefingNote: (engagementId: string, note: BriefingNote) => void
+  resolveBriefingNote: (engagementId: string, noteId: string) => void
+  deleteBriefingNote: (engagementId: string, noteId: string) => void
 
   // Field statuses
   setFieldStatus: (id: string, field: string, status: 'needed' | 'not_needed' | null) => void
@@ -759,6 +764,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
   }, [])
 
+  const addBriefingNote = useCallback((engagementId: string, note: BriefingNote) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === engagementId
+        ? { ...e, briefing_notes: [...(e.briefing_notes ?? []), note], updated_at: new Date().toISOString() }
+        : e
+    ))
+    insertBriefingNoteRow({
+      engagement_id: engagementId,
+      body: note.body,
+      resolved: note.resolved ?? false,
+      created_at: note.created_at,
+    }).catch(onWriteError)
+  }, [])
+
+  const resolveBriefingNote = useCallback((engagementId: string, noteId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        briefing_notes: (e.briefing_notes ?? []).map(n => n.id === noteId ? { ...n, resolved: true } : n),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    updateBriefingNoteRow(noteId, { resolved: true }).catch(onWriteError)
+  }, [])
+
+  const deleteBriefingNote = useCallback((engagementId: string, noteId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        briefing_notes: (e.briefing_notes ?? []).filter(n => n.id !== noteId),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    deleteBriefingNoteRow(noteId).catch(onWriteError)
+  }, [])
+
   const setFieldStatus = useCallback((id: string, field: string, status: 'needed' | 'not_needed' | null) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -813,6 +856,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm, updateComm,
+      addBriefingNote, resolveBriefingNote, deleteBriefingNote,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
       updateCompany, createCompany, deleteCompany, updateContact, deleteContact,

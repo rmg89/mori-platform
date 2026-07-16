@@ -496,6 +496,7 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
 // ─── Briefing Zone ────────────────────────────────────────────────────────────
 
 function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: Partial<Engagement>) => void; briefingComplete: boolean }) {
+  const { addBriefingNote, resolveBriefingNote, deleteBriefingNote } = useStore()
   const [draft, setDraft] = useState('')
   const [showResolved, setShowResolved] = useState(false)
   const notes: BriefingNote[] = e.briefing_notes ?? []
@@ -504,17 +505,16 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
 
   function addNote() {
     if (!draft.trim()) return
-    const note: BriefingNote = { id: `bn_${Date.now()}`, body: draft.trim(), created_at: new Date().toISOString() }
-    save({ briefing_notes: [...notes, note] } as any)
+    addBriefingNote(e.id, { id: `bn_${Date.now()}`, body: draft.trim(), created_at: new Date().toISOString() })
     setDraft('')
   }
 
   function removeNote(id: string) {
-    save({ briefing_notes: notes.filter(n => n.id !== id) } as any)
+    deleteBriefingNote(e.id, id)
   }
 
   function resolveNote(id: string) {
-    save({ briefing_notes: notes.map(n => n.id === id ? { ...n, resolved: true } : n) } as any)
+    resolveBriefingNote(e.id, id)
   }
 
   return (
@@ -568,14 +568,20 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
       {(open.length > 0 || resolved.length > 0) && (
         <div className="mt-3 pt-3 border-t border-ink-50 space-y-1.5">
           {[...open].reverse().map(note => (
-            <div key={note.id} className="group/note flex items-start gap-2">
+            <div key={note.id} className="flex items-start gap-2">
               <div className="flex-1 bg-parchment/60 rounded-lg px-3 py-2">
                 <p className="text-xs leading-relaxed text-ink-500 whitespace-pre-line">{note.body}</p>
                 <p className="text-[10px] text-ink-300 mt-0.5">{formatElapsed(note.created_at)}</p>
               </div>
-              <div className="flex flex-col gap-1 opacity-0 group-hover/note:opacity-100 transition-all flex-shrink-0 mt-1.5">
-                <button onClick={() => resolveNote(note.id)} className="text-ink-200 hover:text-sage transition-colors" title="Mark resolved"><Check size={11} /></button>
-                <button onClick={() => removeNote(note.id)} className="text-ink-200 hover:text-red-400 transition-colors" title="Delete"><X size={11} /></button>
+              <div className="flex gap-1 flex-shrink-0 mt-0.5">
+                <button onClick={() => resolveNote(note.id)} title="Mark resolved"
+                  className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-sage hover:border-sage/40 hover:bg-sage/8 transition-colors">
+                  <Check size={13} />
+                </button>
+                <button onClick={() => removeNote(note.id)} title="Delete"
+                  className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors">
+                  <X size={13} />
+                </button>
               </div>
             </div>
           ))}
@@ -589,11 +595,14 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
               {showResolved && (
                 <div className="space-y-1.5 mt-1.5">
                   {[...resolved].reverse().map(note => (
-                    <div key={note.id} className="group/note flex items-start gap-2 opacity-40">
+                    <div key={note.id} className="flex items-start gap-2 opacity-40 hover:opacity-100 transition-opacity">
                       <div className="flex-1 bg-parchment/40 rounded-lg px-3 py-1.5">
                         <p className="text-xs line-through text-ink-300 whitespace-pre-line">{note.body}</p>
                       </div>
-                      <button onClick={() => removeNote(note.id)} className="opacity-0 group-hover/note:opacity-100 mt-1 text-ink-200 hover:text-red-400 transition-all"><X size={11} /></button>
+                      <button onClick={() => removeNote(note.id)} title="Delete"
+                        className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors flex-shrink-0">
+                        <X size={13} />
+                      </button>
                     </div>
                   ))}
                 </div>
