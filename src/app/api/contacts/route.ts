@@ -14,8 +14,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { engagement_id, ...contact } = await req.json()
-  const id = await insertContact(engagement_id ?? null, contact)
-  if (!id) return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })
-  return NextResponse.json({ id })
+  try {
+    const { engagement_id, ...contact } = await req.json()
+    const id = await insertContact(engagement_id ?? null, contact)
+    if (!id) return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })
+    return NextResponse.json({ id })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
 }
