@@ -27,7 +27,9 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 
 ### Planned (committed)
 
-- [needs input: no committed roadmap found in code or commit history — ask what's next]
+- **Fix: engagements moved backward no longer vanish from the Prospects list** (`fix-prospect-backward-fallback` branch, pushed, not yet merged) — `getBackwardTransition()` now falls back to `prospect_step: 'in_contact'` instead of `'confirmed'`, which was silently excluded from the Prospects list.
+- **Add Contact** (`add-contact-button` branch, pushed, not yet merged) — standalone "Add Contact" entry point on the Contacts directory (`AddContactModal.tsx`), with inline company search-or-create. Required loosening contacts to be independent of any engagement (`unassignedContacts` in `store.tsx`). **Blocked**: needs `supabase/migrations/allow_contacts_without_engagement.sql` run before it will actually save (live `contacts.engagement_id` is `NOT NULL`, contradicting `schema.sql`). Also on this branch: sortable columns on both the Contacts and Companies list pages, and a "Companies" nav link on the Contacts page.
+- **Supabase CLI migration tracking** (`chore/supabase-cli-setup` branch, pushed, `/test`-reviewed, ready to merge) — see Decisions below.
 
 ### Maybe / someday
 
@@ -51,6 +53,8 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - ~~`confirmed_at`/`declined_at` were missing from the live `engagements` table~~ — both are base `schema.sql` columns that `confirmProspect`/`declineProspect` have always written to, but were never actually present in production, causing a 400 ("Could not find the 'confirmed_at' column") when confirming a prospect. Fixed 2026-07-15 with `supabase/migrations/add_confirmed_declined_at.sql`, confirmed run against production.
 - ~~`EngagementDetailPage` called `useCallback` after an early `if (!e) return`~~ — changed the hook count between renders whenever the engagement lookup toggled found/not-found, surfacing as React errors #300/#310 in production. Fixed 2026-07-15 by hoisting the hook above the guard. Every other detail page was swept for the same pattern and is clean.
 - `StageHistoryNav.tsx`, `ProspectSnapshotView.tsx`, and `EngagementSnapshotView.tsx` were built but never wired into any route — nothing under `src/app/` imports them, and they duplicate functionality that's already live inline (`SnapshotPanel`/`WrapUpSnapshotPanel`). Not on `main` (left uncommitted deliberately). Needs a decision: finish and wire up, or delete.
+- **`prospect_step: 'confirmed'` fallback bug**: `getBackwardTransition()` (`src/lib/pipeline.ts`) fell back to `'confirmed'` when an engagement had no `prospect_snapshot` (true for anything confirmed via the `move_to_confirmed` MCP tool) — `'confirmed'` is excluded from the Prospects list's active-steps filter, so the record silently vanished from every list after being moved backward. Fixed on `fix-prospect-backward-fallback` (not yet merged); falls back to `'in_contact'` instead.
+- **`contacts.engagement_id` is `NOT NULL` on the live table**, contradicting `schema.sql` (shows it nullable) — found via a direct insert test against production. Blocks the new Add Contact feature (`add-contact-button` branch) until `supabase/migrations/allow_contacts_without_engagement.sql` is run.
 
 ## Test checklist
 
@@ -75,6 +79,8 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - [ ] Unarchive a record from the Archive *list* page itself (not just from a detail page) and confirm it doesn't also navigate you into the record
 - [ ] Delete a company and delete a contact end-to-end on a real (non-throwaway) record and confirm referencing engagements/contacts unlink cleanly rather than erroring
 - [ ] Before adding a new component, grep whether anything under `src/app/` actually imports it — a component can build and type-check clean while being fully unreachable (regression: `StageHistoryNav`/`ProspectSnapshotView`/`EngagementSnapshotView`)
+- [ ] Confirm an engagement via the `move_to_confirmed` MCP tool (not the UI), then move it back to Prospects — confirm it lands in `inquiry`/`outreach`/`in_contact` and shows up in the Prospects list, not silently `confirmed` and invisible (regression: `getBackwardTransition` fallback)
+- [ ] Create a standalone contact (Add Contact button, no engagement) and confirm it saves and shows up in the Contacts directory, sorts correctly by every column, and that "create new company" inline also works (regression: `contacts.engagement_id` NOT NULL / new feature end-to-end)
 
 ## Decisions
 
