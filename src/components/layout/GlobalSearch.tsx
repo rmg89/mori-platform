@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { UserSearch, Handshake, Archive, Building2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
@@ -30,15 +31,35 @@ export default function GlobalSearch() {
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState({ top: 0, left: 0 })
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (wrapperRef.current?.contains(target)) return
+      if (dropdownRef.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
+
+  // The header uses backdrop-blur, which (like `transform`) establishes its own
+  // stacking context — a z-index inside it can never out-rank page content that
+  // comes later in the DOM. Portal the dropdown to <body> and position it manually
+  // instead (same fix already used for modals in this codebase).
+  useLayoutEffect(() => {
+    if (!open || !wrapperRef.current) return
+    const updatePosition = () => {
+      const rect = wrapperRef.current!.getBoundingClientRect()
+      setCoords({ top: rect.bottom + 6, left: rect.left })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    return () => window.removeEventListener('resize', updatePosition)
+  }, [open])
 
   const { engagementResults, companyResults, contactResults } = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -122,8 +143,9 @@ export default function GlobalSearch() {
         />
       </div>
 
-      {open && hasQuery && (
-        <div className="absolute left-0 top-full mt-1.5 w-80 max-h-96 overflow-y-auto bg-white border border-ink-100 rounded-lg shadow-lg p-1.5 z-50">
+      {open && hasQuery && createPortal(
+        <div ref={dropdownRef} style={{ top: coords.top, left: coords.left }}
+          className="fixed w-80 max-h-96 overflow-y-auto bg-white border border-ink-100 rounded-lg shadow-lg p-1.5 z-50">
           {allResults.length === 0 ? (
             <p className="text-xs text-ink-300 italic px-2 py-3 text-center">No results for &ldquo;{query}&rdquo;</p>
           ) : (
@@ -145,7 +167,8 @@ export default function GlobalSearch() {
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
