@@ -11,6 +11,19 @@ One entry per work session. Newest at the top.
 - Follow-ups / open questions:
 ```
 
+## 2026-07-16
+- Branch: `wire-up-search-bar` — pushed, `/test`-reviewed, not yet merged to `main`.
+- What I did:
+  - Wired up the header search bar (`AppShell.tsx`), which had been a dead placeholder `<input>` with no state or handler since it was first built. New `GlobalSearch.tsx` component queries `engagements`, `companies`, and each engagement's `contacts` live from the store on every keystroke, and renders a grouped dropdown (Engagements / Companies / Contacts, capped at 4 per group) with click-to-navigate to the matching detail page. `Enter` jumps to the first result, `Escape`/click-outside closes it.
+  - Ran `/test` before considering it done. Confirmed via `git diff` that this was an unrelated task sitting on the wrong branch (`email-review-pipeline`, from a previous unrelated task) — stashed the changes, branched fresh off `origin/main` (couldn't check out `main` locally since a separate worktree already had it checked out), and re-applied there instead.
+  - `/test` review found the dropdown rendering *behind* page content on the dashboard (confirmed by a user screenshot, not caught by reading alone). Root cause: `<header>` uses `backdrop-blur-sm`, which — like `transform` — establishes its own CSS stacking context, so the dropdown's `z-50` could never out-rank `<main>`'s content, which sits later in the DOM. Same root cause as a modal-positioning bug fixed earlier in this project. Fixed by portaling the dropdown to `document.body` (matching the existing modal pattern) and positioning it manually via `getBoundingClientRect()`, with a resize listener and an outside-click check updated to also cover the portaled node (needed so a click on a result isn't eaten by the portal boundary before its `onClick` fires).
+- Bugs found:
+  - **Search dropdown rendered behind page content** — caused by `<header>`'s `backdrop-blur-sm` trapping the dropdown's `z-index` inside its own stacking context. Fixed, see above.
+- Decisions: none.
+- Follow-ups / open for next session:
+  - Not merged yet — needs a manual preview click-through (type a query, confirm grouped results, click through to an engagement/company/contact, confirm the dropdown now renders on top after the portal fix) before merging.
+  - `/test` also flagged (not fixed, just noted): the search scans the full unfiltered `engagements`/`companies` arrays on every keystroke with no cap on the scan itself (only on displayed results) — worth watching as the pipeline grows past current data volume; and a fresh-page-load race where searching before the initial Supabase fetch resolves shows a false "No results" instead of a loading state (pre-existing pattern elsewhere in the app, not new to this branch, but newly user-visible here).
+
 ## 2026-07-15 (2)
 - Branches: three opened this session, all still open (not merged):
   - `fix-prospect-backward-fallback` — pushed, ready to merge, no known blockers.
