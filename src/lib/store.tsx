@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow } from '@/lib/db'
+import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, deleteCommRow, upsertContact, insertContact, deleteContactRow } from '@/lib/db'
 import { getBackwardTransition } from '@/lib/pipeline'
 import type { ReviewItem, Company } from '@/types'
 
@@ -88,6 +88,7 @@ interface StoreActions {
   // Comms
   addComm: (engagementId: string, comm: CommEntry) => void
   updateComm: (engagementId: string, commId: string, patch: Partial<CommEntry>) => void
+  deleteComm: (engagementId: string, commId: string) => void
 
   // Field statuses
   setFieldStatus: (id: string, field: string, status: 'needed' | 'not_needed' | null) => void
@@ -759,6 +760,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
   }, [])
 
+  const deleteComm = useCallback((engagementId: string, commId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        comms: e.comms.filter(c => c.id !== commId),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    deleteCommRow(commId).catch(onWriteError)
+  }, [])
+
   const setFieldStatus = useCallback((id: string, field: string, status: 'needed' | 'not_needed' | null) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -812,7 +825,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, updatePostEventStage,
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
-      addCall, updateCall, addComm, updateComm,
+      addCall, updateCall, addComm, updateComm, deleteComm,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
       updateCompany, createCompany, deleteCompany, updateContact, deleteContact,

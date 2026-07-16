@@ -10,7 +10,7 @@ import ArchiveModal from '@/components/ArchiveModal'
 import UnarchiveButton from '@/components/UnarchiveButton'
 import {
   ArrowLeft, AlertTriangle, CheckCircle2, Circle,
-  Phone, Edit3, Check, X, Plus, Trash2, FolderArchive
+  Phone, Edit3, Check, X, Plus, Trash2, FolderArchive, Flag
 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
@@ -291,11 +291,41 @@ function EditableNotes({ value, onSave }: { value?: string | null; onSave: (v: s
   )
   return (
     <div className="group relative">
-      <p className="text-sm text-ink-600 leading-relaxed pr-6">{value || <span className="text-ink-200 italic">No notes yet</span>}</p>
+      <p className="text-sm text-ink-600 leading-relaxed pr-6 whitespace-pre-line">{value || <span className="text-ink-200 italic">No notes yet</span>}</p>
       <button onClick={() => { setDraft(value ?? ''); setEditing(true) }}
         className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-all text-ink-300 hover:text-gold">
         <Edit3 size={12} />
       </button>
+    </div>
+  )
+}
+
+function NextStepBadge({ comm }: { comm: CommEntry }) {
+  if (!comm.next_step || comm.next_step_cleared) return null
+  const now = Date.now()
+  const snoozedUntil = comm.next_step_snoozed_until && new Date(comm.next_step_snoozed_until).getTime() >= now
+    ? comm.next_step_snoozed_until : null
+  const due = !snoozedUntil && comm.next_step_due_at ? new Date(comm.next_step_due_at) : null
+  const overdue = due ? due.getTime() < now : false
+
+  let statusText = ''
+  if (snoozedUntil) {
+    statusText = `Follow up ${new Date(snoozedUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  } else if (due) {
+    const daysUntil = Math.ceil((due.getTime() - now) / 86400000)
+    statusText = overdue ? 'Overdue' : daysUntil <= 0 ? 'Due today' : `Due in ${daysUntil}d`
+  }
+
+  return (
+    <div className={`mt-1.5 flex items-start gap-2 text-xs font-medium px-3 py-2 rounded-lg border ${
+      overdue ? 'bg-red-50 border-red-200 text-red-600' : 'bg-gold/10 border-gold/30 text-gold-dark'
+    }`}>
+      <Flag size={12} className="flex-shrink-0 mt-0.5" />
+      <span className="flex-1">
+        <span className="uppercase tracking-wide text-[10px] font-semibold opacity-75 mr-1.5">Next step</span>
+        {comm.next_step}
+      </span>
+      {statusText && <span className="flex-shrink-0 text-[10px] opacity-75 whitespace-nowrap">{statusText}</span>}
     </div>
   )
 }
@@ -608,7 +638,7 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
 export default function ProspectDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall, confirmProspect, declineProspect, deleteEngagement, archiveEngagement } = useStore()
+  const { engagements: allEngagements, setProspectStep, updateEngagement, updateCall, confirmProspect, declineProspect, deleteEngagement, archiveEngagement, deleteComm } = useStore()
   const [showLogComm, setShowLogComm] = useState(false)
   const [showAddCall, setShowAddCall] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -877,15 +907,26 @@ export default function ProspectDetailPage() {
         {showLogComm && <LogCommPanel engagementId={e.id} onClose={() => setShowLogComm(false)} />}
         <div className="space-y-4 mt-4">
           {[...e.comms].reverse().map(comm => (
-            <div key={comm.id} className={`flex gap-3 ${comm.type === 'email_outbound' ? 'flex-row-reverse' : ''}`}>
-              <div className={`text-xs px-3 py-2 rounded-xl max-w-lg ${
-                comm.type === 'email_outbound' ? 'bg-ink text-cream ml-auto'
-                : comm.type === 'stage_change' ? 'bg-parchment text-ink-400 italic'
-                : 'bg-parchment text-ink'
-              }`}>
-                {comm.subject && <p className="font-semibold mb-1">{comm.subject}</p>}
-                <p className="whitespace-pre-line">{comm.body}</p>
-                <p className="text-[10px] opacity-60 mt-1">{comm.from_name} · {formatDate(comm.date, 'MMM d, h:mm a')}</p>
+            <div key={comm.id} className={`group flex flex-col ${comm.type === 'email_outbound' ? 'items-end' : 'items-start'}`}>
+              <div className="flex items-start gap-1.5 max-w-lg w-full">
+                <div className={`flex-1 text-xs px-3 py-2 rounded-xl min-w-0 ${
+                  comm.type === 'email_outbound' ? 'bg-ink text-cream order-2'
+                  : comm.type === 'stage_change' ? 'bg-parchment text-ink-400 italic'
+                  : 'bg-parchment text-ink'
+                }`}>
+                  {comm.subject && <p className="font-semibold mb-1">{comm.subject}</p>}
+                  <p className="whitespace-pre-line">{comm.body}</p>
+                  <p className="text-[10px] opacity-60 mt-1">{comm.from_name} · {formatDate(comm.date, 'MMM d, h:mm a')}</p>
+                </div>
+                <button
+                  onClick={() => deleteComm(e.id, comm.id)}
+                  title="Delete this timeline item"
+                  className={`flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 text-ink-200 hover:text-red-500 transition-all ${comm.type === 'email_outbound' ? 'order-1' : ''}`}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              <div className="max-w-lg w-full">
+                <NextStepBadge comm={comm} />
               </div>
             </div>
           ))}

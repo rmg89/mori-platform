@@ -609,6 +609,11 @@ export async function updateCommRow(id: string, patch: Partial<CommRow>): Promis
   if (error) throw new Error(`updateCommRow: ${error.message}`)
 }
 
+export async function deleteCommRow(id: string): Promise<void> {
+  const { error } = await supabase.from('communications').delete().eq('id', id)
+  if (error) throw new Error(`deleteCommRow: ${error.message}`)
+}
+
 export async function upsertCall(call: Partial<CallRow> & { engagement_id: string }): Promise<void> {
   const { error } = await supabase.from('calls').upsert(call)
   if (error) throw new Error(`upsertCall: ${error.message}`)
