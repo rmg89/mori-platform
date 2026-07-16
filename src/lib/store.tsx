@@ -771,6 +771,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         : e
     ))
     insertBriefingNoteRow({
+      id: note.id,
       engagement_id: engagementId,
       body: note.body,
       resolved: note.resolved ?? false,

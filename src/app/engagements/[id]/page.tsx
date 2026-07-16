@@ -505,7 +505,7 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
 
   function addNote() {
     if (!draft.trim()) return
-    addBriefingNote(e.id, { id: `bn_${Date.now()}`, body: draft.trim(), created_at: new Date().toISOString() })
+    addBriefingNote(e.id, { id: crypto.randomUUID(), body: draft.trim(), created_at: new Date().toISOString() })
     setDraft('')
   }
 
