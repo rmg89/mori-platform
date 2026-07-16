@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { EngagementContact, Engagement, ContactStatus } from '@/types'
 import { getInitials } from '@/lib/utils'
-import { Search, Mail, ArrowRight, Eye, Plus, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react'
+import { Search, Mail, ArrowRight, Eye, Plus, ArrowUp, ArrowDown, ChevronsUpDown, Building2 } from 'lucide-react'
 import Link from 'next/link'
 import AddContactModal from '@/components/AddContactModal'
 
@@ -116,11 +116,20 @@ export default function ContactsPage() {
           <p className="text-ink-400 text-sm mt-1">{all.length} contacts</p>
           <div className="accent-line mt-3 w-24" />
         </div>
-        <button
-          onClick={() => setAddContactOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-medium text-white bg-ink hover:bg-ink-700 px-4 py-2 rounded-lg transition-all flex-shrink-0">
-          <Plus size={13} /> Add Contact
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Link
+            href="/companies"
+            className="flex items-center gap-2 px-3 py-2 bg-parchment border border-ink-100 text-ink-500 text-sm rounded-lg hover:bg-ink-100 transition-all"
+          >
+            <Building2 size={14} />
+            Companies
+          </Link>
+          <button
+            onClick={() => setAddContactOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-white bg-ink hover:bg-ink-700 px-4 py-2 rounded-lg transition-all">
+            <Plus size={13} /> Add Contact
+          </button>
+        </div>
       </div>
 
       {/* Search + filters */}
