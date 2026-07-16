@@ -27,6 +27,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - **Add Contact** (`src/components/AddContactModal.tsx`, launched from the Contacts page) — standalone entry point for a contact independent of any engagement, with inline company search-or-create; sortable columns on both the Contacts and Companies list pages; a "Companies" nav link on the Contacts page mirroring the existing "Contacts" link on Companies.
 - **Stage History nav + read-only snapshot views** (`src/components/StageHistoryNav.tsx`, `ProspectSnapshotView.tsx`, `EngagementSnapshotView.tsx`) — wired into `prospects/[id]`, `engagements/[id]`, `wrap-up/[id]` so a record that's moved past a stage shows a frozen, visually-faithful replica of that stage's live page instead of the stale live template, plus a "Stage History" pill nav to jump between them.
 - **Supabase CLI migration tracking** — see Decisions below.
+- **Global search bar wired up** (`src/components/layout/GlobalSearch.tsx`, replacing a dead placeholder `<input>` in `AppShell.tsx`) — queries engagements, companies, and contacts live from the store and shows a grouped results dropdown that navigates to the matching record. `/test`-reviewed, merged `wire-up-search-bar` to `main` 2026-07-16.
 
 ### Planned (committed)
 
@@ -61,6 +62,7 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - ~~`allow_contacts_without_engagement.sql` predated the Supabase CLI setup and used the wrong filename format~~ — silently skipped by `supabase migration list`/`db push` (no schema impact, tracking-only). Renamed to a CLI-compliant timestamp 2026-07-16.
 - **Two migrations exist in the remote Supabase ledger with no matching local file** (`20260716160226`, `20260716162140`) — found via `supabase migration list` after this session's merges; attributed to a different agent/session, not yet reconciled with a local file. User will audit.
 - **`add-contact-button`'s second batch of edits (Companies-page sort, Companies nav link) sat uncommitted on disk** despite being reported as pushed — caught only when the user asked directly. Committed 2026-07-16.
+- ~~The new global search dropdown (`GlobalSearch.tsx`) rendered behind page content instead of on top of it~~ — `<header>`'s `backdrop-blur-sm` establishes its own CSS stacking context (same root cause as an earlier modal-positioning bug in this codebase), trapping the dropdown's `z-index` so it could never out-rank `<main>`'s later-in-DOM content. Fixed 2026-07-16 on branch `wire-up-search-bar` by portaling the dropdown to `document.body`, same pattern as the existing modals.
 
 ## Test checklist
 
@@ -90,6 +92,8 @@ CRM and business-operations platform for booking and running Mori Taheripour's s
 - [ ] In New Inquiry, type in the contact search field, pick a result, and confirm the results list closes and doesn't reopen until you click/focus the field again (regression: dropdown defaulting to showing results even on an empty query)
 - [ ] Move a Wrap-Up engagement back to Engagements *without* changing its `event_date`, then hard-refresh, and confirm it doesn't get silently re-forwarded to Wrap-Up by the automatic date-based transition in `fetchAllEngagements()` (regression: reschedule/auto-revert interaction gap, flagged by `/test`, never actually clicked through)
 - [ ] Open the Engagement snapshot view (visit a Wrap-Up record, click "Engagements" in Stage History) for a record with little or no briefing data ever filled in, and confirm no section (Primary Contact, Event Details) shows a header with nothing underneath (regression: sparse-data blank-header gap in `EngagementSnapshotView`)
+- [ ] Type a query into the header search bar on any page and confirm the results dropdown renders visibly *on top of* the page content, not behind it (regression: `<header>`'s `backdrop-blur-sm` trapping the dropdown's z-index in its own stacking context — same root cause class as the earlier modal-positioning bug; any new floating/absolutely-positioned UI added inside `<header>` should be checked for this)
+- [ ] Click a result in the header search dropdown and confirm it actually navigates (regression: since the dropdown is portaled to `document.body`, a click on it could be eaten by the outside-click handler firing on `mousedown` before the result's `onClick` fires, if the portal node isn't excluded from that check)
 - [ ] Periodically run `npx supabase migration list` and confirm every entry with a `remote` timestamp also has a matching local file in `supabase/migrations/` — a migration applied outside this repo's own branch/CLI workflow (dashboard UI, another agent, a different checkout) creates a remote-only entry with nothing to show what it changed (regression: two untracked 2026-07-16 migrations found this way)
 
 ## Decisions
