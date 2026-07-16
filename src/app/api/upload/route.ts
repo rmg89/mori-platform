@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
+  const supabase = supabaseAdmin()
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   const engagementId = formData.get('engagement_id') as string | null
+  const folder = formData.get('folder') as string | null
 
   if (!file || !engagementId) {
     return NextResponse.json({ error: 'file and engagement_id required' }, { status: 400 })
   }
 
-  const ext = file.name.split('.').pop()
-  const path = `${engagementId}/${Date.now()}-${file.name}`
+  const path = folder
+    ? `${engagementId}/${folder}/${Date.now()}-${file.name}`
+    : `${engagementId}/${Date.now()}-${file.name}`
   const bytes = await file.arrayBuffer()
 
   const { data, error } = await supabase.storage

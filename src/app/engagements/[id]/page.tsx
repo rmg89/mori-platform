@@ -471,14 +471,13 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
                   if (!file) return
                   setUploading(true)
                   try {
-                    const { supabase } = await import('@/lib/supabase')
-                    const path = `${engagementId}/${Date.now()}-${file.name}`
-                    const { data, error } = await supabase.storage
-                      .from('materials')
-                      .upload(path, file, { contentType: file.type })
-                    if (!error && data) {
-                      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
-                      onAttachFile(publicUrl, file.name)
+                    const formData = new FormData()
+                    formData.append('file', file)
+                    formData.append('engagement_id', engagementId)
+                    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                    if (res.ok) {
+                      const { url } = await res.json()
+                      onAttachFile(url, file.name)
                     }
                   } finally {
                     setUploading(false)
@@ -1078,7 +1077,7 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
   }
 
   async function ensureDepositDraft(depositAmount: number) {
-    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
     await ensureDraftInvoice({
       engagementId: e.id,
       type: 'deposit',
@@ -1089,7 +1088,7 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
   }
 
   async function syncDepositInvoiceStatus(status: 'finalized' | 'sent' | 'paid') {
-    const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
+    const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices-client')
     const inv = await findLatestInvoice(e.id, 'deposit')
     if (inv) await setInvoiceStatus(inv, status)
   }
@@ -1100,7 +1099,7 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
   }
 
   async function handleEditInvoice() {
-    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
     let inv = await findLatestInvoice(e.id, 'deposit')
     if (!inv && amount) {
       inv = await ensureDraftInvoice({
@@ -1125,8 +1124,8 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
 
   async function downloadDepositPdf() {
     const { generateDepositInvoice } = await import('@/lib/documents')
-    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
-    const { fetchBusinessProfile } = await import('@/lib/business')
+    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
+    const { fetchBusinessProfile } = await import('@/lib/business-client')
     const [inv, business] = await Promise.all([
       ensureDraftInvoice({
         engagementId: e.id,
