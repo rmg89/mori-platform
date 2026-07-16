@@ -11,6 +11,32 @@ One entry per work session. Newest at the top.
 - Follow-ups / open questions:
 ```
 
+## 2026-07-16 (3)
+- Branch: `fix-engagement-detail` — pushed, `/test`-reviewed three times; merge-gate status at end of session below.
+- What I did:
+  - Root-caused a live bug: a "Zencastr Recording Link" material showed 0/1 received and overdue despite the link being present. Traced it to the `add_material` MCP tool (`route.ts`) hardcoding `received: false` on every insert regardless of whether a `url`/`notes` was supplied — fixed to mark an incoming material received when content is given at creation, matching the UI's own `captureLink`/`captureNote` behavior.
+  - Fixed briefing document notes rendering oldest-first instead of newest-first (both the open and resolved lists) — notes are appended to the end of the array on write, with nothing reversing them for display.
+  - Found and fixed a real data-loss bug: adding, resolving, or deleting a briefing note through the UI never actually persisted to Supabase. `updateEngagement()` explicitly strips `briefing_notes` from every patch before writing (it's a normalized table, not a column on `engagements`), and nothing else picked up the slack — a note only ever lived in local React state and vanished on reload. Added `addBriefingNote`/`resolveBriefingNote`/`deleteBriefingNote` actions that write directly to the `briefing_notes` table, mirroring the existing `addComm`/`updateComm` pattern.
+  - User live-tested the deployed preview and hit two further real failures this fix missed: `briefing_notes` had row-level security enabled with no anon policy (the MCP server's own inserts always use the service-role key, which bypasses RLS, so this table's anon-key path had never actually been exercised before); and the client-generated note id (`bn_...`) wasn't a real UUID, so an immediate resolve/delete on a just-added note (before a reload) failed with "invalid input syntax for type uuid". Fixed both: a migration disabling RLS and granting anon/authenticated on `briefing_notes` (applied via `supabase db push`, confirmed live via `supabase migration list`), and switched note-id generation to `crypto.randomUUID()`, sent explicitly on insert so local and server ids match immediately.
+  - Added an "unresolve" button for resolved notes (mirrors resolve, writes `resolved: false`) — previously the only way back from resolved was delete-and-retype.
+  - Made the resolve/delete buttons on briefing notes bigger and always-visible instead of tiny hover-only icons, per feedback that they didn't read as clickable.
+  - Discovered two migrations already live in the remote Supabase ledger with no local file anywhere in this branch (`20260716160226`, `20260716162140`). Traced them via `git show` against the still-unmerged `email-review-pipeline` branch's commits — a `review_items` table for its inbound-email feature, unrelated to this branch's work — and pulled the actual files in so local migration tracking matches the live database instead of running `migration repair` blind.
+  - Ran `/test` three times as the branch evolved. The second pass predicted the exact "client id doesn't match Supabase-generated id" failure mode by reading the code, before the user's live testing independently hit the same root cause plus the separate RLS issue.
+  - At wrap time: merged current `main` into this branch (it had moved — Add Contact, global search bar, more docs/lessons since this branch forked) and resolved the one resulting conflict (two import lines in `store.tsx`, both sides adding different named imports to the same line — kept both). Re-verified type-check and a real `npm run build` both green after the merge (copied `.env.local` into the worktree first — `git worktree add` doesn't carry it over, and its absence produces a "supabaseUrl is required" false-negative build failure, not a real one).
+- Bugs found:
+  - **`add_material` MCP tool always inserted incoming materials as `received: false`**, even with a `url`/`notes` supplied — fixed.
+  - **Briefing document notes rendered oldest-first** — fixed.
+  - **Briefing notes were never actually persisted to Supabase** (add/resolve/delete all silently no-op'd against the database, only ever changing local state) — fixed.
+  - **`briefing_notes` had RLS enabled with no anon policy** — blocked every anon-key write; the MCP server's service-role writes never surfaced it. Fixed via migration, confirmed applied.
+  - **Client-generated briefing-note ids weren't real UUIDs** — broke any resolve/delete attempted before the next reload. Fixed with `crypto.randomUUID()`.
+  - **No way to unresolve a resolved briefing note** — fixed, added a button.
+- Decisions:
+  - When client code generates an id that a Supabase `uuid` column will store, generate a real UUID (`crypto.randomUUID()`) up front rather than a formatted placeholder string (`bn_${Date.now()}`) — see Follow-ups, this same gap exists in two other places.
+  - Pulled two orphaned-but-legitimate migrations in from a different unmerged branch's commits rather than running `supabase migration repair --status reverted` on them — repair would have mislabeled already-applied, still-needed migrations as reverted.
+- Follow-ups / open for next session:
+  - **`addComm` and `addCall` (`store.tsx`) share the same "temp id vs Supabase-generated id" pattern that just caused the briefing-notes bug** — not confirmed broken yet, but worth a proactive audit before either gets an "add then immediately mutate" UI flow like briefing notes just did.
+  - The `/test` NEEDS MANUAL CHECK list was never explicitly confirmed item-by-item by the user in conversation (they found the RLS/UUID bugs directly instead, which is stronger evidence than a checklist tick, but doesn't cover everything on the list) — before merging, ideally confirm resolve→reload and unresolve→reload both persist, and that `add_material` via a live MCP call shows received correctly.
+
 ## 2026-07-16 (2)
 - Branch: `wire-up-search-bar` — pushed, `/test`-reviewed, merged to `main` this session.
 - What I did:
