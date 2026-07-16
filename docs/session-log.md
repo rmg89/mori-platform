@@ -53,6 +53,27 @@ One entry per work session. Newest at the top.
 - Follow-ups / open for next session:
   - Not merged yet — needs a manual preview click-through (search, select, confirm the list closes and reopens only on refocus) before merging.
 
+## 2026-07-15 (4)
+- Branch: `wire-stage-history-nav` — still open, not merged to `main`.
+- What I did:
+  - Wired `StageHistoryNav.tsx`, `ProspectSnapshotView.tsx`, and `EngagementSnapshotView.tsx` (flagged in the entry below as built but never wired into any route) into `prospects/[id]`, `engagements/[id]`, and `wrap-up/[id]` — a record that's moved past a stage now shows a frozen replica of that stage's page instead of the stale live template, plus a "Stage History" pill nav to jump between stages.
+  - Moved the Stage History nav from a small inline row at the top of the page to a full-width card at the bottom, and consolidated the separate Move-forward/Move-back/Archive boxes into one grouped card (Delete stays separate, last).
+  - Fixed `getRecordStages()`: it inferred "this record was in Engagements" from `engagement_snapshot` being non-null, but that field is only set by the rarely-used manual `moveToWrapUp` action — most records reach Wrap-Up via the automatic date-based transition in `fetchAllEngagements()`, which never sets it. Silently dropped the "Engagements" pill for almost every real wrap-up record. Now derived from `section`/`prospect_step` directly.
+  - Removed a redundant "Back to Prospects/Engagements" link from the two read-only snapshot views — it pointed at a list the record isn't in anymore; the Stage History pills (and the app shell's own nav) already cover that.
+  - Rewrote `ProspectSnapshotView` and `EngagementSnapshotView` to be full visual replicas of their live-page counterparts (stepper table, event details, contacts, materials progress tiles, deposit card, briefing document, timeline) instead of a simplified generic label/value reconstruction, per explicit request that the read-only view "look like what we're used to."
+  - Fixed the Briefing Document card being hidden entirely whenever a handful of snapshot fields (purpose/venue/travel/etc.) all happened to be empty — the live page's Briefing Document is never conditionally hidden; its header/contact/details/prepnotes sections are always shown regardless of data. Now always renders, matching the live page's own default-sections logic (Venue/Travel/Run of Show still conditional on physical-event/travel data, same as live).
+  - Ran `/test` twice on this branch before merge.
+- Bugs found:
+  - **`getRecordStages()` silently dropped the Engagements stage for most wrap-up records** — fixed, see above.
+  - **Briefing Document card was hidden entirely when snapshot data was sparse** — fixed, see above.
+  - **Briefing Document's Primary Contact / Event Details sub-sections can render a header with nothing underneath** when their fields are empty, found on the second `/test` pass — inconsistent with "Prep Notes" right below (which has an explicit empty-state fallback) and every other card on the page (which hide entirely when empty). Not fixed this session.
+- Decisions:
+  - When reconstructing a live, data-driven page as a "frozen/read-only" view, match what the live page actually renders with *no* data (placeholders, always-shown sections) before assuming an empty section should just disappear — the two are easy to conflate and only diverge exactly on the sparse records a user is most likely to be looking at.
+- Follow-ups / open for next session:
+  - Fix the Primary Contact / Event Details blank-header gap in `EngagementSnapshotView.tsx` found by the second `/test` pass.
+  - Not merged yet — needs a manual preview click-through (see the two `/test` reports in-session for the specific NEEDS MANUAL CHECK lists) before merging.
+  - The reschedule/auto-revert interaction gap flagged on an earlier branch's `/test` pass (moving Wrap-Up → Engagements without changing `event_date` gets silently bounced back on next reload) still has no dedicated regression check beyond a checklist line — worth actually clicking through once, since it was only ever traced by reading.
+
 ## 2026-07-15
 - Branch: `add-unarchive-and-move-backward` — merged to `main` this session (`104ad5a`), branch deleted locally and on origin.
 - What I did:
