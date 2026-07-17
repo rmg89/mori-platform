@@ -784,6 +784,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         : e
     ))
     insertComm({
+      id: comm.id,
       engagement_id: engagementId,
       type: comm.type,
       date: comm.date,

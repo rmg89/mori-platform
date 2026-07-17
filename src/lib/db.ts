@@ -607,7 +607,7 @@ export async function insertCompanyRow(input: { name: string; website?: string; 
   }
 }
 
-export async function insertComm(comm: Omit<CommRow, 'id'>): Promise<void> {
+export async function insertComm(comm: CommRow): Promise<void> {
   const { error } = await supabase.from('communications').insert(comm)
   if (error) throw new Error(`insertComm: ${error.message}`)
 }
