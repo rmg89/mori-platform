@@ -237,22 +237,49 @@ function addContractHeader(doc: any, signature: SignatureImage | null, dateStr: 
 }
 
 // One bordered two-column row of the Program Details table (label | wrapped value lines).
+// Quiet hairline borders + a pale shaded label cell, matching the invoice's
+// table-header treatment rather than a raw grid.
 function addProgramRow(doc: any, y: number, label: string, valueLines: string[], labelW = 150): number {
   const lineH = 12.5
   const content = valueLines.length ? valueLines : ['—']
   const rowH = Math.max(content.length * lineH + 12, 26)
-  doc.setDrawColor(150, 147, 140)
+  doc.setFillColor(248, 246, 242)
+  doc.rect(CONTRACT_L, y, labelW, rowH, 'F')
+  doc.setDrawColor(205, 202, 196)
   doc.setLineWidth(0.5)
   doc.rect(CONTRACT_L, y, CONTRACT_W, rowH)
   doc.line(CONTRACT_L + labelW, y, CONTRACT_L + labelW, y + rowH)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(15, 14, 12)
+  doc.setFontSize(8.5)
+  doc.setTextColor(80, 78, 72)
   doc.text(label, CONTRACT_L + 8, y + 15)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9.5)
+  doc.setTextColor(15, 14, 12)
   doc.text(content, CONTRACT_L + labelW + 8, y + 15)
   return y + rowH
+}
+
+// Hairline rule that opens a new major section — the invoice's segmented,
+// breathable feel rather than one dense block of legal text.
+function addSectionRule(doc: any, y: number): number {
+  doc.setDrawColor(205, 202, 196)
+  doc.setLineWidth(0.4)
+  doc.line(CONTRACT_L, y, CONTRACT_R, y)
+  return y + 18
+}
+
+// Hanging-indent bullet: the bullet sits at x, wrapped continuation lines
+// align under the text (not flush back to the bullet) — matches how a
+// professionally typeset bullet list wraps.
+function addBullet(doc: any, text: string, x: number, y: number, width: number, lineH = 13): number {
+  const bulletW = 12
+  const lines = doc.splitTextToSize(text, width - bulletW)
+  doc.text('•', x, y)
+  for (let i = 0; i < lines.length; i++) {
+    doc.text(lines[i], x + bulletW, y + i * lineH)
+  }
+  return y + lines.length * lineH
 }
 
 export async function generateContract(client: Client, business: BusinessProfile): Promise<Blob> {
@@ -274,7 +301,7 @@ export async function generateContract(client: Client, business: BusinessProfile
 
   doc.setFontSize(10)
   doc.setTextColor(40, 38, 34)
-  const intro = `This agreement is between MT GLOBAL STRATEGIES ("Speaker"), located at ${businessAddress}, and ${s(client.organization)} ("Client")${clientAddress ? `, with offices at ${clientAddress}` : ''}.`
+  const intro = `This agreement is between MT GLOBAL STRATEGIES (the "Speaker"), located at ${businessAddress}, and ${s(client.organization)} (the "Client")${clientAddress ? `, with offices at ${clientAddress}` : ''}.`
   let introLines = doc.splitTextToSize(intro, CONTRACT_W)
   doc.text(introLines, CONTRACT_L, y)
   y += introLines.length * 14 + 14
@@ -332,15 +359,16 @@ export async function generateContract(client: Client, business: BusinessProfile
   doc.setFontSize(9.5)
   doc.setTextColor(40, 38, 34)
   for (const item of (scopeItems.length ? scopeItems : [''])) {
-    const lines = doc.splitTextToSize(`•  ${s(item)}`, CONTRACT_W - 12)
-    checkPage(lines.length * 13 + 4)
-    doc.text(lines, CONTRACT_L + 8, y)
-    y += lines.length * 13 + 4
+    const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
+    checkPage(lineCount * 13 + 4)
+    y = addBullet(doc, s(item), CONTRACT_L + 8, y, CONTRACT_W - 8)
+    y += 4
   }
   y += 8
 
   // ── Compensation and Billing ─────────────────────────────────────────────────
-  checkPage(60)
+  checkPage(70)
+  y = addSectionRule(doc, y)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(15, 14, 12)
@@ -413,7 +441,7 @@ export async function generateContract(client: Client, business: BusinessProfile
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(15, 14, 12)
-  doc.text(`TOTAL PROGRAM FEE: ${formatCurrency(totalProgramFee)}${hasNumericTravel ? '' : ' + travel (TBD)'}`, CONTRACT_L, y)
+  doc.text(`TOTAL PROGRAM FEE: ${formatCurrency(totalProgramFee)}`, CONTRACT_L, y)
   y += 20
 
   doc.setFont('helvetica', 'normal')
@@ -421,8 +449,8 @@ export async function generateContract(client: Client, business: BusinessProfile
   doc.setTextColor(40, 38, 34)
   const paymentLines = [
     'MT Global Strategies will invoice 100% of the total Program Fee upon contract acceptance.',
-    `Your deposit (50% of fee, ${formatCurrency(depositAmt)}) is due upon approval of the contract.`,
-    `The remaining balance (50% of fee, ${formatCurrency(balanceAmt)}) is due five (5) days after the event.`,
+    'Your deposit (50% of fee) is due upon approval of the contract.',
+    'The remaining balance (50% of fee) is due five (5) days after the event.',
     'The invoice will be billed in full if the event date is less than thirty (30) days from the authorization date.',
   ]
   for (const line of paymentLines) {
@@ -431,7 +459,16 @@ export async function generateContract(client: Client, business: BusinessProfile
     doc.text(lines, CONTRACT_L, y)
     y += lines.length * 13 + 4
   }
-  y += 10
+  y += 6
+
+  // Computed figures kept out of the legal paragraph above — presented as a
+  // quiet key-value summary, the same bold-label pattern as Services Fee/Travel Fee.
+  checkPage(20)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(80, 78, 72)
+  doc.text(`Deposit Due: ${formatCurrency(depositAmt)} (USD)     Balance Due: ${formatCurrency(balanceAmt)} (USD)`, CONTRACT_L, y)
+  y += 20
 
   checkPage(60)
   doc.setFont('helvetica', 'bold')
@@ -469,7 +506,8 @@ export async function generateContract(client: Client, business: BusinessProfile
     "No videotaping without written consent given by the speaker. If videotaping is to be performed and approved by the speaker, the client agrees to supply a copy of all recorded footage to Speaker within thirty (30) days of event.",
     "Client grants Speaker permission to use Client's logo on Speaker's website and to list Client as a customer.",
   ]
-  checkPage(30)
+  checkPage(80)
+  y = addSectionRule(doc, y)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(15, 14, 12)
@@ -478,11 +516,14 @@ export async function generateContract(client: Client, business: BusinessProfile
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9.5)
   doc.setTextColor(40, 38, 34)
+  const speakerReqIntroLines = doc.splitTextToSize('As part of the engagement, the Client and Speaker agree to the following terms:', CONTRACT_W)
+  doc.text(speakerReqIntroLines, CONTRACT_L, y)
+  y += speakerReqIntroLines.length * 13 + 6
   for (const item of speakerRequirements) {
-    const lines = doc.splitTextToSize(`•  ${s(item)}`, CONTRACT_W - 12)
-    checkPage(lines.length * 13 + 6)
-    doc.text(lines, CONTRACT_L + 8, y)
-    y += lines.length * 13 + 6
+    const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
+    checkPage(lineCount * 13 + 6)
+    y = addBullet(doc, s(item), CONTRACT_L + 8, y, CONTRACT_W - 8)
+    y += 6
   }
   y += 6
 
@@ -494,7 +535,8 @@ export async function generateContract(client: Client, business: BusinessProfile
     'Speaker will provide all materials necessary for the workshop, including slides and handouts, to Client no later than three (3) days prior to the event.',
     "The Client will support the Speaker's administrative needs for the event, including, but not limited to, distributing handouts and recording participants' results after the negotiation exercises.",
   ]
-  checkPage(30)
+  checkPage(80)
+  y = addSectionRule(doc, y)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(15, 14, 12)
@@ -503,16 +545,20 @@ export async function generateContract(client: Client, business: BusinessProfile
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9.5)
   doc.setTextColor(40, 38, 34)
+  const technicalReqIntroLines = doc.splitTextToSize('As part of the engagement, the Client and the Speaker agree to the following terms:', CONTRACT_W)
+  doc.text(technicalReqIntroLines, CONTRACT_L, y)
+  y += technicalReqIntroLines.length * 13 + 6
   for (const item of technicalRequirements) {
-    const lines = doc.splitTextToSize(`•  ${s(item)}`, CONTRACT_W - 12)
-    checkPage(lines.length * 13 + 6)
-    doc.text(lines, CONTRACT_L + 8, y)
-    y += lines.length * 13 + 6
+    const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
+    checkPage(lineCount * 13 + 6)
+    y = addBullet(doc, s(item), CONTRACT_L + 8, y, CONTRACT_W - 8)
+    y += 6
   }
   y += 10
 
   // ── Cancellation Policy ──────────────────────────────────────────────────────
-  checkPage(60)
+  checkPage(80)
+  y = addSectionRule(doc, y)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(15, 14, 12)
@@ -535,7 +581,8 @@ export async function generateContract(client: Client, business: BusinessProfile
   y += 10
 
   // ── Authorization ─────────────────────────────────────────────────────────────
-  checkPage(120)
+  checkPage(140)
+  y = addSectionRule(doc, y)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(15, 14, 12)
