@@ -23,6 +23,8 @@ import TimezoneSelect from '@/components/TimezoneSelect'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
 import { TIMEZONE_OPTIONS } from '@/lib/timezone'
 import { getBackwardTransition } from '@/lib/pipeline'
+import EngagementSnapshotView from '@/components/EngagementSnapshotView'
+import StageHistoryNav from '@/components/StageHistoryNav'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -469,14 +471,13 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
                   if (!file) return
                   setUploading(true)
                   try {
-                    const { supabase } = await import('@/lib/supabase')
-                    const path = `${engagementId}/${Date.now()}-${file.name}`
-                    const { data, error } = await supabase.storage
-                      .from('materials')
-                      .upload(path, file, { contentType: file.type })
-                    if (!error && data) {
-                      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
-                      onAttachFile(publicUrl, file.name)
+                    const formData = new FormData()
+                    formData.append('file', file)
+                    formData.append('engagement_id', engagementId)
+                    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                    if (res.ok) {
+                      const { url } = await res.json()
+                      onAttachFile(url, file.name)
                     }
                   } finally {
                     setUploading(false)
@@ -494,6 +495,7 @@ function IncomingItem({ item, overdue, captured, engagementId, onUndo, onRemove,
 // ─── Briefing Zone ────────────────────────────────────────────────────────────
 
 function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: Partial<Engagement>) => void; briefingComplete: boolean }) {
+  const { addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote } = useStore()
   const [draft, setDraft] = useState('')
   const [showResolved, setShowResolved] = useState(false)
   const notes: BriefingNote[] = e.briefing_notes ?? []
@@ -502,17 +504,20 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
 
   function addNote() {
     if (!draft.trim()) return
-    const note: BriefingNote = { id: `bn_${Date.now()}`, body: draft.trim(), created_at: new Date().toISOString() }
-    save({ briefing_notes: [...notes, note] } as any)
+    addBriefingNote(e.id, { id: crypto.randomUUID(), body: draft.trim(), created_at: new Date().toISOString() })
     setDraft('')
   }
 
   function removeNote(id: string) {
-    save({ briefing_notes: notes.filter(n => n.id !== id) } as any)
+    deleteBriefingNote(e.id, id)
   }
 
   function resolveNote(id: string) {
-    save({ briefing_notes: notes.map(n => n.id === id ? { ...n, resolved: true } : n) } as any)
+    resolveBriefingNote(e.id, id)
+  }
+
+  function unresolveNote(id: string) {
+    unresolveBriefingNote(e.id, id)
   }
 
   return (
@@ -565,15 +570,21 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
       {/* Logged notes — footnote style below input */}
       {(open.length > 0 || resolved.length > 0) && (
         <div className="mt-3 pt-3 border-t border-ink-50 space-y-1.5">
-          {open.map(note => (
-            <div key={note.id} className="group/note flex items-start gap-2">
+          {[...open].reverse().map(note => (
+            <div key={note.id} className="flex items-start gap-2">
               <div className="flex-1 bg-parchment/60 rounded-lg px-3 py-2">
                 <p className="text-xs leading-relaxed text-ink-500 whitespace-pre-line">{note.body}</p>
                 <p className="text-[10px] text-ink-300 mt-0.5">{formatElapsed(note.created_at)}</p>
               </div>
-              <div className="flex flex-col gap-1 opacity-0 group-hover/note:opacity-100 transition-all flex-shrink-0 mt-1.5">
-                <button onClick={() => resolveNote(note.id)} className="text-ink-200 hover:text-sage transition-colors" title="Mark resolved"><Check size={11} /></button>
-                <button onClick={() => removeNote(note.id)} className="text-ink-200 hover:text-red-400 transition-colors" title="Delete"><X size={11} /></button>
+              <div className="flex gap-1 flex-shrink-0 mt-0.5">
+                <button onClick={() => resolveNote(note.id)} title="Mark resolved"
+                  className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-sage hover:border-sage/40 hover:bg-sage/8 transition-colors">
+                  <Check size={13} />
+                </button>
+                <button onClick={() => removeNote(note.id)} title="Delete"
+                  className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors">
+                  <X size={13} />
+                </button>
               </div>
             </div>
           ))}
@@ -586,12 +597,21 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
               </button>
               {showResolved && (
                 <div className="space-y-1.5 mt-1.5">
-                  {resolved.map(note => (
-                    <div key={note.id} className="group/note flex items-start gap-2 opacity-40">
+                  {[...resolved].reverse().map(note => (
+                    <div key={note.id} className="flex items-start gap-2 opacity-40 hover:opacity-100 transition-opacity">
                       <div className="flex-1 bg-parchment/40 rounded-lg px-3 py-1.5">
                         <p className="text-xs line-through text-ink-300 whitespace-pre-line">{note.body}</p>
                       </div>
-                      <button onClick={() => removeNote(note.id)} className="opacity-0 group-hover/note:opacity-100 mt-1 text-ink-200 hover:text-red-400 transition-all"><X size={11} /></button>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => unresolveNote(note.id)} title="Mark unresolved"
+                          className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-gold-dark hover:border-gold/40 hover:bg-gold/8 transition-colors">
+                          <Undo2 size={13} />
+                        </button>
+                        <button onClick={() => removeNote(note.id)} title="Delete"
+                          className="p-1.5 rounded-lg border border-ink-100 bg-white text-ink-300 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-colors">
+                          <X size={13} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1057,7 +1077,7 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
   }
 
   async function ensureDepositDraft(depositAmount: number) {
-    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
     await ensureDraftInvoice({
       engagementId: e.id,
       type: 'deposit',
@@ -1068,7 +1088,7 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
   }
 
   async function syncDepositInvoiceStatus(status: 'finalized' | 'sent' | 'paid') {
-    const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
+    const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices-client')
     const inv = await findLatestInvoice(e.id, 'deposit')
     if (inv) await setInvoiceStatus(inv, status)
   }
@@ -1079,7 +1099,7 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
   }
 
   async function handleEditInvoice() {
-    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
     let inv = await findLatestInvoice(e.id, 'deposit')
     if (!inv && amount) {
       inv = await ensureDraftInvoice({
@@ -1104,8 +1124,8 @@ function DepositCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>
 
   async function downloadDepositPdf() {
     const { generateDepositInvoice } = await import('@/lib/documents')
-    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
-    const { fetchBusinessProfile } = await import('@/lib/business')
+    const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
+    const { fetchBusinessProfile } = await import('@/lib/business-client')
     const [inv, business] = await Promise.all([
       ensureDraftInvoice({
         engagementId: e.id,
@@ -2503,6 +2523,7 @@ export default function EngagementDetailPage() {
   }, [e, updateEngagement])
 
   if (!e) return <div className="p-8 text-ink-400">Engagement not found</div>
+  if (e.section !== 'engagements') return <EngagementSnapshotView engagement={e} />
 
   const backwardTarget = getBackwardTransition(e)
   const eventType = (e as any).event_type || 'speaking'
@@ -2596,66 +2617,72 @@ export default function EngagementDetailPage() {
         audience_size: e.audience_size,
       }} />
 
-      {/* Archive */}
-      {e.archived ? (
-        <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-          <div>
-            <p className="text-sm font-medium text-ink">This record is archived</p>
-            {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
-          </div>
-          <UnarchiveButton engagementId={e.id} />
-        </div>
-      ) : (
-        <>
-          <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-            <div>
-              <p className="text-sm font-medium text-ink">Move to Wrap-Up</p>
-              <p className="text-xs text-ink-400 mt-0.5">Moves this record forward, ahead of the automatic transition on the event date. Nothing else is changed.</p>
-            </div>
-            <button
-              onClick={() => setMoveForwardModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-              <FastForward size={13} /> Move to Wrap-Up
-            </button>
-          </div>
-          {backwardTarget && (
-            <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-              <div>
-                <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
-                <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
-              </div>
-              <button
-                onClick={() => setMoveBackModalOpen(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-                <Undo2 size={13} /> {backwardTarget.label}
-              </button>
-            </div>
-          )}
-          <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-parchment/60 border border-ink-100 rounded-xl">
-            <div>
-              <p className="text-sm font-medium text-ink">Archive this engagement</p>
-              <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
-            </div>
-            <button
-              onClick={() => setArchiveModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
-              <FolderArchive size={13} /> Archive
-            </button>
-          </div>
-        </>
-      )}
+      {/* Manage record: stage history, move forward/back, archive/unarchive */}
+      <div className="mt-6 space-y-3">
+        <StageHistoryNav engagement={e} current="engagements" />
 
-      {/* Delete */}
-      <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
-        <div>
-          <p className="text-sm font-medium text-red-600">Delete this engagement</p>
-          <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+        <div className="bg-white border border-ink-100 rounded-xl divide-y divide-ink-100">
+          {e.archived ? (
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
+              <div>
+                <p className="text-sm font-medium text-ink">This record is archived</p>
+                {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
+              </div>
+              <UnarchiveButton engagementId={e.id} />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3 px-5 py-4">
+                <div>
+                  <p className="text-sm font-medium text-ink">Move to Wrap-Up</p>
+                  <p className="text-xs text-ink-400 mt-0.5">Moves this record forward, ahead of the automatic transition on the event date. Nothing else is changed.</p>
+                </div>
+                <button
+                  onClick={() => setMoveForwardModalOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+                  <FastForward size={13} /> Move to Wrap-Up
+                </button>
+              </div>
+              {backwardTarget && (
+                <div className="flex items-center justify-between gap-3 px-5 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
+                    <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
+                  </div>
+                  <button
+                    onClick={() => setMoveBackModalOpen(true)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+                    <Undo2 size={13} /> {backwardTarget.label}
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 px-5 py-4">
+                <div>
+                  <p className="text-sm font-medium text-ink">Archive this engagement</p>
+                  <p className="text-xs text-ink-400 mt-0.5">Moves it out of the active list. A note is required.</p>
+                </div>
+                <button
+                  onClick={() => setArchiveModalOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-ink-500 border border-ink-200 px-4 py-2 rounded-lg hover:bg-ink hover:text-white hover:border-ink transition-all flex-shrink-0">
+                  <FolderArchive size={13} /> Archive
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        <button
-          onClick={() => setDeleteModalOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
-          <Trash2 size={13} /> Delete
-        </button>
+
+        {/* Delete */}
+        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-red-600">Delete this engagement</p>
+            <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+          </div>
+          <button
+            onClick={() => setDeleteModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
       </div>
 
       <ConfirmModal

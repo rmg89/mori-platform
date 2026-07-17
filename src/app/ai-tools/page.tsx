@@ -107,8 +107,8 @@ export default function AIToolsPage() {
     setInvGenerating(true)
     try {
       const { generateInvoice, generateDepositInvoice } = await import('@/lib/documents')
-      const { createInvoice } = await import('@/lib/invoices')
-      const { fetchBusinessProfile } = await import('@/lib/business')
+      const { createInvoice } = await import('@/lib/invoices-client')
+      const { fetchBusinessProfile } = await import('@/lib/business-client')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mockEngagement: any = {
         id: Date.now().toString(),

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStore, SaveStatus } from '@/lib/store'
+import GlobalSearch from '@/components/layout/GlobalSearch'
 
 function SaveIndicator({ status, error }: { status: SaveStatus; error: string | null }) {
   if (status === 'idle') return null
@@ -102,15 +103,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Top bar */}
         <header className="h-10 flex items-center justify-between px-5 flex-shrink-0 border-b border-ink-100/60 bg-cream/80 backdrop-blur-sm">
-          <div className="flex items-center gap-2 rounded-lg px-2.5 py-1 w-48 bg-ink-50/60 border border-ink-100/60">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-ink-300 flex-shrink-0">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input
-              placeholder="Search clients, events..."
-              className="bg-transparent text-xs text-ink-600 placeholder:text-ink-300 outline-none flex-1"
-            />
-          </div>
+          <GlobalSearch />
           <SaveIndicator status={saveStatus} error={saveError} />
           <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-gold bg-ink-800">
             MT

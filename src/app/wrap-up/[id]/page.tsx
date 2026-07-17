@@ -11,6 +11,7 @@ import ArchiveModal from '@/components/ArchiveModal'
 import UnarchiveButton from '@/components/UnarchiveButton'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
 import { getBackwardTransition } from '@/lib/pipeline'
+import StageHistoryNav from '@/components/StageHistoryNav'
 
 function daysSince(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -388,8 +389,8 @@ export default function WrapUpDetailPage() {
     setInvoiceDownloading(true)
     try {
       const { generateInvoice } = await import('@/lib/documents')
-      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
-      const { fetchBusinessProfile } = await import('@/lib/business')
+      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
+      const { fetchBusinessProfile } = await import('@/lib/business-client')
       const [inv, business] = await Promise.all([
         ensureDraftInvoice({
           engagementId: e.id,
@@ -414,7 +415,7 @@ export default function WrapUpDetailPage() {
 
   async function handleEditInvoice() {
     if (!e) return
-    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+    const { findLatestInvoice, ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
     let inv = await findLatestInvoice(engagementId, 'invoice')
     if (!inv && e.fee) {
       inv = await ensureDraftInvoice({
@@ -428,7 +429,7 @@ export default function WrapUpDetailPage() {
   async function handleAddFlag(flagId: PostEventFlag) {
     setPostEventFlagNeeded(engagementId, flagId)
     if (flagId === 'invoice' && e?.fee) {
-      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices')
+      const { ensureDraftInvoice, buildInvoiceSnapshot } = await import('@/lib/invoices-client')
       await ensureDraftInvoice({
         engagementId: e.id,
         type: 'invoice',
@@ -455,7 +456,7 @@ export default function WrapUpDetailPage() {
 
     // Mirror finalized/sent/paid onto the matching invoices-table row so the central Invoices page agrees
     if (flagId === 'invoice' && (stageId === 'finalized' || stageId === 'sent' || stageId === 'paid')) {
-      const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices')
+      const { findLatestInvoice, setInvoiceStatus } = await import('@/lib/invoices-client')
       const inv = await findLatestInvoice(engagementId, 'invoice')
       if (inv) await setInvoiceStatus(inv, stageId)
     }
@@ -695,15 +696,15 @@ export default function WrapUpDetailPage() {
                                 if (files.length === 0) return
                                 setMediaUploading(true)
                                 try {
-                                  const { supabase } = await import('@/lib/supabase')
                                   for (const file of files) {
-                                    const path = `${engagementId}/wrapup/${Date.now()}-${file.name}`
-                                    const { data, error } = await supabase.storage
-                                      .from('materials')
-                                      .upload(path, file, { contentType: file.type })
-                                    if (!error && data) {
-                                      const { data: { publicUrl } } = supabase.storage.from('materials').getPublicUrl(data.path)
-                                      addPostEventMedia(engagementId, { type: 'photo', name: file.name, url: publicUrl })
+                                    const formData = new FormData()
+                                    formData.append('file', file)
+                                    formData.append('engagement_id', engagementId)
+                                    formData.append('folder', 'wrapup')
+                                    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                                    if (res.ok) {
+                                      const { url } = await res.json()
+                                      addPostEventMedia(engagementId, { type: 'photo', name: file.name, url })
                                     }
                                   }
                                 } finally {
@@ -940,63 +941,69 @@ export default function WrapUpDetailPage() {
         audience_size: e.audience_size,
       }} />
 
-      {/* Archive */}
-      {e.archived ? (
-        <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
-          <div>
-            <p className="text-sm font-medium text-ink">This record is archived</p>
-            {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
-          </div>
-          <UnarchiveButton engagementId={e.id} />
-        </div>
-      ) : (
-        <>
-          {backwardTarget && (
-            <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
-              <div>
-                <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
-                <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
-              </div>
-              <button
-                onClick={() => setMoveBackModalOpen(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment px-4 py-2 rounded-lg transition-all flex-shrink-0">
-                <Undo2 size={13} /> {backwardTarget.label}
-              </button>
-            </div>
-          )}
-          <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-white border border-ink-100 rounded-xl">
-            <div>
-              <p className="text-sm font-medium text-ink">Archive this engagement</p>
-              <p className="text-xs text-ink-400 mt-0.5">
-                {allDone
-                  ? 'All wrap-up items are complete — archiving moves it out of the active list.'
-                  : `${outstandingCount} item${outstandingCount === 1 ? '' : 's'} still outstanding.`}
-              </p>
-            </div>
-            <button
-              onClick={() => setArchiveModalOpen(true)}
-              className={`flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg transition-all flex-shrink-0 ${
-                allDone
-                  ? 'text-white bg-ink hover:bg-ink-700'
-                  : 'text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment'
-              }`}>
-              <FolderArchive size={13} /> {allDone ? 'Archive' : 'Archive Anyway'}
-            </button>
-          </div>
-        </>
-      )}
+      {/* Manage record: stage history, move back, archive/unarchive */}
+      <div className="mt-6 space-y-3">
+        <StageHistoryNav engagement={e} current="wrap-up" />
 
-      {/* Delete */}
-      <div className="mt-3 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
-        <div>
-          <p className="text-sm font-medium text-red-600">Delete this engagement</p>
-          <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+        <div className="bg-white border border-ink-100 rounded-xl divide-y divide-ink-100">
+          {e.archived ? (
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
+              <div>
+                <p className="text-sm font-medium text-ink">This record is archived</p>
+                {e.archived_reason && <p className="text-xs text-ink-400 mt-0.5">{e.archived_reason}</p>}
+              </div>
+              <UnarchiveButton engagementId={e.id} />
+            </div>
+          ) : (
+            <>
+              {backwardTarget && (
+                <div className="flex items-center justify-between gap-3 px-5 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-ink">{backwardTarget.label}</p>
+                    <p className="text-xs text-ink-400 mt-0.5">Moves this record back one pipeline stage. Nothing else is changed.</p>
+                  </div>
+                  <button
+                    onClick={() => setMoveBackModalOpen(true)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment px-4 py-2 rounded-lg transition-all flex-shrink-0">
+                    <Undo2 size={13} /> {backwardTarget.label}
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 px-5 py-4">
+                <div>
+                  <p className="text-sm font-medium text-ink">Archive this engagement</p>
+                  <p className="text-xs text-ink-400 mt-0.5">
+                    {allDone
+                      ? 'All wrap-up items are complete — archiving moves it out of the active list.'
+                      : `${outstandingCount} item${outstandingCount === 1 ? '' : 's'} still outstanding.`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setArchiveModalOpen(true)}
+                  className={`flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg transition-all flex-shrink-0 ${
+                    allDone
+                      ? 'text-white bg-ink hover:bg-ink-700'
+                      : 'text-ink-400 hover:text-ink border border-ink-100 hover:bg-parchment'
+                  }`}>
+                  <FolderArchive size={13} /> {allDone ? 'Archive' : 'Archive Anyway'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
-        <button
-          onClick={() => setDeleteModalOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
-          <Trash2 size={13} /> Delete
-        </button>
+
+        {/* Delete */}
+        <div className="flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">
+          <div>
+            <p className="text-sm font-medium text-red-600">Delete this engagement</p>
+            <p className="text-xs text-red-400 mt-0.5">Permanently removes all data for this engagement. This cannot be undone.</p>
+          </div>
+          <button
+            onClick={() => setDeleteModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-all flex-shrink-0">
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
       </div>
 
       <ConfirmModal

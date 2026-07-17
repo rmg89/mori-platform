@@ -21,16 +21,17 @@ const STATUS_COLORS: Record<ContactStatus, string> = {
 }
 
 export default function ContactProfilePage() {
-  const { engagements: allEngagements, deleteContact } = useStore()
+  const { engagements: allEngagements, unassignedContacts, deleteContact } = useStore()
   const { id } = useParams()
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
-  // Find the contact across all engagements
-  const allContacts = allEngagements.flatMap(e =>
-    e.contacts.map(c => ({ ...c, engagement: e }))
-  )
+  // Find the contact across all engagements, or among standalone contacts with no engagement
+  const allContacts = [
+    ...allEngagements.flatMap(e => e.contacts.map(c => ({ ...c, engagement: e }))),
+    ...unassignedContacts,
+  ]
   const match = allContacts.find(c => c.id === id)
 
   const [watching, setWatching] = useState(match?.watching ?? false)

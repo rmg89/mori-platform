@@ -3,7 +3,7 @@ import { useStore } from '@/lib/store'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Company, POST_EVENT_FLAGS } from '@/types'
-import { Search, Eye, ArrowRight, Plus, BookUser, Building2, CalendarClock } from 'lucide-react'
+import { Search, Eye, ArrowRight, Plus, BookUser, Building2, CalendarClock, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react'
 import Link from 'next/link'
 import AddCompanyModal from '@/components/AddCompanyModal'
 import { isEngagementCurrent } from '@/lib/utils'
@@ -58,12 +58,33 @@ const STAGE_LABELS: Record<string, string> = {
   expired: 'Expired',
 }
 
+type SortKey = 'company' | 'industry' | 'stage' | 'contacts'
+type SortDir = 'asc' | 'desc'
+
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'company', label: 'Company' },
+  { key: 'industry', label: 'Industry' },
+  { key: 'stage', label: 'Stage' },
+  { key: 'contacts', label: 'Contacts' },
+]
+
 export default function CompaniesPage() {
   const { companies, engagements } = useStore()
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [addCompanyOpen, setAddCompanyOpen] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('company')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   const filtered = companies.filter(company => {
     const q = search.toLowerCase()
@@ -74,6 +95,17 @@ export default function CompaniesPage() {
     if (filter === 'watching') return !!company.watching
     if (filter === 'current') return hasCurrentEngagement(company, engagements)
     return getCompanyStage(company, engagements) === filter
+  })
+
+  const dirMultiplier = sortDir === 'asc' ? 1 : -1
+  const sorted = filtered.slice().sort((a, b) => {
+    if (sortKey === 'contacts') return (a.contact_ids.length - b.contact_ids.length) * dirMultiplier
+    const valueFor = (c: Company) => {
+      if (sortKey === 'company') return c.name
+      if (sortKey === 'industry') return c.industry ?? ''
+      return STAGE_LABELS[getCompanyStage(c, engagements)] ?? ''
+    }
+    return valueFor(a).localeCompare(valueFor(b)) * dirMultiplier
   })
 
   return (
@@ -144,17 +176,27 @@ export default function CompaniesPage() {
       {/* Company list */}
       <div className="bg-white border border-ink-100 rounded-xl overflow-hidden">
         <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] border-b border-ink-100 px-5 py-2.5 bg-parchment">
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Company</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Industry</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Stage</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Contacts</span>
+          {SORT_COLUMNS.map(col => (
+            <button
+              key={col.key}
+              onClick={() => toggleSort(col.key)}
+              className="flex items-center gap-1 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hover:text-ink transition-colors text-left"
+            >
+              {col.label}
+              {sortKey === col.key ? (
+                sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
+              ) : (
+                <ChevronsUpDown size={11} className="text-ink-200" />
+              )}
+            </button>
+          ))}
           <span></span>
         </div>
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-ink-400">No companies match your filter.</div>
         ) : (
           <div className="divide-y divide-ink-50">
-            {filtered.map(company => (
+            {sorted.map(company => (
               <CompanyRow engagements={engagements} key={company.id} company={company} />
             ))}
           </div>

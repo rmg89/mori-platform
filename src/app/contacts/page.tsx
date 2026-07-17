@@ -3,10 +3,11 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { EngagementContact, Engagement, ContactStatus } from '@/types'
 import { getInitials } from '@/lib/utils'
-import { Search, Mail, ArrowRight, Eye } from 'lucide-react'
+import { Search, Mail, ArrowRight, Eye, Plus, ArrowUp, ArrowDown, ChevronsUpDown, Building2 } from 'lucide-react'
 import Link from 'next/link'
+import AddContactModal from '@/components/AddContactModal'
 
-type ContactWithEngagement = EngagementContact & { engagement: Engagement }
+type ContactWithEngagement = EngagementContact & { engagement?: Engagement }
 
 const ROLE_LABELS: Record<string, string> = {
   primary: 'Primary', bureau: 'Bureau', legal: 'Legal',
@@ -35,6 +36,16 @@ const STATUS_COLORS: Record<ContactStatus, string> = {
   client: 'text-gold bg-gold/10 border-gold/20',
 }
 
+type SortKey = 'contact' | 'organization' | 'role' | 'status'
+type SortDir = 'asc' | 'desc'
+
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'contact', label: 'Contact' },
+  { key: 'organization', label: 'Organization' },
+  { key: 'role', label: 'Role' },
+  { key: 'status', label: 'Status' },
+]
+
 type FilterStatus = ContactStatus | 'watching' | 'all'
 
 const FILTERS: { id: FilterStatus; label: string }[] = [
@@ -46,13 +57,29 @@ const FILTERS: { id: FilterStatus; label: string }[] = [
 ]
 
 export default function ContactsPage() {
-  const { engagements: allEngagements } = useStore()
+  const { engagements: allEngagements, unassignedContacts, companies } = useStore()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterStatus>('all')
+  const [addContactOpen, setAddContactOpen] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('contact')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  const all: ContactWithEngagement[] = allEngagements.flatMap(e =>
-    e.contacts.map(c => ({ ...c, engagement: e }))
-  )
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const all: ContactWithEngagement[] = [
+    ...allEngagements.flatMap(e => e.contacts.map(c => ({ ...c, engagement: e }))),
+    ...unassignedContacts,
+  ]
+
+  const orgLabel = (c: ContactWithEngagement) =>
+    c.engagement?.organization ?? companies.find(co => co.id === c.company_id)?.name ?? ''
 
   const filtered = all.filter(c => {
     const q = search.toLowerCase()
@@ -60,7 +87,7 @@ export default function ContactsPage() {
       c.first_name.toLowerCase().includes(q) ||
       c.last_name.toLowerCase().includes(q) ||
       c.email.toLowerCase().includes(q) ||
-      c.engagement.organization.toLowerCase().includes(q) ||
+      orgLabel(c).toLowerCase().includes(q) ||
       (c.title ?? '').toLowerCase().includes(q)
     )
     const matchesFilter =
@@ -70,12 +97,39 @@ export default function ContactsPage() {
     return matchesSearch && matchesFilter
   })
 
+  const sortValue = (c: ContactWithEngagement): string => {
+    switch (sortKey) {
+      case 'contact': return `${c.first_name} ${c.last_name}`
+      case 'organization': return orgLabel(c)
+      case 'role': return ROLE_LABELS[c.role] ?? c.role
+      case 'status': return c.status ? STATUS_LABELS[c.status] : ''
+    }
+  }
+  const dirMultiplier = sortDir === 'asc' ? 1 : -1
+  const sorted = filtered.slice().sort((a, b) => sortValue(a).localeCompare(sortValue(b)) * dirMultiplier)
+
   return (
     <div className="p-8 max-w-5xl mx-auto animate-fade-in">
-      <div className="mb-8">
-        <h1 className="font-display text-3xl font-semibold text-ink">Contacts</h1>
-        <p className="text-ink-400 text-sm mt-1">{all.length} contacts across {allEngagements.length} engagements</p>
-        <div className="accent-line mt-3 w-24" />
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-ink">Contacts</h1>
+          <p className="text-ink-400 text-sm mt-1">{all.length} contacts</p>
+          <div className="accent-line mt-3 w-24" />
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Link
+            href="/companies"
+            className="flex items-center gap-2 px-3 py-2 bg-parchment border border-ink-100 text-ink-500 text-sm rounded-lg hover:bg-ink-100 transition-all"
+          >
+            <Building2 size={14} />
+            Companies
+          </Link>
+          <button
+            onClick={() => setAddContactOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-white bg-ink hover:bg-ink-700 px-4 py-2 rounded-lg transition-all">
+            <Plus size={13} /> Add Contact
+          </button>
+        </div>
       </div>
 
       {/* Search + filters */}
@@ -110,20 +164,30 @@ export default function ContactsPage() {
       {/* Table */}
       <div className="bg-white border border-ink-100 rounded-xl overflow-hidden">
         <div className="grid grid-cols-[2fr_2fr_1fr_1fr_auto] border-b border-ink-100 px-5 py-2.5 bg-parchment">
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Contact</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Organization</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Role</span>
-          <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-wider">Status</span>
+          {SORT_COLUMNS.map(col => (
+            <button
+              key={col.key}
+              onClick={() => toggleSort(col.key)}
+              className="flex items-center gap-1 text-[10px] font-semibold text-ink-400 uppercase tracking-wider hover:text-ink transition-colors text-left"
+            >
+              {col.label}
+              {sortKey === col.key ? (
+                sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />
+              ) : (
+                <ChevronsUpDown size={11} className="text-ink-200" />
+              )}
+            </button>
+          ))}
           <span></span>
         </div>
 
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-ink-400">No contacts match your search.</div>
         ) : (
           <div className="divide-y divide-ink-50">
-            {filtered.map(c => (
+            {sorted.map(c => (
               <Link
-                key={`${c.id}-${c.engagement.id}`}
+                key={c.id}
                 href={`/contacts/${c.id}`}
                 className="grid grid-cols-[2fr_2fr_1fr_1fr_auto] px-5 py-3.5 hover:bg-parchment transition-all group items-center"
               >
@@ -154,7 +218,7 @@ export default function ContactsPage() {
 
                 {/* Organization */}
                 <div className="min-w-0">
-                  <p className="text-sm text-ink truncate">{c.engagement.organization}</p>
+                  <p className="text-sm text-ink truncate">{orgLabel(c) || <span className="text-ink-200">—</span>}</p>
                   {c.title && <p className="text-xs text-ink-400 truncate">{c.title}</p>}
                 </div>
 
@@ -182,6 +246,8 @@ export default function ContactsPage() {
           </div>
         )}
       </div>
+
+      {addContactOpen && <AddContactModal onClose={() => setAddContactOpen(false)} />}
     </div>
   )
 }

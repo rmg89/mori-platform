@@ -1,12 +1,12 @@
-"use client"
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Mori Platform — Business profile (invoice letterhead: name/address/phone/fax)
-// Single-row table, id fixed at 1.
+// Single-row table, id fixed at 1. Server-only, uses the service-role client.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import type { BusinessProfile } from '@/types'
+
+const supabase = supabaseAdmin()
 
 const FALLBACK: BusinessProfile = {
   name: 'MT Global Strategies',

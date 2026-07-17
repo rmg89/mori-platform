@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Invoice, InvoiceSnapshot } from '@/types'
-import { updateInvoiceSnapshot } from '@/lib/invoices'
+import { updateInvoiceSnapshot } from '@/lib/invoices-client'
 
 function Field({
   label, value, onChange, placeholder, type = 'text',

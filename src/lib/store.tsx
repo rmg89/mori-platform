@@ -1,10 +1,10 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
-import { Engagement, EngagementContact, EngagementCall, CommEntry, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, deleteCommRow, upsertContact, insertContact, deleteContactRow } from '@/lib/db'
+import { Engagement, EngagementContact, EngagementCall, CommEntry, BriefingNote, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
+import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, deleteCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted, insertBriefingNoteRow, updateBriefingNoteRow, deleteBriefingNoteRow } from '@/lib/db-client'
 import { getBackwardTransition } from '@/lib/pipeline'
-import type { ReviewItem, Company } from '@/types'
+import type { ReviewItem, ReviewAction, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
 
@@ -14,6 +14,7 @@ interface StoreState {
   engagements: Engagement[]
   reviewItems: ReviewItem[]
   companies: Company[]
+  unassignedContacts: EngagementContact[]
   loading: boolean
   error: string | null
   saveStatus: SaveStatus
@@ -90,11 +91,17 @@ interface StoreActions {
   updateComm: (engagementId: string, commId: string, patch: Partial<CommEntry>) => void
   deleteComm: (engagementId: string, commId: string) => void
 
+  // Briefing notes
+  addBriefingNote: (engagementId: string, note: BriefingNote) => void
+  resolveBriefingNote: (engagementId: string, noteId: string) => void
+  unresolveBriefingNote: (engagementId: string, noteId: string) => void
+  deleteBriefingNote: (engagementId: string, noteId: string) => void
+
   // Field statuses
   setFieldStatus: (id: string, field: string, status: 'needed' | 'not_needed' | null) => void
 
   // Review
-  confirmReviewItem: (id: string, confirmedBy: string) => void
+  confirmReviewItem: (id: string, confirmedBy: string, action?: ReviewAction) => void
   dismissReviewItem: (id: string) => void
 
   // Companies
@@ -105,6 +112,10 @@ interface StoreActions {
   // Contacts (global — updates all engagements sharing the same email)
   updateContact: (email: string, patch: Partial<EngagementContact>) => void
   deleteContact: (id: string) => void
+  createContact: (input: {
+    first_name: string; last_name?: string; email?: string; phone?: string; title?: string
+    company_id?: string
+  }) => Promise<void>
 }
 
 type Store = StoreState & StoreActions
@@ -119,6 +130,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [unassignedContacts, setUnassignedContacts] = useState<EngagementContact[]>([])
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -146,8 +158,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
   useEffect(() => {
-    Promise.all([fetchAllEngagements(), fetchCompanies()])
-      .then(([engData, coData]) => {
+    Promise.all([fetchAllEngagements(), fetchCompanies(), fetchReviewItems(), fetchUnassignedContacts()])
+      .then(([engData, coData, reviewData, contactData]) => {
         // Preserve any records created locally (e.g. via the New Inquiry modal)
         // while this initial fetch was still in flight — don't let a stale
         // snapshot wipe out state that already moved on.
@@ -158,6 +170,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setCompanies(prev => {
           const fetchedIds = new Set(coData.map(c => c.id))
           return [...coData, ...prev.filter(c => !fetchedIds.has(c.id))]
+        })
+        setReviewItems(reviewData)
+        setUnassignedContacts(prev => {
+          const fetchedIds = new Set(contactData.map(c => c.id))
+          return [...contactData, ...prev.filter(c => !fetchedIds.has(c.id))]
         })
         setLoading(false)
       })
@@ -215,14 +232,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       company_id: e.company_id === id ? undefined : e.company_id,
       contacts: e.contacts.map(c => c.company_id === id ? { ...c, company_id: undefined } : c),
     })))
+    setUnassignedContacts(prev => prev.map(c => c.company_id === id ? { ...c, company_id: undefined } : c))
     deleteCompanyRow(id).catch(onWriteError)
   }, [])
 
   const updateContact = useCallback((email: string, patch: Partial<EngagementContact>) => {
+    const lower = email.toLowerCase()
     setEngagements((prev: Engagement[]) => {
       prev.forEach((e: Engagement) => {
         e.contacts.forEach((c: EngagementContact) => {
-          if (c.email.toLowerCase() === email.toLowerCase()) {
+          if (c.email.toLowerCase() === lower) {
             upsertContact({ id: c.id, engagement_id: e.id, ...patch } as never).catch(onWriteError)
           }
         })
@@ -230,16 +249,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return prev.map((e: Engagement) => ({
         ...e,
         contacts: e.contacts.map((c: EngagementContact) =>
-          c.email.toLowerCase() === email.toLowerCase() ? { ...c, ...patch } : c
+          c.email.toLowerCase() === lower ? { ...c, ...patch } : c
         ),
       }))
+    })
+    setUnassignedContacts(prev => {
+      prev.forEach(c => {
+        if (c.email.toLowerCase() === lower) {
+          upsertContact({ id: c.id, engagement_id: null, ...patch } as never).catch(onWriteError)
+        }
+      })
+      return prev.map(c => c.email.toLowerCase() === lower ? { ...c, ...patch } : c)
     })
   }, [])
 
   const deleteContact = useCallback((id: string) => {
     setEngagements(prev => prev.map(e => ({ ...e, contacts: e.contacts.filter(c => c.id !== id) })))
+    setUnassignedContacts(prev => prev.filter(c => c.id !== id))
     deleteContactRow(id).catch(onWriteError)
   }, [])
+
+  const createContact = useCallback(async (input: {
+    first_name: string; last_name?: string; email?: string; phone?: string; title?: string
+    company_id?: string
+  }) => {
+    const id = await insertContact(null, {
+      first_name: input.first_name,
+      last_name: input.last_name || '',
+      email: input.email || null,
+      phone: input.phone || null,
+      title: input.title || null,
+      role: 'primary',
+      is_current_point_of_contact: false,
+      status: null,
+      watching: false,
+      notes: null,
+      company_id: input.company_id ?? null,
+      team_id: null,
+    })
+    if (!id) { onWriteError(new Error('Failed to create contact')); return }
+    setUnassignedContacts(prev => [...prev, {
+      id,
+      first_name: input.first_name,
+      last_name: input.last_name ?? '',
+      email: input.email ?? '',
+      phone: input.phone,
+      title: input.title,
+      role: 'primary',
+      is_current_point_of_contact: false,
+      watching: false,
+      company_id: input.company_id,
+    }])
+  }, [onWriteError])
 
   const updateEngagement = useCallback((id: string, patch: Partial<Engagement>) => {
     setEngagements(prev => prev.map(e =>
@@ -255,7 +316,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       contacts.forEach(c => {
         if (/^(new_|lnk_)/.test(c.id)) {
           insertContact(id, {
-            engagement_id: id,
             first_name: c.first_name,
             last_name: c.last_name ?? '',
             email: c.email ?? null,
@@ -772,6 +832,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     deleteCommRow(commId).catch(onWriteError)
   }, [])
 
+  const addBriefingNote = useCallback((engagementId: string, note: BriefingNote) => {
+    setEngagements(prev => prev.map(e =>
+      e.id === engagementId
+        ? { ...e, briefing_notes: [...(e.briefing_notes ?? []), note], updated_at: new Date().toISOString() }
+        : e
+    ))
+    insertBriefingNoteRow({
+      id: note.id,
+      engagement_id: engagementId,
+      body: note.body,
+      resolved: note.resolved ?? false,
+      created_at: note.created_at,
+    }).catch(onWriteError)
+  }, [])
+
+  const resolveBriefingNote = useCallback((engagementId: string, noteId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        briefing_notes: (e.briefing_notes ?? []).map(n => n.id === noteId ? { ...n, resolved: true } : n),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    updateBriefingNoteRow(noteId, { resolved: true }).catch(onWriteError)
+  }, [])
+
+  const unresolveBriefingNote = useCallback((engagementId: string, noteId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        briefing_notes: (e.briefing_notes ?? []).map(n => n.id === noteId ? { ...n, resolved: false } : n),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    updateBriefingNoteRow(noteId, { resolved: false }).catch(onWriteError)
+  }, [])
+
+  const deleteBriefingNote = useCallback((engagementId: string, noteId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        briefing_notes: (e.briefing_notes ?? []).filter(n => n.id !== noteId),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    deleteBriefingNoteRow(noteId).catch(onWriteError)
+  }, [])
+
   const setFieldStatus = useCallback((id: string, field: string, status: 'needed' | 'not_needed' | null) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -782,15 +893,87 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const confirmReviewItem = useCallback((id: string, confirmedBy: string) => {
-    setReviewItems(prev => prev.map(r =>
-      r.id === id ? { ...r, confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() } : r
-    ))
-  }, [])
+  const confirmReviewItem = useCallback(async (id: string, confirmedBy: string, action?: ReviewAction) => {
+    const item = reviewItems.find(r => r.id === id)
+    if (!item) return
+    const resolvedAction = action ?? item.ai_suggested_action
+    const now = new Date().toISOString()
 
-  const dismissReviewItem = useCallback((id: string) => {
-    setReviewItems(prev => prev.filter(r => r.id !== id))
-  }, [])
+    try {
+      if (resolvedAction === 'create_prospect') {
+        const extracted = await fetchReviewItemExtracted(id)
+        await insertEngagementRow({
+          organization: (extracted?.organization as string) || item.from_name,
+          source: 'email',
+          topic: extracted?.topic as string | undefined,
+          event_city: extracted?.event_city as string | undefined,
+          event_type: extracted?.event_type as string | undefined,
+          fee: extracted?.fee as number | undefined,
+          contacts: [{
+            first_name: (extracted?.contact_first_name as string) || item.from_name,
+            last_name: extracted?.contact_last_name as string | undefined,
+            email: item.from_email,
+            title: extracted?.contact_title as string | undefined,
+            is_current_point_of_contact: true,
+          }],
+        })
+        const refreshed = await fetchAllEngagements()
+        setEngagements(refreshed)
+      } else if (resolvedAction === 'add_to_existing' && item.ai_suggested_engagement_id) {
+        // insertContact logs and returns null on failure rather than throwing —
+        // check explicitly so a DB error doesn't get silently marked "confirmed".
+        const contactId = await insertContact(item.ai_suggested_engagement_id, {
+          first_name: item.from_name,
+          last_name: null,
+          email: item.from_email,
+          phone: null,
+          title: null,
+          role: 'unknown',
+          is_current_point_of_contact: false,
+          status: 'prospect_active',
+          watching: false,
+          notes: null,
+          company_id: null,
+          team_id: null,
+        })
+        if (!contactId) throw new Error('Failed to add contact to engagement')
+        const refreshed = await fetchAllEngagements()
+        setEngagements(refreshed)
+      } else if (resolvedAction === 'update_prospect' && item.ai_suggested_engagement_id) {
+        const extracted = await fetchReviewItemExtracted(id)
+        const patch: Record<string, unknown> = {}
+        if (extracted?.topic) patch.topic = extracted.topic
+        if (extracted?.event_city) patch.event_city = extracted.event_city
+        if (extracted?.fee != null) patch.fee = extracted.fee
+        if (Object.keys(patch).length) {
+          await updateEngagementRow(item.ai_suggested_engagement_id, patch)
+          const refreshed = await fetchAllEngagements()
+          setEngagements(refreshed)
+        }
+      }
+
+      await updateReviewItemRow(id, { confirmed_by: confirmedBy, confirmed_at: now, ai_suggested_action: resolvedAction })
+      setReviewItems(prev => prev.map(r => r.id === id
+        ? { ...r, ai_suggested_action: resolvedAction ?? r.ai_suggested_action, confirmed_by: confirmedBy, confirmed_at: now }
+        : r
+      ))
+    } catch (err) {
+      onWriteError(err)
+    }
+  }, [reviewItems, onWriteError])
+
+  const dismissReviewItem = useCallback(async (id: string) => {
+    const now = new Date().toISOString()
+    try {
+      await updateReviewItemRow(id, { confirmed_by: 'system', confirmed_at: now, ai_suggested_action: 'ignore' })
+      setReviewItems(prev => prev.map(r => r.id === id
+        ? { ...r, ai_suggested_action: 'ignore', confirmed_by: 'system', confirmed_at: now }
+        : r
+      ))
+    } catch (err) {
+      onWriteError(err)
+    }
+  }, [onWriteError])
 
   // Derive each company's linked engagements/contacts fresh from the current
   // engagements list, rather than trusting stored engagement_ids/contact_ids
@@ -815,7 +998,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      engagements, reviewItems, companies: companiesWithLinks, loading, error, saveStatus, saveError,
+      engagements, reviewItems, companies: companiesWithLinks, unassignedContacts, loading, error, saveStatus, saveError,
       updateEngagement, setProspectStep,
       confirmProspect, declineProspect, moveToWrapUp, moveEngagementBack, confirmBookingReview, confirmWrapUpReview,
       addProspect,
@@ -826,9 +1009,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm, updateComm, deleteComm,
+      addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
-      updateCompany, createCompany, deleteCompany, updateContact, deleteContact,
+      updateCompany, createCompany, deleteCompany, updateContact, deleteContact, createContact,
     }}>
       {children}
     </StoreContext.Provider>

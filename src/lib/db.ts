@@ -1,17 +1,17 @@
-"use client"
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Mori Platform — Supabase data layer
+// Mori Platform — Supabase data layer (server-only, uses the service-role client)
 // Fetches from Supabase and maps rows into the Engagement shape the app expects.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 import type {
   Engagement, EngagementContact, CommEntry, EngagementCall,
   OutgoingMaterial, IncomingMaterial, BriefingNote,
   EngagementFlag, MediaFlag, PostEventFlag, WrapUpFlagStages,
-  EngagementAlert,
+  EngagementAlert, ReviewItem, ReviewItemState, ReviewAction,
 } from '@/types'
+
+const supabase = supabaseAdmin()
 
 // ─── Row types (raw Supabase shapes) ─────────────────────────────────────────
 
@@ -92,7 +92,7 @@ interface EngagementRow {
 
 interface ContactRow {
   id: string
-  engagement_id: string
+  engagement_id: string | null
   first_name: string
   last_name: string | null
   email: string | null
@@ -418,7 +418,7 @@ function assembleEngagement(
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function fetchAllEngagements(): Promise<Engagement[]> {
+export async function fetchAllEngagements(origin: string): Promise<Engagement[]> {
   // Auto-transition any confirmed engagement whose event date has passed into wrap-up
   const today = new Date().toISOString().split('T')[0]
   const { data: transitioned } = await supabase
@@ -430,7 +430,7 @@ export async function fetchAllEngagements(): Promise<Engagement[]> {
     .select('id')
 
   ;(transitioned ?? []).forEach((row: { id: string }) => {
-    fetch('/api/ai/scan-engagement', {
+    fetch(`${origin}/api/ai/scan-engagement`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ engagement_id: row.id, scan_type: 'wrapup' }),
@@ -535,17 +535,25 @@ export async function insertEngagementRow(input: {
   return assembleEngagement(row as EngagementRow, contacts, [], [], [], [])
 }
 
-export async function insertContact(engagement_id: string, contact: Omit<ContactRow, 'id'>): Promise<string | null> {
+export async function insertContact(engagement_id: string | null, contact: Omit<ContactRow, 'id' | 'engagement_id'>): Promise<string | null> {
   const { data, error } = await supabase.from('contacts').insert({ ...contact, engagement_id }).select('id').single()
   if (error) { console.error('insertContact:', error.message); return null }
   return data.id
 }
 
-export async function upsertContact(contact: Partial<ContactRow> & { engagement_id: string }): Promise<void> {
+export async function upsertContact(contact: Partial<ContactRow> & { engagement_id: string | null }): Promise<void> {
   // Only upsert if the id looks like a real UUID (not a temp id from the UI)
   if (!contact.id || /^(new_|lnk_)/.test(contact.id)) return
   const { error } = await supabase.from('contacts').upsert(contact)
   if (error) throw new Error(`upsertContact: ${error.message}`)
+}
+
+// Contacts with no engagement_id — created directly from the Contacts directory,
+// not as part of a prospect/engagement.
+export async function fetchUnassignedContacts(): Promise<EngagementContact[]> {
+  const { data, error } = await supabase.from('contacts').select('*').is('engagement_id', null)
+  if (error) throw new Error(`fetchUnassignedContacts: ${error.message}`)
+  return (data as ContactRow[]).map(mapContact)
 }
 
 export async function deleteContactRow(id: string): Promise<void> {
@@ -617,5 +625,78 @@ export async function deleteCommRow(id: string): Promise<void> {
 export async function upsertCall(call: Partial<CallRow> & { engagement_id: string }): Promise<void> {
   const { error } = await supabase.from('calls').upsert(call)
   if (error) throw new Error(`upsertCall: ${error.message}`)
+}
+
+export async function insertBriefingNoteRow(note: BriefingNoteRow): Promise<void> {
+  const { error } = await supabase.from('briefing_notes').insert(note)
+  if (error) throw new Error(`insertBriefingNoteRow: ${error.message}`)
+}
+
+export async function updateBriefingNoteRow(id: string, patch: Partial<BriefingNoteRow>): Promise<void> {
+  const { error } = await supabase.from('briefing_notes').update(patch).eq('id', id)
+  if (error) throw new Error(`updateBriefingNoteRow: ${error.message}`)
+}
+
+export async function deleteBriefingNoteRow(id: string): Promise<void> {
+  const { error } = await supabase.from('briefing_notes').delete().eq('id', id)
+  if (error) throw new Error(`deleteBriefingNoteRow: ${error.message}`)
+}
+
+// ─── Review queue (inbound-email triage) ─────────────────────────────────────
+
+interface ReviewItemRow {
+  id: string
+  received_at: string
+  from_name: string | null
+  from_email: string
+  subject: string | null
+  body_preview: string | null
+  account: string | null
+  ai_confidence: number | null
+  state: string
+  ai_suggested_action: string | null
+  ai_suggested_engagement_id: string | null
+  ai_reasoning: string | null
+  confirmed_by: string | null
+  confirmed_at: string | null
+}
+
+function assembleReviewItem(row: ReviewItemRow): ReviewItem {
+  return {
+    id: row.id,
+    received_at: row.received_at,
+    from_name: row.from_name ?? row.from_email,
+    from_email: row.from_email,
+    subject: row.subject ?? '',
+    body_preview: row.body_preview ?? '',
+    account: row.account ?? '',
+    ai_confidence: row.ai_confidence ?? 0,
+    state: (row.state as ReviewItemState) ?? 'needs_review',
+    ai_suggested_action: (row.ai_suggested_action as ReviewAction) ?? 'ignore',
+    ai_suggested_engagement_id: row.ai_suggested_engagement_id ?? undefined,
+    ai_reasoning: row.ai_reasoning ?? '',
+    confirmed_by: row.confirmed_by ?? undefined,
+    confirmed_at: row.confirmed_at ?? undefined,
+  }
+}
+
+export async function fetchReviewItems(): Promise<ReviewItem[]> {
+  const { data, error } = await supabase
+    .from('review_items')
+    .select('id,received_at,from_name,from_email,subject,body_preview,account,ai_confidence,state,ai_suggested_action,ai_suggested_engagement_id,ai_reasoning,confirmed_by,confirmed_at')
+    .order('received_at', { ascending: false })
+  if (error) { console.warn('fetchReviewItems:', error.message); return [] }
+  return (data as ReviewItemRow[]).map(assembleReviewItem)
+}
+
+export async function updateReviewItemRow(id: string, patch: Record<string, unknown>): Promise<void> {
+  const { error } = await supabase.from('review_items').update(patch).eq('id', id)
+  if (error) throw new Error(`updateReviewItemRow: ${error.message}`)
+}
+
+export async function fetchReviewItemExtracted(id: string): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase.from('review_items').select('ai_extracted').eq('id', id).single()
+  if (error) { console.warn('fetchReviewItemExtracted:', error.message); return null }
+  return (data?.ai_extracted as Record<string, unknown>) ?? null
 }
 
