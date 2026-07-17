@@ -197,155 +197,401 @@ function addLineItemsTableHeader(doc: any, y: number, L: number, R: number, W: n
   return y + boxH + 18
 }
 
-// ─── Contract / legacy header (used by generateContract) ──────────────────────
-
-function addHeader(doc: any, title: string) {
-  doc.setFillColor(15, 14, 12)
-  doc.rect(0, 0, 612, 80, 'F')
-  doc.setTextColor(201, 168, 76)
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'normal')
-  doc.text('MORI TAHERIPOUR', 50, 35)
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(9)
-  doc.text('Wharton School · Author · Keynote Speaker · Negotiation Expert', 50, 52)
-  doc.setTextColor(201, 168, 76)
-  doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
-  doc.text(title.toUpperCase(), 50, 70)
-  doc.setTextColor(15, 14, 12)
-  doc.setFont('helvetica', 'normal')
-}
-
-function addFooter(doc: any, pageNum: number) {
-  doc.setDrawColor(210, 208, 202)
-  doc.setLineWidth(0.3)
-  doc.line(50, 748, 562, 748)
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(165, 162, 155)
-  doc.text('moritaheripour.com  ·  admin@moritaheripour.com', 50, 761)
-  doc.text(`Page ${pageNum}`, 562, 761, { align: 'right' })
-}
-
-function addField(doc: any, label: string, value: string, x: number, y: number) {
-  doc.setFontSize(8)
-  doc.setTextColor(100, 97, 90)
-  doc.setFont('helvetica', 'bold')
-  doc.text(label.toUpperCase(), x, y)
-  doc.setFontSize(10)
-  doc.setTextColor(15, 14, 12)
-  doc.setFont('helvetica', 'normal')
-  doc.text(value || '—', x, y + 14)
-}
-
 // ─── Contract ─────────────────────────────────────────────────────────────────
+// Matches the firm's real "Agreement: Speaking Engagement" template, letterhead
+// and terms verbatim — this is a document a client actually signs, not a
+// stylistic mock-up, so section wording follows the supplied boilerplate.
 
-export function generateContract(client: Client): Blob {
-  const doc = createDoc()
-  addHeader(doc, 'Speaking Agreement')
+const CONTRACT_L = 50, CONTRACT_R = 562, CONTRACT_W = CONTRACT_R - CONTRACT_L
+const CONTRACT_PAGE_H = 740
 
-  let y = 110
-  const L = 50, R = 330
-
-  // Agreement intro
-  doc.setFontSize(10)
-  doc.setTextColor(60, 58, 54)
-  const intro = `This Speaking Agreement ("Agreement") is entered into between Mori Taheripour ("Speaker") and ${client.organization} ("Client"), for the speaking engagement described below.`
-  const lines = doc.splitTextToSize(intro, 512)
-  doc.text(lines, 50, y)
-  y += lines.length * 14 + 20
-
-  // Divider
-  doc.setDrawColor(201, 168, 76)
-  doc.setLineWidth(0.5)
-  doc.line(50, y, 562, y)
-  y += 20
-
-  // Event details
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(15, 14, 12)
-  doc.text('EVENT DETAILS', 50, y)
-  y += 20
-
-  addField(doc, 'Client Organization', client.organization, L, y)
-  addField(doc, 'Primary Contact', `${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}`, R, y)
-  y += 40
-
-  addField(doc, 'Event Name', client.event_name || '—', L, y)
-  addField(doc, 'Event Date', formatDate(client.event_date), R, y)
-  y += 40
-
-  addField(doc, 'Venue / Location', `${client.event_location || '—'}, ${client.event_city || ''}`, L, y)
-  addField(doc, 'Format', client.event_format?.replace('_', '-').toUpperCase() || '—', R, y)
-  y += 40
-
-  addField(doc, 'Topic / Presentation Title', client.topic || '—', L, y)
-  addField(doc, 'Session Length', client.session_length ? `${client.session_length} minutes` : '—', R, y)
-  y += 40
-
-  addField(doc, 'Audience Size (est.)', client.audience_size?.toString() || '—', L, y)
-  addField(doc, 'AV Requirements', client.av_needs || 'Standard', R, y)
-  y += 50
-
-  // Compensation
-  doc.setDrawColor(201, 168, 76)
-  doc.line(50, y, 562, y)
-  y += 20
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('COMPENSATION & EXPENSES', 50, y)
-  y += 20
-
-  addField(doc, 'Speaking Fee', formatCurrency(client.fee), L, y)
-  addField(doc, 'Travel', client.travel_covered ? 'Covered by Client' : 'Covered by Speaker', R, y)
-  y += 40
-  addField(doc, 'Hotel Accommodation', client.hotel_covered ? 'Covered by Client' : 'Covered by Speaker', L, y)
-  y += 50
-
-  // Terms
-  doc.setDrawColor(201, 168, 76)
-  doc.line(50, y, 562, y)
-  y += 20
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('TERMS & CONDITIONS', 50, y)
-  y += 16
-
-  const terms = [
-    '1. PAYMENT: Full speaking fee is due within 30 days of invoice issuance, unless otherwise agreed in writing.',
-    '2. CANCELLATION: Cancellation by Client within 60 days of event date will result in forfeiture of 50% of the speaking fee. Cancellation within 30 days will result in forfeiture of 100% of the fee.',
-    '3. RECORDING: Client may not record, broadcast, or distribute Speaker\'s presentation without prior written consent.',
-    '4. PROMOTION: Client may use Speaker\'s name, likeness, and approved bio for event promotion. All materials must be approved by Speaker\'s team prior to publication.',
-    '5. GOVERNING LAW: This agreement shall be governed by the laws of the Commonwealth of Pennsylvania.',
-  ]
-
-  doc.setFontSize(9)
-  doc.setTextColor(60, 58, 54)
+// Centered logo (falls back to a text wordmark), DATE line, and the accent title.
+function addContractHeader(doc: any, signature: SignatureImage | null, dateStr: string) {
   doc.setFont('helvetica', 'normal')
-  for (const term of terms) {
-    const tlines = doc.splitTextToSize(term, 512)
-    doc.text(tlines, 50, y)
-    y += tlines.length * 13 + 6
+  doc.setFontSize(9)
+  doc.setTextColor(15, 14, 12)
+  doc.text(dateStr, CONTRACT_L, 40)
+
+  if (signature) {
+    const maxW = 160, maxH = 46
+    const scale = Math.min(maxH / signature.height, maxW / signature.width, 1)
+    const w = signature.width * scale, h = signature.height * scale
+    doc.addImage(signature.dataUrl, 'PNG', (612 - w) / 2, 44, w, h)
+  } else {
+    doc.setFont('times', 'normal')
+    doc.setFontSize(15)
+    doc.text('MT GLOBAL STRATEGIES', 306, 68, { align: 'center' })
   }
 
-  y += 30
-  // Signature lines
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(15)
+  doc.setTextColor(196, 120, 45)
+  doc.text('Agreement: Speaking Engagement', CONTRACT_L, 118)
+
+  doc.setDrawColor(205, 202, 196)
+  doc.setLineWidth(0.4)
+  doc.line(CONTRACT_L, 126, CONTRACT_R, 126)
+
+  doc.setTextColor(15, 14, 12)
+  doc.setFont('helvetica', 'normal')
+}
+
+// One bordered two-column row of the Program Details table (label | wrapped value lines).
+function addProgramRow(doc: any, y: number, label: string, valueLines: string[], labelW = 150): number {
+  const lineH = 12.5
+  const content = valueLines.length ? valueLines : ['—']
+  const rowH = Math.max(content.length * lineH + 12, 26)
+  doc.setDrawColor(150, 147, 140)
+  doc.setLineWidth(0.5)
+  doc.rect(CONTRACT_L, y, CONTRACT_W, rowH)
+  doc.line(CONTRACT_L + labelW, y, CONTRACT_L + labelW, y + rowH)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(15, 14, 12)
+  doc.text(label, CONTRACT_L + 8, y + 15)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.text(content, CONTRACT_L + labelW + 8, y + 15)
+  return y + rowH
+}
+
+export async function generateContract(client: Client, business: BusinessProfile): Promise<Blob> {
+  const doc = createDoc()
+  const signature = await loadSignatureImage()
+  const c = pc(client) as any
+  const anyClient = client as any
+
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  addContractHeader(doc, signature, dateStr)
+
+  let y = 145
+  const checkPage = (needed = 40) => {
+    if (y + needed > CONTRACT_PAGE_H) { doc.addPage(); y = 50 }
+  }
+
+  const businessAddress = (business.address || '2425 L Street NW, #409 Washington, DC 20037').replace(/\n+/g, ', ')
+  const clientAddress = s(c?.address)
+
+  doc.setFontSize(10)
+  doc.setTextColor(40, 38, 34)
+  const intro = `This agreement is between MT GLOBAL STRATEGIES ("Speaker"), located at ${businessAddress}, and ${s(client.organization)} ("Client")${clientAddress ? `, with offices at ${clientAddress}` : ''}.`
+  let introLines = doc.splitTextToSize(intro, CONTRACT_W)
+  doc.text(introLines, CONTRACT_L, y)
+  y += introLines.length * 14 + 14
+
+  const progIntro = 'Program Details: Client wishes to retain the services of "Speaker" for the purpose and terms below:'
+  introLines = doc.splitTextToSize(progIntro, CONTRACT_W)
+  doc.text(introLines, CONTRACT_L, y)
+  y += introLines.length * 14 + 12
+
+  // ── Program Details table ──────────────────────────────────────────────────
+  const isVirtual = client.event_format === 'virtual'
+  const contactLines = c
+    ? [`${s(c.first_name)} ${s(c.last_name)}`, c.title ? s(c.title) : null, c.email ? s(c.email) : null, c.phone ? s(c.phone) : null].filter(Boolean) as string[]
+    : []
+  const rosLines = (anyClient.run_of_show as Record<string, unknown>[] | undefined)?.length
+    ? anyClient.run_of_show.map((r: Record<string, unknown>) => {
+        const n = normalizeRosForPdf(r)
+        return [n.date, n.time, n.what].filter(Boolean).join(' — ')
+      })
+    : []
+  const scopeItems: string[] = (anyClient.project_scope ?? []).filter((x: string) => x && x.trim())
+
+  checkPage(30)
+  y = addProgramRow(doc, y, 'Speaker:', ['Mori Taheripour'])
+  checkPage(30)
+  y = addProgramRow(doc, y, 'Event Details:', [
+    `Client: ${s(client.organization)}`,
+    `Estimated Attendees: ${anyClient.audience_size ?? '—'}`,
+    `Attendee Location: ${s(anyClient.attendee_location) || s(client.event_city) || '—'}`,
+  ])
+  checkPage(30)
+  y = addProgramRow(doc, y, 'Date & Time:', [
+    `Date: ${formatDate(client.event_date)}`,
+    `Time: ${s(client.event_time) || '—'}`,
+  ])
+  checkPage(30)
+  y = addProgramRow(doc, y, 'Event / Hotel Venue / Virtual Platform:', [
+    `Location: ${s(client.event_location) || (isVirtual ? 'Virtual' : '—')}`,
+    `Tech Platform: ${s(anyClient.tech_platform) || '—'}`,
+  ])
+  checkPage(30)
+  y = addProgramRow(doc, y, 'Primary Contact(s):', contactLines)
+  checkPage(30)
+  y = addProgramRow(doc, y, 'Run of Show:', rosLines)
+  y += 16
+
+  // ── Project Scope Includes ───────────────────────────────────────────────────
+  checkPage(30)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Project Scope Includes:', CONTRACT_L, y)
+  y += 16
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  for (const item of (scopeItems.length ? scopeItems : [''])) {
+    const lines = doc.splitTextToSize(`•  ${s(item)}`, CONTRACT_W - 12)
+    checkPage(lines.length * 13 + 4)
+    doc.text(lines, CONTRACT_L + 8, y)
+    y += lines.length * 13 + 4
+  }
+  y += 8
+
+  // ── Compensation and Billing ─────────────────────────────────────────────────
+  checkPage(60)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Compensation and Billing', CONTRACT_L, y)
+  y += 16
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  const billingIntro = 'In exchange for the services provided, the Client agrees to compensate the Speaker as follows:'
+  let bLines = doc.splitTextToSize(billingIntro, CONTRACT_W)
+  doc.text(bLines, CONTRACT_L, y)
+  y += bLines.length * 13 + 10
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(15, 14, 12)
+  doc.text(`Services Fee: ${formatCurrency(client.fee)} (USD)`, CONTRACT_L, y)
+  y += 16
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  const taxParagraph = 'In the event that there are any sales taxes, admission taxes, user fees, or other charges, taxes, or fees of any kind levied by the jurisdiction where the speaking engagement is to take place, Client shall be wholly responsible for all such taxes and expenses in addition to any other payment due under the terms of this agreement. Notwithstanding the preceding sentence, each party shall be responsible for its own income taxes.'
+  bLines = doc.splitTextToSize(taxParagraph, CONTRACT_W)
+  checkPage(bLines.length * 13 + 10)
+  doc.text(bLines, CONTRACT_L, y)
+  y += bLines.length * 13 + 14
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(15, 14, 12)
+  checkPage(16)
+  doc.text('Book Fee & Logistics:', CONTRACT_L, y)
+  y += 15
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  const bookParagraph = 'The Client will purchase 50 copies of Bring Yourself directly from Porchlight Book Company. Books will be shipped to the address provided by Client to Porchlight Book Company.'
+  bLines = doc.splitTextToSize(bookParagraph, CONTRACT_W)
+  checkPage(bLines.length * 13 + 14)
+  doc.text(bLines, CONTRACT_L, y)
+  y += bLines.length * 13 + 18
+
+  const travelFee = s(anyClient.travel_fee) || 'TBD'
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(15, 14, 12)
+  checkPage(20)
+  doc.text(`Travel Fee: $ ${travelFee} (USD)`, CONTRACT_L, y)
+  y += 20
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  const receiptsParagraph = 'Speaker to provide all receipts related to travel to and from the event to Client, no later than ten (10) days after speaking engagement. Speaker to provide a second invoice which includes the total of travel expenditures.'
+  bLines = doc.splitTextToSize(receiptsParagraph, CONTRACT_W)
+  checkPage(bLines.length * 13 + 16)
+  doc.text(bLines, CONTRACT_L, y)
+  y += bLines.length * 13 + 16
+
+  // ── Total program fee + payment terms ────────────────────────────────────────
+  const travelFeeNum = parseFloat(travelFee.replace(/[^0-9.]/g, ''))
+  const hasNumericTravel = !isNaN(travelFeeNum) && /\d/.test(travelFee)
+  const totalProgramFee = (client.fee ?? 0) + (hasNumericTravel ? travelFeeNum : 0)
+  const depositAmt = client.deposit_amount ?? Math.round(totalProgramFee * 0.5)
+  const balanceAmt = totalProgramFee - depositAmt
+
+  checkPage(20)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 14, 12)
+  doc.text(`TOTAL PROGRAM FEE: ${formatCurrency(totalProgramFee)}${hasNumericTravel ? '' : ' + travel (TBD)'}`, CONTRACT_L, y)
+  y += 20
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  const paymentLines = [
+    'MT Global Strategies will invoice 100% of the total Program Fee upon contract acceptance.',
+    `Your deposit (50% of fee, ${formatCurrency(depositAmt)}) is due upon approval of the contract.`,
+    `The remaining balance (50% of fee, ${formatCurrency(balanceAmt)}) is due five (5) days after the event.`,
+    'The invoice will be billed in full if the event date is less than thirty (30) days from the authorization date.',
+  ]
+  for (const line of paymentLines) {
+    const lines = doc.splitTextToSize(line, CONTRACT_W)
+    checkPage(lines.length * 13 + 4)
+    doc.text(lines, CONTRACT_L, y)
+    y += lines.length * 13 + 4
+  }
+  y += 10
+
+  checkPage(60)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Please remit all payments to:', CONTRACT_L, y)
+  y += 14
+  doc.setFont('helvetica', 'normal')
+  doc.text(business.name || 'MT GLOBAL STRATEGIES', CONTRACT_L, y)
+  y += 13
+  if (business.address) {
+    const addrLines = doc.splitTextToSize(business.address, CONTRACT_W)
+    doc.text(addrLines, CONTRACT_L, y)
+    y += addrLines.length * 13
+  }
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(9)
+  doc.text('*Bank Information for wire transfer can be provided upon request.', CONTRACT_L, y)
+  y += 20
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  const availabilityParagraph = 'Please note, availability is not guaranteed until the contract and deposit have been received. All inquiries into availability and tentative holds for dates are done as a courtesy and are subject to change. Pricing as defined herein is valid for sixty (60) days unless mutually agreed otherwise. All parties agree to keep the terms of this agreement strictly confidential and shall not disclose these terms to any outside parties.'
+  bLines = doc.splitTextToSize(availabilityParagraph, CONTRACT_W)
+  checkPage(bLines.length * 13 + 16)
+  doc.text(bLines, CONTRACT_L, y)
+  y += bLines.length * 13 + 20
+
+  // ── Speaker Requirements ──────────────────────────────────────────────────────
+  const speakerRequirements = [
+    "Speaker agrees to present to the best of her ability the information and material described herein and in conversations between the parties as well as to coordinate the details of this program with the Client in order to achieve the outcomes that the Client has stated.",
+    "The Speaker or Speaker's Representatives will pre-approve all promotional material and advertising related to the Speaker with reference to the Client's event. Approvals will be provided within 48 hours and will not be unduly withheld. Promotional materials include, but are not limited to, Speaker's biography, photographs, speech title, and speech description. Speaker will provide headshot(s) and biography.",
+    "No other photographs, information, or materials pertaining to the Speaker may be used without the prior written approval of the Speaker or Speaker's Representatives.",
+    "No videotaping without written consent given by the speaker. If videotaping is to be performed and approved by the speaker, the client agrees to supply a copy of all recorded footage to Speaker within thirty (30) days of event.",
+    "Client grants Speaker permission to use Client's logo on Speaker's website and to list Client as a customer.",
+  ]
+  checkPage(30)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Speaker Requirements:', CONTRACT_L, y)
+  y += 16
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  for (const item of speakerRequirements) {
+    const lines = doc.splitTextToSize(`•  ${s(item)}`, CONTRACT_W - 12)
+    checkPage(lines.length * 13 + 6)
+    doc.text(lines, CONTRACT_L + 8, y)
+    y += lines.length * 13 + 6
+  }
+  y += 6
+
+  // ── Technical and Logistical Requirements ────────────────────────────────────
+  const technicalRequirements = [
+    'The Client will manage the technical setup and provide a brief technical walkthrough to address any questions prior to the event.',
+    'The Client will make copies of all handouts.',
+    'Client will provide the following: One (1) easel or whiteboard, a laptop and a clicker for the advancement of slides, and a wireless microphone (if necessary).',
+    'Speaker will provide all materials necessary for the workshop, including slides and handouts, to Client no later than three (3) days prior to the event.',
+    "The Client will support the Speaker's administrative needs for the event, including, but not limited to, distributing handouts and recording participants' results after the negotiation exercises.",
+  ]
+  checkPage(30)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Technical and Logistical Requirements:', CONTRACT_L, y)
+  y += 16
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  for (const item of technicalRequirements) {
+    const lines = doc.splitTextToSize(`•  ${s(item)}`, CONTRACT_W - 12)
+    checkPage(lines.length * 13 + 6)
+    doc.text(lines, CONTRACT_L + 8, y)
+    y += lines.length * 13 + 6
+  }
+  y += 10
+
+  // ── Cancellation Policy ──────────────────────────────────────────────────────
+  checkPage(60)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Cancellation Policy', CONTRACT_L, y)
+  y += 16
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  const cancellationParagraphs = [
+    "If the Client changes the event dates, the deposit sum will be retained by the Speaker and applied to future presentations or consulting assignments on Client's behalf for a period of one year. If the change is made within thirty (30) days of the event date, the Speaker will retain the deposit without refund to the Client.",
+    'In the event of cancellation of this Agreement by Speaker due to illness, death in the family, or an unforeseen emergency or travel delay, MT Global Strategies will not have any liability for expenses or losses incurred by Client. However, in such an event, MT Global Strategies agrees to refund to Client any advances or deposits received from the Client.',
+    'In addition and notwithstanding any other provision of this agreement, in the event that the performance of any obligation under this agreement by any party to this agreement is prevented due to acts of God, any government restriction, wars, hostilities, civil disturbances, revolutions, strikes, terrorist attacks, lockouts, or any other cause beyond the reasonable control of any party, then such party shall not be responsible to the other parties for failure or delay in performance of its obligations under this agreement. The terms of this clause shall not exempt, but merely suspend, any party from its duty to perform the obligations under this agreement as soon as practicable after a force majeure condition ceases to exist.',
+  ]
+  for (const para of cancellationParagraphs) {
+    const lines = doc.splitTextToSize(para, CONTRACT_W)
+    checkPage(lines.length * 13 + 12)
+    doc.text(lines, CONTRACT_L, y)
+    y += lines.length * 13 + 12
+  }
+  y += 10
+
+  // ── Authorization ─────────────────────────────────────────────────────────────
+  checkPage(120)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Authorization', CONTRACT_L, y)
+  y += 16
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.5)
+  doc.setTextColor(40, 38, 34)
+  doc.text('All parties agree with the terms set forth in this document.', CONTRACT_L, y)
+  y += 26
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(15, 14, 12)
+  doc.text('ACCEPTED ON BEHALF OF (Client) BY:', CONTRACT_L, y)
+  y += 24
   doc.setDrawColor(15, 14, 12)
   doc.setLineWidth(0.5)
-  doc.line(50, y, 240, y)
-  doc.line(330, y, 520, y)
-  y += 14
-  doc.setFontSize(9)
+  doc.line(CONTRACT_L, y, CONTRACT_L + 300, y)
+  y += 12
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
   doc.setTextColor(100, 97, 90)
-  doc.text('Mori Taheripour, Speaker', 50, y)
-  doc.text(`${pc(client)?.first_name || "—"} ${pc(client)?.last_name || "—"}, ${client.organization}`, 330, y)
-  y += 14
-  doc.text('Date: ___________________', 50, y)
-  doc.text('Date: ___________________', 330, y)
+  doc.text('NAME & TITLE', CONTRACT_L, y)
+  y += 22
+  doc.line(CONTRACT_L, y, CONTRACT_L + 300, y)
+  y += 12
+  doc.text('COMPANY', CONTRACT_L, y)
+  doc.text('DATE', CONTRACT_L + 340, y)
+  y += 36
 
-  addFooter(doc, 1)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(15, 14, 12)
+  checkPage(90)
+  doc.text('ACCEPTED ON BEHALF OF MT GLOBAL STRATEGIES BY:', CONTRACT_L, y)
+  y += 24
+  doc.setDrawColor(15, 14, 12)
+  doc.line(CONTRACT_L, y, CONTRACT_L + 300, y)
+  y += 12
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(100, 97, 90)
+  doc.text('NAME & TITLE', CONTRACT_L, y)
+  y += 22
+  doc.text('DATE', CONTRACT_L, y)
+
+  // Page numbers
+  const pageCount = doc.getNumberOfPages()
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p)
+    doc.setFontSize(8)
+    doc.setTextColor(160, 157, 150)
+    doc.text(`Page ${p} of ${pageCount}`, CONTRACT_R, 775, { align: 'right' })
+  }
+
   return doc.output('blob')
 }
 

@@ -281,6 +281,7 @@ export interface Engagement {
   // ── Engagement progress (replaces flat engagement_flags for speaking) ──────
   contract_required?: boolean
   contract_sent_at?: string
+  contract_finalized_at?: string
   contract_signed_at?: string
   outgoing_materials?: OutgoingMaterial[]
   outgoing_not_needed?: boolean        // manually marked: no prep materials needed
@@ -429,6 +430,54 @@ export interface Invoice {
   sent_at?: string
   paid_at?: string
   snapshot: InvoiceSnapshot
+}
+
+// ─── Contracts ────────────────────────────────────────────────────────────────
+
+export type ContractStatus = 'draft' | 'finalized' | 'sent' | 'signed'
+
+// Minimal snapshot of the fields generateContract reads, captured at generation
+// time so a later re-download reproduces the original PDF even if the live
+// engagement has since changed. Fields with no Engagement equivalent
+// (estimated_attendees, attendee_location, tech_platform, project_scope) are
+// contract-specific and only ever live here.
+export interface ContractSnapshot {
+  organization: string
+  event_name?: string
+  topic?: string
+  event_date?: string
+  event_city?: string
+  event_location?: string
+  event_format?: 'in_person' | 'virtual' | 'hybrid'
+  tech_platform?: string
+  estimated_attendees?: number
+  attendee_location?: string
+  fee?: number
+  deposit_amount?: number
+  travel_fee?: string
+  project_scope?: string[]
+  run_of_show?: { time: string; what: string; notes?: string }[]
+  contact_first_name?: string
+  contact_last_name?: string
+  contact_title?: string
+  contact_email?: string
+  contact_phone?: string
+  contact_address?: string
+}
+
+export interface Contract {
+  id: string
+  created_at: string
+  engagement_id?: string
+  contract_number: string
+  sequence_number: number
+  organization: string
+  amount: number
+  status: ContractStatus
+  finalized_at?: string
+  sent_at?: string
+  signed_at?: string
+  snapshot: ContractSnapshot
 }
 
 // ─── AI Types ─────────────────────────────────────────────────────────────────

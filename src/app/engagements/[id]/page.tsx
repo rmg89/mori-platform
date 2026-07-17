@@ -1348,6 +1348,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
 
   const [newIncomingLabel, setNewIncomingLabel] = useState('')
   const [customLabel, setCustomLabel] = useState('')
+  const [downloadingContract, setDownloadingContract] = useState(false)
 
   const {
     outgoing, incoming, contractRequired, contractSent, contractSigned,
@@ -1356,6 +1357,33 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
     addIncoming, toggleIncoming, toggleIncomingPin, removeIncoming, renameIncoming, toggleContractFlag,
     attachFile, removeFile, captureNote, captureLink,
   } = useProgressState(e, save)
+
+  async function handleDownloadContract() {
+    setDownloadingContract(true)
+    try {
+      const { generateContract } = await import('@/lib/documents')
+      const { ensureDraftContract, buildContractSnapshot } = await import('@/lib/contracts-client')
+      const { fetchBusinessProfile } = await import('@/lib/business-client')
+      const [, business] = await Promise.all([
+        ensureDraftContract({
+          engagementId: e.id,
+          organization: e.organization,
+          amount: e.fee ?? 0,
+          snapshot: buildContractSnapshot(e),
+        }),
+        fetchBusinessProfile(),
+      ])
+      const blob = await generateContract(e, business)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `contract-${e.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloadingContract(false)
+    }
+  }
 
   function toggleZone(z: ZoneKey) {
     setOpenZones((prev: Set<ZoneKey>) => {
@@ -1453,7 +1481,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
           )}
 
           {contractRequired === true && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {([{ flag: 'contract_sent' as const, label: 'Contract Sent to Client', ts: e.contract_sent_at }, { flag: 'contract_signed' as const, label: 'Contract Signed', ts: e.contract_signed_at }]).map(({ flag, label, ts }) => {
                 const done = e.engagement_flags?.includes(flag) ?? false
                 const locked = flag === 'contract_signed' && !contractSent
@@ -1472,6 +1500,13 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
                   </button>
                 )
               })}
+              <button
+                onClick={handleDownloadContract}
+                disabled={downloadingContract}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-200 bg-white text-sm font-medium text-ink-400 hover:border-gold/50 hover:text-ink transition-all disabled:opacity-40">
+                <Download size={13} className="flex-shrink-0" />
+                <span>{downloadingContract ? 'Preparing…' : 'Download Contract'}</span>
+              </button>
             </div>
           )}
         </div>

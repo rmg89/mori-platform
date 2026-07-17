@@ -45,6 +45,7 @@ interface EngagementRow {
   hotel_covered: boolean | null
   contract_required: boolean | null
   contract_sent_at: string | null
+  contract_finalized_at: string | null
   contract_signed_at: string | null
   materials_requested: boolean
   client_deliverables_sent: boolean
@@ -367,6 +368,7 @@ function assembleEngagement(
 
     contract_required: row.contract_required ?? undefined,
     contract_sent_at: row.contract_sent_at ?? undefined,
+    contract_finalized_at: row.contract_finalized_at ?? undefined,
     contract_signed_at: row.contract_signed_at ?? undefined,
     briefing_complete: row.briefing_complete,
     briefing_complete_at: row.briefing_complete_at ?? undefined,
