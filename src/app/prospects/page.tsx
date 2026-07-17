@@ -40,13 +40,15 @@ function classifyInContact(e: Engagement): InContactGroup {
   )
   const hasResponse = e.comms?.some(c => c.needs_response)
   const hasAlerts = e.alerts.length > 0
+  const hasScheduledCall = e.calls?.some(c => c.status === 'scheduled')
+  const hasRequestedCall = e.calls?.some(c => c.status === 'requested')
 
-  if (!activeNS && !snoozedNS && !hasResponse) return 'unmanaged'
+  if (!activeNS && !snoozedNS && !hasResponse && !hasScheduledCall && !hasRequestedCall) return 'unmanaged'
 
   const isOverdue = activeNS?.next_step_due_at && new Date(activeNS.next_step_due_at).getTime() < now
   if (hasResponse || isOverdue || hasAlerts) return 'action'
 
-  if (!activeNS && snoozedNS) return 'scheduled'
+  if (!activeNS && (snoozedNS || hasScheduledCall)) return 'scheduled'
 
   return 'awaiting'
 }

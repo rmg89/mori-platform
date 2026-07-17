@@ -607,7 +607,7 @@ export async function insertCompanyRow(input: { name: string; website?: string; 
   }
 }
 
-export async function insertComm(comm: Omit<CommRow, 'id'>): Promise<void> {
+export async function insertComm(comm: CommRow): Promise<void> {
   const { error } = await supabase.from('communications').insert(comm)
   if (error) throw new Error(`insertComm: ${error.message}`)
 }
@@ -615,6 +615,11 @@ export async function insertComm(comm: Omit<CommRow, 'id'>): Promise<void> {
 export async function updateCommRow(id: string, patch: Partial<CommRow>): Promise<void> {
   const { error } = await supabase.from('communications').update(patch).eq('id', id)
   if (error) throw new Error(`updateCommRow: ${error.message}`)
+}
+
+export async function deleteCommRow(id: string): Promise<void> {
+  const { error } = await supabase.from('communications').delete().eq('id', id)
+  if (error) throw new Error(`deleteCommRow: ${error.message}`)
 }
 
 export async function upsertCall(call: Partial<CallRow> & { engagement_id: string }): Promise<void> {

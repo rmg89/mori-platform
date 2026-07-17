@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, BriefingNote, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted, insertBriefingNoteRow, updateBriefingNoteRow, deleteBriefingNoteRow } from '@/lib/db-client'
+import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, deleteCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted, insertBriefingNoteRow, updateBriefingNoteRow, deleteBriefingNoteRow } from '@/lib/db-client'
 import { getBackwardTransition } from '@/lib/pipeline'
 import type { ReviewItem, ReviewAction, Company } from '@/types'
 
@@ -89,6 +89,7 @@ interface StoreActions {
   // Comms
   addComm: (engagementId: string, comm: CommEntry) => void
   updateComm: (engagementId: string, commId: string, patch: Partial<CommEntry>) => void
+  deleteComm: (engagementId: string, commId: string) => void
 
   // Briefing notes
   addBriefingNote: (engagementId: string, note: BriefingNote) => void
@@ -783,6 +784,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         : e
     ))
     insertComm({
+      id: comm.id,
       engagement_id: engagementId,
       type: comm.type,
       date: comm.date,
@@ -817,6 +819,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       next_step_snoozed_until: patch.next_step_snoozed_until ?? undefined,
       next_step_cleared: patch.next_step_cleared ?? undefined,
     } as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
+  }, [])
+
+  const deleteComm = useCallback((engagementId: string, commId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        comms: e.comms.filter(c => c.id !== commId),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    deleteCommRow(commId).catch(onWriteError)
   }, [])
 
   const addBriefingNote = useCallback((engagementId: string, note: BriefingNote) => {
@@ -995,7 +1009,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, updatePostEventStage,
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
-      addCall, updateCall, addComm, updateComm,
+      addCall, updateCall, addComm, updateComm, deleteComm,
       addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,

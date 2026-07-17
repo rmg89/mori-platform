@@ -11,6 +11,30 @@ One entry per work session. Newest at the top.
 - Follow-ups / open questions:
 ```
 
+## 2026-07-17
+- Branch: `fix-call-tracking` — merged to `main` this session.
+- What I did:
+  - Root-caused why a prospect with a scheduled call still showed under "Unmanaged — no next step defined": `classifyInContact` (`prospects/page.tsx`) only checked `comms[].next_step`, never `e.calls`. Fixed to treat a scheduled/requested call as satisfying "has a next step," routing it into the "Scheduled"/"Awaiting" buckets instead.
+  - Made call info (link/phone/location) editable independent of the scheduling flow — previously the textarea only appeared during initial scheduling, with no way back in once a call was scheduled.
+  - Fixed clicking "Scheduled" after an accidental "Completed" click forcing the user back through the full re-scheduling form (and silently wiping the existing date if left blank) — now restores the existing date/time in one click when one is already on file.
+  - Added the ability to delete a timeline item (comm/note), surfaced a comm's `next_step` as an obvious flagged badge in the timeline instead of silently capturing it with no display, and fixed multi-paragraph notes collapsing into one dense block (missing `whitespace-pre-line`).
+  - At wrap time: `main` had moved substantially since this branch forked (the `secure-supabase-rls` server-side-gateway retrofit, `fix-engagement-detail`'s briefing-notes work, `email-review-pipeline`, RLS default-deny cutover). Merged current `main` in; `src/lib/db.ts` and `prospects/[id]/page.tsx` auto-merged clean, `store.tsx` had one real conflict — this branch's only change there was adding `deleteComm`, which had landed at the exact same insertion point as main's four briefing-note actions (interleaved conflict markers, not just adjacent). Reconstructed both as separate, complete functions; kept both sides.
+  - Retrofitted `deleteComm` onto the server-side gateway, same pattern as `fix-engagement-detail`'s `briefing_notes` retrofit: `db.ts` already had `deleteCommRow` (auto-merged in, unchanged), added a `DELETE` handler to the existing `communications/[id]` route, and added a `deleteCommRow` wrapper to `db-client.ts`. Without this, the new delete-timeline-item button would have called a server-only function directly from a `'use client'` component.
+  - Ran `/test` a fourth time against the final reconciled state. Found a real bug by reading, not by reproducing it live: `LogCommPanel` generates a new comm's id as `` `cm_${Date.now()}` `` and `insertComm(...)` never sends that id to the server, so Supabase assigns its own UUID — identical to the `briefing_notes` id-mismatch bug found (and fixed) on `fix-engagement-detail` the same day. This branch is the first to expose it for comms specifically, since it's the first to add a way to delete a comm by id. Fixed before merging (same session): `insertComm` now takes a full `CommRow` (id included) and actually sends it; fixed the id generation at all three `LogCommPanel` call sites (`prospects/[id]`, `engagements/[id]`, `wrap-up/[id]`, not just this branch's own page) to `crypto.randomUUID()` — required at all three, since `insertComm` now sends whatever id it's given, and leaving the other two on the placeholder string would have broken *every* new comm on those pages immediately, not just a follow-up delete.
+  - User confirmed merging to `main` after reviewing the `/test` report, on the same "running `/wrap` is the confirmation" basis established earlier in the session (see `fix-engagement-detail`'s entry and the `.claude/commands/wrap.md` update, `fix-wrap-manual-check-gate` branch — not yet merged as of this entry).
+- Bugs found:
+  - **Prospects list misclassified engagements with a scheduled call as "Unmanaged"** — fixed, see above.
+  - **Call info editable only during initial scheduling** — fixed, added an independent edit affordance.
+  - **Accidental "Completed" click had no easy way back to "Scheduled"** without risking data loss — fixed.
+  - **Timeline items had no delete option, and a comm's `next_step` was captured but never shown** — fixed.
+  - **Multi-paragraph notes lost their formatting** (no `whitespace-pre-line`) — fixed.
+  - **Deleting a comm added earlier in the same session (before a reload) would 500** — same root cause as the `briefing_notes` UUID bug: `LogCommPanel`'s temp id (`cm_${Date.now()}`) never reached Supabase, so the delete call targeted an id that didn't exist. Found by reading during this session's `/test`, fixed the same session (see above). `addCall` still uses the same temp-id-on-insert pattern and hasn't been individually checked.
+- Decisions:
+  - Merged `deleteComm`'s server-only retrofit into this branch's own merge commit rather than a separate follow-up — matches how `fix-engagement-detail` handled the identical `briefing_notes` situation the same day, keeps the branch shippable as one unit.
+- Follow-ups / open for next session:
+  - **Fix the `addComm`/`addCall` temp-id mismatch properly** — likely the same fix as `briefing_notes`: generate a real `crypto.randomUUID()` client-side and send it explicitly on insert instead of letting the id diverge. Two call sites now confirmed to need this (`briefing_notes` was fixed; `communications` is now flagged; `calls` still unchecked).
+  - `fix-engagement-detail`'s own session-log entry (2026-07-16 (5)) still reads "reconciling against main now... before a final merge decision" even though that branch was in fact merged later the same session — stale, worth a quick correction next time that entry's touched, not fixed here since it's out of scope for this branch's own `/wrap`.
+
 ## 2026-07-16 (5)
 - Branch: `fix-engagement-detail` — pushed, `/test`-reviewed four times; reconciling against `main` now (see end of entry) before a final merge decision.
 - What I did:
