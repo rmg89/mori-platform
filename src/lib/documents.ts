@@ -205,7 +205,9 @@ function addLineItemsTableHeader(doc: any, y: number, L: number, R: number, W: n
 const CONTRACT_L = 50, CONTRACT_R = 562, CONTRACT_W = CONTRACT_R - CONTRACT_L
 const CONTRACT_PAGE_H = 740
 
-// Centered logo (falls back to a text wordmark), DATE line, and the accent title.
+// Centered logo (falls back to a text wordmark), DATE line, and the title —
+// same plain, monochrome treatment as the invoice header (addInvoiceHeader):
+// no accent color anywhere in the document, just ink and gray.
 function addContractHeader(doc: any, signature: SignatureImage | null, dateStr: string) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
@@ -223,17 +225,25 @@ function addContractHeader(doc: any, signature: SignatureImage | null, dateStr: 
     doc.text('MT GLOBAL STRATEGIES', 306, 68, { align: 'center' })
   }
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(15)
-  doc.setTextColor(196, 120, 45)
-  doc.text('Agreement: Speaking Engagement', CONTRACT_L, 118)
-
+  // Light hairline, then the modest gray uppercase title, then a stronger
+  // rule closing the header — identical two-rule structure to addInvoiceHeader.
   doc.setDrawColor(205, 202, 196)
-  doc.setLineWidth(0.4)
+  doc.setLineWidth(0.5)
+  doc.line(CONTRACT_L, 100, CONTRACT_R, 100)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(12.5)
+  doc.setTextColor(80, 78, 72)
+  doc.text('AGREEMENT: SPEAKING ENGAGEMENT', CONTRACT_L, 118)
+
+  doc.setDrawColor(15, 14, 12)
+  doc.setLineWidth(0.6)
   doc.line(CONTRACT_L, 126, CONTRACT_R, 126)
 
-  doc.setTextColor(15, 14, 12)
+  doc.setDrawColor(15, 14, 12)
+  doc.setLineWidth(0.5)
   doc.setFont('helvetica', 'normal')
+  doc.setTextColor(15, 14, 12)
 }
 
 // One bordered two-column row of the Program Details table (label | wrapped value lines).
