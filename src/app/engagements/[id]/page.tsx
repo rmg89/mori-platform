@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect, useRef, useTransition, createContext, useContext } from 'react'
 import { useStore } from '@/lib/store'
 import {
-  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact, Invoice
+  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact, Invoice, Contract
 } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import {
@@ -21,6 +21,7 @@ import ArchiveModal from '@/components/ArchiveModal'
 import UnarchiveButton from '@/components/UnarchiveButton'
 import TimezoneSelect from '@/components/TimezoneSelect'
 import InvoiceEditModal from '@/components/InvoiceEditModal'
+import ContractEditModal from '@/components/ContractEditModal'
 import { TIMEZONE_OPTIONS } from '@/lib/timezone'
 import { getBackwardTransition } from '@/lib/pipeline'
 import EngagementSnapshotView from '@/components/EngagementSnapshotView'
@@ -1349,6 +1350,9 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
   const [newIncomingLabel, setNewIncomingLabel] = useState('')
   const [customLabel, setCustomLabel] = useState('')
   const [downloadingContract, setDownloadingContract] = useState(false)
+  const [contract, setContract] = useState<Contract | null>(null)
+  const [editingContract, setEditingContract] = useState<Contract | null>(null)
+  const [uploadingSignedFile, setUploadingSignedFile] = useState(false)
 
   const {
     outgoing, incoming, contractRequired, contractSent, contractSigned,
@@ -1358,21 +1362,38 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
     attachFile, removeFile, captureNote, captureLink,
   } = useProgressState(e, save)
 
+  // Load the draft contract (if any) once Contract is marked required, so the
+  // signed-file link/status can actually render instead of assuming from the
+  // live engagement record.
+  useEffect(() => {
+    if (contractRequired !== true) return
+    let cancelled = false
+    ;(async () => {
+      const { findLatestContract } = await import('@/lib/contracts-client')
+      const found = await findLatestContract(e.id)
+      if (!cancelled) setContract(found)
+    })()
+    return () => { cancelled = true }
+  }, [contractRequired, e.id])
+
+  async function ensureContract(): Promise<Contract> {
+    const { ensureDraftContract, buildContractSnapshot } = await import('@/lib/contracts-client')
+    const found = await ensureDraftContract({
+      engagementId: e.id,
+      organization: e.organization,
+      amount: e.fee ?? 0,
+      snapshot: buildContractSnapshot(e),
+    })
+    setContract(found)
+    return found
+  }
+
   async function handleDownloadContract() {
     setDownloadingContract(true)
     try {
       const { generateContract } = await import('@/lib/documents')
-      const { ensureDraftContract, buildContractSnapshot } = await import('@/lib/contracts-client')
       const { fetchBusinessProfile } = await import('@/lib/business-client')
-      const [, business] = await Promise.all([
-        ensureDraftContract({
-          engagementId: e.id,
-          organization: e.organization,
-          amount: e.fee ?? 0,
-          snapshot: buildContractSnapshot(e),
-        }),
-        fetchBusinessProfile(),
-      ])
+      const [, business] = await Promise.all([ensureContract(), fetchBusinessProfile()])
       const blob = await generateContract(e, business)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -1383,6 +1404,46 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
     } finally {
       setDownloadingContract(false)
     }
+  }
+
+  async function handleEditContract() {
+    const c = contract ?? await ensureContract()
+    setEditingContract(c)
+  }
+
+  async function handleUploadSignedFile(file: File) {
+    setUploadingSignedFile(true)
+    try {
+      const c = contract ?? await ensureContract()
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('engagement_id', e.id)
+      formData.append('folder', 'contracts')
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      if (!res.ok) return
+      const { url } = await res.json()
+      const { attachSignedContractFile } = await import('@/lib/contracts-client')
+      const updated = await attachSignedContractFile(c, url, file.name)
+      setContract(updated)
+      // Mirror onto the engagement, same dual-write pattern as the deposit card —
+      // uploading the signed file implies signed, so the toggle button reflects it immediately.
+      if (!contractSigned) {
+        const now = new Date().toISOString()
+        save({
+          contract_signed_at: now,
+          engagement_flags: [...(e.engagement_flags ?? []), 'contract_signed'] as any,
+        })
+      }
+    } finally {
+      setUploadingSignedFile(false)
+    }
+  }
+
+  async function handleRemoveSignedFile() {
+    if (!contract) return
+    const { attachSignedContractFile } = await import('@/lib/contracts-client')
+    const updated = await attachSignedContractFile(contract, null, null)
+    setContract(updated)
   }
 
   function toggleZone(z: ZoneKey) {
@@ -1481,32 +1542,69 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
           )}
 
           {contractRequired === true && (
-            <div className="flex flex-wrap items-center gap-2">
-              {([{ flag: 'contract_sent' as const, label: 'Contract Sent to Client', ts: e.contract_sent_at }, { flag: 'contract_signed' as const, label: 'Contract Signed', ts: e.contract_signed_at }]).map(({ flag, label, ts }) => {
-                const done = e.engagement_flags?.includes(flag) ?? false
-                const locked = flag === 'contract_signed' && !contractSent
-                return (
-                  <button key={flag}
-                    onClick={() => !locked && toggleContractFlag(flag)}
-                    disabled={locked}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-                      done ? 'bg-sage/8 border-sage/20 text-sage'
-                      : locked ? 'bg-parchment border-ink-100 text-ink-200 cursor-not-allowed opacity-50'
-                      : 'bg-white border-ink-200 text-ink-400 hover:border-ink-300 hover:text-ink active:scale-95'
-                    }`}>
-                    {done ? <CheckCircle2 size={13} className="flex-shrink-0" /> : <Circle size={13} className="flex-shrink-0" />}
-                    <span>{label}</span>
-                    {done && ts && <span className="text-[10px] opacity-60 font-normal">{formatElapsed(ts)}</span>}
-                  </button>
-                )
-              })}
-              <button
-                onClick={handleDownloadContract}
-                disabled={downloadingContract}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-200 bg-white text-sm font-medium text-ink-400 hover:border-gold/50 hover:text-ink transition-all disabled:opacity-40">
-                <Download size={13} className="flex-shrink-0" />
-                <span>{downloadingContract ? 'Preparing…' : 'Download Contract'}</span>
-              </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {([{ flag: 'contract_sent' as const, label: 'Contract Sent to Client', ts: e.contract_sent_at }, { flag: 'contract_signed' as const, label: 'Contract Signed', ts: e.contract_signed_at }]).map(({ flag, label, ts }) => {
+                  const done = e.engagement_flags?.includes(flag) ?? false
+                  const locked = flag === 'contract_signed' && !contractSent
+                  return (
+                    <button key={flag}
+                      onClick={() => !locked && toggleContractFlag(flag)}
+                      disabled={locked}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                        done ? 'bg-sage/8 border-sage/20 text-sage'
+                        : locked ? 'bg-parchment border-ink-100 text-ink-200 cursor-not-allowed opacity-50'
+                        : 'bg-white border-ink-200 text-ink-400 hover:border-ink-300 hover:text-ink active:scale-95'
+                      }`}>
+                      {done ? <CheckCircle2 size={13} className="flex-shrink-0" /> : <Circle size={13} className="flex-shrink-0" />}
+                      <span>{label}</span>
+                      {done && ts && <span className="text-[10px] opacity-60 font-normal">{formatElapsed(ts)}</span>}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={handleEditContract}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-200 bg-white text-sm font-medium text-ink-400 hover:border-gold/50 hover:text-ink transition-all">
+                  <Pencil size={12} className="flex-shrink-0" />
+                  <span>Edit Details</span>
+                </button>
+                <button
+                  onClick={handleDownloadContract}
+                  disabled={downloadingContract}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-ink-200 bg-white text-sm font-medium text-ink-400 hover:border-gold/50 hover:text-ink transition-all disabled:opacity-40">
+                  <Download size={13} className="flex-shrink-0" />
+                  <span>{downloadingContract ? 'Preparing…' : 'Download Contract'}</span>
+                </button>
+              </div>
+
+              {/* Signed contract file — client's own returned copy */}
+              {contractSent && (
+                <div className="flex items-center gap-2">
+                  <Paperclip size={11} className="text-ink-300 flex-shrink-0" />
+                  {contract?.signed_file_url ? (
+                    <div className="flex items-center gap-1.5 group/file">
+                      <a href={contract.signed_file_url} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-gold hover:underline">
+                        {contract.signed_file_name ?? 'Signed contract'}
+                      </a>
+                      <button onClick={handleRemoveSignedFile}
+                        className="text-ink-200 hover:text-red-400 opacity-0 group-hover/file:opacity-100 transition-all">
+                        <X size={9} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className={`text-xs cursor-pointer transition-colors ${uploadingSignedFile ? 'text-ink-300 pointer-events-none' : 'text-ink-300 hover:text-ink-500'}`}>
+                      {uploadingSignedFile ? 'Uploading…' : 'Upload signed contract…'}
+                      <input type="file" className="hidden" disabled={uploadingSignedFile}
+                        onChange={(ev: React.ChangeEvent<HTMLInputElement>) => {
+                          const file = ev.target.files?.[0]
+                          if (file) handleUploadSignedFile(file)
+                          ev.target.value = ''
+                        }} />
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1712,6 +1810,13 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
         <BriefingZone e={e} save={save} briefingComplete={briefingComplete} />
       )}
 
+      {editingContract && (
+        <ContractEditModal
+          contract={editingContract}
+          onClose={() => setEditingContract(null)}
+          onSaved={updated => { setContract(updated); setEditingContract(null) }}
+        />
+      )}
     </div>
   )
 }

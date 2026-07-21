@@ -477,6 +477,8 @@ export interface Contract {
   finalized_at?: string
   sent_at?: string
   signed_at?: string
+  signed_file_url?: string
+  signed_file_name?: string
   snapshot: ContractSnapshot
 }
 

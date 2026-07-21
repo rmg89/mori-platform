@@ -90,6 +90,25 @@ export function finalizeContract(contract: Contract): Promise<void> {
   return setContractStatus(contract, 'finalized')
 }
 
+// Attaches the client's signed/countersigned contract file. Uploading a file
+// implies signed — same convention as incoming_materials' attachFile marking
+// received: true — so this also advances status to 'signed' (and mirrors
+// contract_signed_at onto the engagement) if it isn't already. Pass null/null
+// to detach (e.g. removing a wrongly-uploaded file) without touching status.
+export async function attachSignedContractFile(contract: Contract, fileUrl: string | null, fileName: string | null): Promise<Contract> {
+  if (fileUrl && contract.status !== 'signed') {
+    await setContractStatus(contract, 'signed')
+  }
+  const { data, error } = await supabase
+    .from('contracts')
+    .update({ signed_file_url: fileUrl, signed_file_name: fileName })
+    .eq('id', contract.id)
+    .select('*')
+    .single()
+  if (error) throw new Error(`attachSignedContractFile: ${error.message}`)
+  return data as Contract
+}
+
 // Finds the most recent contract row for an engagement (used when the existing
 // engagement/wrap-up controls change status, to mirror it back).
 export async function findLatestContract(engagementId: string): Promise<Contract | null> {

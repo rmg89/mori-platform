@@ -54,6 +54,13 @@ export function finalizeContract(contract: Contract): Promise<void> {
   return setContractStatus(contract, 'finalized')
 }
 
+// Attaches the client's signed/countersigned contract file — implies signed,
+// same as incoming_materials' attachFile marking received: true. Pass
+// null/null to detach.
+export async function attachSignedContractFile(contract: Contract, fileUrl: string | null, fileName: string | null): Promise<Contract> {
+  return req(`/api/contracts/${contract.id}/signed-file`, { method: 'PATCH', body: JSON.stringify({ fileUrl, fileName }) })
+}
+
 export async function findLatestContract(engagementId: string): Promise<Contract | null> {
   const params = new URLSearchParams({ engagement_id: engagementId })
   return req(`/api/contracts/latest?${params}`)
