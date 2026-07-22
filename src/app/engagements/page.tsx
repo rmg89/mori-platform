@@ -63,8 +63,13 @@ function getProgressSteps(e: Engagement) {
   const outgoing = e.outgoing_materials ?? []
   const incoming = e.incoming_materials ?? []
   const contractRequired = e.contract_required
-  const contractSent = e.engagement_flags?.includes('contract_sent') ?? false
-  const contractSigned = e.engagement_flags?.includes('contract_signed') ?? false
+  // Contract status now lives in the contracts table (possibly several
+  // documents), mirrored onto these timestamp columns by setContractStatus —
+  // not engagement_flags, which nothing in the new document flow writes to
+  // anymore. Matches how wrap-up/[id]/page.tsx and EngagementSnapshotView
+  // already read this.
+  const contractSent = !!e.contract_sent_at
+  const contractSigned = !!e.contract_signed_at
   const outgoingDone = outgoing.filter(m => m.done).length
   const incomingDone = incoming.filter(m => m.received).length
 

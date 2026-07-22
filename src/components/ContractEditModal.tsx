@@ -62,6 +62,7 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
   const [contactAddress, setContactAddress] = useState(s.contact_address ?? '')
   const [eventName, setEventName] = useState(s.event_name ?? '')
   const [eventDate, setEventDate] = useState(s.event_date ?? '')
+  const [eventTime, setEventTime] = useState(s.event_time ?? '')
   const [eventCity, setEventCity] = useState(s.event_city ?? '')
   const [eventLocation, setEventLocation] = useState(s.event_location ?? '')
   const [techPlatform, setTechPlatform] = useState(s.tech_platform ?? '')
@@ -88,6 +89,7 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
         event_name: eventName.trim() || undefined,
         topic: eventName.trim() || undefined,
         event_date: eventDate || undefined,
+        event_time: eventTime.trim() || undefined,
         event_city: eventCity.trim() || undefined,
         event_location: eventLocation.trim() || undefined,
         tech_platform: techPlatform.trim() || undefined,
@@ -133,8 +135,9 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
           <Field label="Event name" value={eventName} onChange={setEventName} placeholder="Stress & Energy Reset Retreat" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Event date" value={eventDate} onChange={setEventDate} type="date" />
-            <Field label="Event city" value={eventCity} onChange={setEventCity} placeholder="Lenox, MA" />
+            <Field label="Event time" value={eventTime} onChange={setEventTime} placeholder="10am" />
           </div>
+          <Field label="Event city" value={eventCity} onChange={setEventCity} placeholder="Lenox, MA" />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Venue / location" value={eventLocation} onChange={setEventLocation} placeholder="Canyon Ranch Lenox" />
             <Field label="Tech platform" value={techPlatform} onChange={setTechPlatform} placeholder="Zoom" />

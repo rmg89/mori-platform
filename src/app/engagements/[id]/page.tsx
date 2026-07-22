@@ -1467,6 +1467,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
   const [newIncomingLabel, setNewIncomingLabel] = useState('')
   const [customLabel, setCustomLabel] = useState('')
   const [contracts, setContracts] = useState<Contract[]>([])
+  const [contractsLoaded, setContractsLoaded] = useState(false)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const [downloadingContractId, setDownloadingContractId] = useState<string | null>(null)
   const [uploadingFileForId, setUploadingFileForId] = useState<string | null>(null)
@@ -1493,13 +1494,35 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
     ;(async () => {
       const { fetchContractsForEngagement } = await import('@/lib/contracts-client')
       const found = await fetchContractsForEngagement(e.id)
-      if (!cancelled) setContracts(found)
+      if (!cancelled) { setContracts(found); setContractsLoaded(true) }
     })()
     return () => { cancelled = true }
   }, [contractRequired, e.id])
 
   const contractsClosed = contracts.filter(c => c.origin === 'received' ? !!c.signed_file_url : c.status === 'signed').length
   const contractDocsComplete = contractRequired === false || (contractRequired === true && contracts.length > 0 && contractsClosed === contracts.length)
+
+  // The mount-time auto-open guess above can't know real contract completion
+  // synchronously (it lives in the async-fetched contracts table), so it
+  // always opens the Contract zone whenever one is required. Once the real
+  // answer has loaded, correct that guess exactly once: if Contract turns out
+  // to already be complete, defer to whichever zone actually needs attention
+  // instead, matching the same fallback order as the initial guess. Only
+  // acts if the zone set still matches the original guess — if the user has
+  // already opened/closed something themselves, leave it alone.
+  const appliedContractCorrection = useRef(false)
+  useEffect(() => {
+    if (!contractsLoaded || appliedContractCorrection.current) return
+    appliedContractCorrection.current = true
+    if (!contractDocsComplete) return
+    setOpenZones(prev => {
+      if (prev.size !== 1 || !prev.has('contract')) return prev
+      if (!outgoingComplete) return new Set<ZoneKey>(['outgoing'])
+      if (!incomingComplete) return new Set<ZoneKey>(['incoming'])
+      if (!briefingComplete) return new Set<ZoneKey>(['briefing'])
+      return new Set<ZoneKey>()
+    })
+  }, [contractsLoaded, contractDocsComplete, outgoingComplete, incomingComplete, briefingComplete])
 
   function replaceContract(updated: Contract) {
     setContracts(prev => prev.map(c => c.id === updated.id ? updated : c))
@@ -1532,6 +1555,11 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
   }
 
   async function handleRemoveDocument(doc: Contract) {
+    const closed = doc.origin === 'drafted' ? doc.status === 'signed' : !!doc.signed_file_url
+    const warning = closed
+      ? `"${doc.label}" is marked closed (signed). Remove it anyway? This can't be undone.`
+      : `Remove "${doc.label}"? This can't be undone.`
+    if (!window.confirm(warning)) return
     const { deleteContract } = await import('@/lib/contracts-client')
     await deleteContract(doc.id)
     setContracts(prev => prev.filter(c => c.id !== doc.id))

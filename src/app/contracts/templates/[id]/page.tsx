@@ -148,6 +148,7 @@ export default function ContractTemplateEditorPage() {
   }
 
   async function handleDelete() {
+    if (!window.confirm(`Delete template "${name}"? This can't be undone.`)) return
     try {
       await deleteContractTemplate(id)
       router.push('/contracts/templates')

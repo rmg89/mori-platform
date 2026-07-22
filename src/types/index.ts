@@ -452,6 +452,7 @@ export interface ContractSnapshot {
   event_name?: string
   topic?: string
   event_date?: string
+  event_time?: string
   event_city?: string
   event_location?: string
   event_format?: 'in_person' | 'virtual' | 'hybrid'
