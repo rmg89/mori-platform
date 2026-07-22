@@ -1388,7 +1388,7 @@ function ContractDocumentCard({
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-ink">{doc.label}</span>
           <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${isDrafted ? 'bg-gold/10 text-gold-dark' : 'bg-sage/10 text-sage'}`}>
-            {isDrafted ? 'We draft' : 'From client'}
+            {isDrafted ? 'Team Mori Drafted' : 'Client Provided'}
           </span>
           {closed && <span className="text-[10px] text-sage font-medium">Closed</span>}
         </div>
@@ -1400,9 +1400,11 @@ function ContractDocumentCard({
       {isDrafted ? (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={onToggleSent}
+            <button onClick={onToggleSent} disabled={signed} title={signed ? 'Un-sign first to change Sent status' : undefined}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                sent ? 'bg-sage/8 border-sage/20 text-sage' : 'bg-white border-ink-200 text-ink-400 hover:border-ink-300 hover:text-ink'
+                signed ? 'bg-sage/8 border-sage/20 text-sage cursor-not-allowed opacity-70'
+                : sent ? 'bg-sage/8 border-sage/20 text-sage'
+                : 'bg-white border-ink-200 text-ink-400 hover:border-ink-300 hover:text-ink'
               }`}>
               {sent ? <CheckCircle2 size={12} className="flex-shrink-0" /> : <Circle size={12} className="flex-shrink-0" />}
               Sent to Client
@@ -1547,8 +1549,15 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
   }
 
   async function handleToggleSent(doc: Contract) {
+    // Status is draft -> finalized -> sent -> signed, not a plain on/off pair —
+    // a document can reach 'finalized' via the global /contracts list page's
+    // own Finalize button, since both pages share the same rows. Toggling
+    // must always move forward to 'sent' from anything not-yet-sent (draft
+    // or finalized), never collapse straight back to 'draft'.
+    if (doc.status === 'signed') return // un-sign first (Signed toggle) before un-sending
     const { setContractStatus } = await import('@/lib/contracts-client')
-    const nextStatus = doc.status === 'draft' ? 'sent' : 'draft'
+    const currentlySent = doc.status === 'sent'
+    const nextStatus = currentlySent ? 'draft' : 'sent'
     await setContractStatus(doc, nextStatus)
     replaceContract({ ...doc, status: nextStatus, sent_at: nextStatus === 'sent' ? new Date().toISOString() : doc.sent_at })
   }
@@ -1719,14 +1728,14 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
                       className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all ${
                         newDocOrigin === 'drafted' ? 'bg-ink text-cream border-ink' : 'border-ink-100 text-ink-400 hover:border-ink-300'
                       }`}>
-                      We'll draft this
+                      Team Mori Drafted
                     </button>
                     <button
                       onClick={() => setNewDocOrigin('received')}
                       className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-all ${
                         newDocOrigin === 'received' ? 'bg-ink text-cream border-ink' : 'border-ink-100 text-ink-400 hover:border-ink-300'
                       }`}>
-                      They'll send us one
+                      Client Provided
                     </button>
                   </div>
                   <button onClick={handleAddDocument}

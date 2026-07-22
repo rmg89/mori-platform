@@ -111,7 +111,7 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h3 className="font-display text-lg font-semibold text-ink">Edit Contract Details</h3>
-            <p className="text-xs text-ink-300 mt-0.5">{contract.contract_number} — editing the fields used to build the PDF, not the document itself.</p>
+            <p className="text-xs text-ink-300 mt-0.5">Editing the fields used to build the PDF, not the document itself.</p>
           </div>
           <button onClick={onClose} className="text-ink-300 hover:text-ink-500 transition-colors flex-shrink-0">
             <X size={16} />

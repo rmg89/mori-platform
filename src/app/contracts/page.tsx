@@ -43,7 +43,7 @@ function StatusBadge({ status }: { status: ContractStatus }) {
 
 function OriginBadge({ origin }: { origin: ContractOrigin }) {
   const cls = origin === 'drafted' ? 'bg-gold/10 text-gold-dark' : 'bg-sage/10 text-sage'
-  return <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${cls}`}>{origin === 'drafted' ? 'We draft' : 'From client'}</span>
+  return <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${cls}`}>{origin === 'drafted' ? 'Team Mori Drafted' : 'Client Provided'}</span>
 }
 
 function FilterTabs<T extends string>({ tabs, value, onChange }: {
