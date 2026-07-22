@@ -29,6 +29,7 @@ export async function createContract(input: {
   snapshot?: ContractSnapshot
   origin?: ContractOrigin
   label?: string
+  templateId?: string
 }): Promise<Contract> {
   return req('/api/contracts', { method: 'POST', body: JSON.stringify(input) })
 }

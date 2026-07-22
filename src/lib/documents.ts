@@ -1,7 +1,7 @@
 // Document generation using jsPDF
 // Templates are data-merge only — no AI, deterministic output
 
-import { Engagement, BusinessProfile, primaryContact } from '@/types'
+import { Engagement, BusinessProfile, ContractTemplateBlock, primaryContact } from '@/types'
 type Client = Engagement
 
 function pc(client: Client) {
@@ -307,7 +307,14 @@ function addBullet(doc: any, text: string, x: number, y: number, width: number, 
   return y + lines.length * lineH
 }
 
-export async function generateContract(client: Client, business: BusinessProfile): Promise<Blob> {
+// Fills {{tag}} placeholders in template content from the merge-field data
+// for this render, then sanitizes the result — covers both author-typed
+// unicode and merge-field-injected unicode in one pass.
+function substituteMergeFields(text: string, data: Record<string, string>): string {
+  return s(text.replace(/\{\{(\w+)\}\}/g, (_match, key) => data[key] ?? ''))
+}
+
+export async function generateContract(client: Client, business: BusinessProfile, blocks: ContractTemplateBlock[]): Promise<Blob> {
   const doc = createDoc()
   const signature = await loadSignatureImage()
   const c = pc(client) as any
@@ -391,200 +398,81 @@ export async function generateContract(client: Client, business: BusinessProfile
   }
   y += 8
 
-  // ── Compensation and Billing ─────────────────────────────────────────────────
-  checkPage(70)
-  y = addSectionRule(doc, y)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setFontSize(CONTRACT_SIZE)
-  doc.setTextColor(15, 14, 12)
-  doc.text('COMPENSATION AND BILLING', CONTRACT_L, y)
-  y += 16
-
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const billingIntro = 'In exchange for the services provided, the Client agrees to compensate the Speaker as follows:'
-  let bLines = doc.splitTextToSize(billingIntro, CONTRACT_W)
-  doc.text(bLines, CONTRACT_L, y)
-  y += bLines.length * CONTRACT_LINE_H + 10
-
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(15, 14, 12)
-  doc.text(`SERVICES FEE: ${formatCurrency(client.fee)} (USD)`, CONTRACT_L, y)
-  y += 16
-
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const taxParagraph = 'In the event that there are any sales taxes, admission taxes, user fees, or other charges, taxes, or fees of any kind levied by the jurisdiction where the speaking engagement is to take place, Client shall be wholly responsible for all such taxes and expenses in addition to any other payment due under the terms of this agreement. Notwithstanding the preceding sentence, each party shall be responsible for its own income taxes.'
-  bLines = doc.splitTextToSize(taxParagraph, CONTRACT_W)
-  checkPage(bLines.length * CONTRACT_LINE_H + 10)
-  doc.text(bLines, CONTRACT_L, y)
-  y += bLines.length * CONTRACT_LINE_H + 14
-
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(15, 14, 12)
-  checkPage(16)
-  doc.text('BOOK FEE & LOGISTICS:', CONTRACT_L, y)
-  y += 15
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const bookParagraph = 'The Client will purchase 50 copies of Bring Yourself directly from Porchlight Book Company. Books will be shipped to the address provided by Client to Porchlight Book Company.'
-  bLines = doc.splitTextToSize(bookParagraph, CONTRACT_W)
-  checkPage(bLines.length * CONTRACT_LINE_H + 14)
-  doc.text(bLines, CONTRACT_L, y)
-  y += bLines.length * CONTRACT_LINE_H + 18
-
+  // ── Template body: Compensation and Billing through Cancellation Policy ──────
+  // Everything below is editable template content (see /contracts/templates),
+  // not hardcoded — the structural sections above and Authorization below stay
+  // fixed since they're data-shaped, not prose.
   const travelFee = s(anyClient.travel_fee) || 'TBD'
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(15, 14, 12)
-  checkPage(20)
-  doc.text(`TRAVEL FEE: $ ${travelFee} (USD)`, CONTRACT_L, y)
-  y += 20
-
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const receiptsParagraph = 'Speaker to provide all receipts related to travel to and from the event to Client, no later than ten (10) days after speaking engagement. Speaker to provide a second invoice which includes the total of travel expenditures.'
-  bLines = doc.splitTextToSize(receiptsParagraph, CONTRACT_W)
-  checkPage(bLines.length * CONTRACT_LINE_H + 16)
-  doc.text(bLines, CONTRACT_L, y)
-  y += bLines.length * CONTRACT_LINE_H + 16
-
-  // ── Total program fee + payment terms ────────────────────────────────────────
   const travelFeeNum = parseFloat(travelFee.replace(/[^0-9.]/g, ''))
   const hasNumericTravel = !isNaN(travelFeeNum) && /\d/.test(travelFee)
   const totalProgramFee = (client.fee ?? 0) + (hasNumericTravel ? travelFeeNum : 0)
   const depositAmt = client.deposit_amount ?? Math.round(totalProgramFee * 0.5)
   const balanceAmt = totalProgramFee - depositAmt
 
-  checkPage(20)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(15, 14, 12)
-  doc.text(`TOTAL PROGRAM FEE: ${formatCurrency(totalProgramFee)}`, CONTRACT_L, y)
-  y += 20
-
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const paymentLines = [
-    'MT Global Strategies will invoice 100% of the total Program Fee upon contract acceptance.',
-    'Your deposit (50% of fee) is due upon approval of the contract.',
-    'The remaining balance (50% of fee) is due five (5) days after the event.',
-    'The invoice will be billed in full if the event date is less than thirty (30) days from the authorization date.',
-  ]
-  for (const line of paymentLines) {
-    const lines = doc.splitTextToSize(line, CONTRACT_W)
-    checkPage(lines.length * CONTRACT_LINE_H + 4)
-    doc.text(lines, CONTRACT_L, y)
-    y += lines.length * CONTRACT_LINE_H + 4
+  const mergeData: Record<string, string> = {
+    organization: s(client.organization),
+    contact_name: [c?.first_name, c?.last_name].filter(Boolean).map((x: string) => s(x)).join(' '),
+    contact_title: s(c?.title),
+    contact_email: s(c?.email),
+    contact_phone: s(c?.phone),
+    event_name: s(client.event_name),
+    event_date: formatDate(client.event_date),
+    event_city: s(client.event_city),
+    event_location: s(client.event_location),
+    fee: formatCurrency(client.fee),
+    travel_fee: travelFee,
+    total_program_fee: formatCurrency(totalProgramFee),
+    deposit_due: formatCurrency(depositAmt),
+    balance_due: formatCurrency(balanceAmt),
+    business_name: s(business.name) || 'MT GLOBAL STRATEGIES',
+    business_address: s(business.address),
+    date: dateStr,
   }
-  y += 6
 
-  // Computed figures kept out of the legal paragraph above — presented as a
-  // quiet key-value summary, the same bold-label pattern as Services Fee/Travel Fee.
-  checkPage(20)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(80, 78, 72)
-  doc.text(`DEPOSIT DUE: ${formatCurrency(depositAmt)} (USD)     BALANCE DUE: ${formatCurrency(balanceAmt)} (USD)`, CONTRACT_L, y)
-  y += 20
-
-  checkPage(60)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(15, 14, 12)
-  doc.text('PLEASE REMIT ALL PAYMENTS TO:', CONTRACT_L, y)
-  y += 14
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.text(business.name || 'MT GLOBAL STRATEGIES', CONTRACT_L, y)
-  y += CONTRACT_LINE_H
-  if (business.address) {
-    const addrLines = doc.splitTextToSize(business.address, CONTRACT_W)
-    doc.text(addrLines, CONTRACT_L, y)
-    y += addrLines.length * CONTRACT_LINE_H
-  }
-  doc.text('*Bank Information for wire transfer can be provided upon request.', CONTRACT_L, y)
-  y += 20
-
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const availabilityParagraph = 'Please note, availability is not guaranteed until the contract and deposit have been received. All inquiries into availability and tentative holds for dates are done as a courtesy and are subject to change. Pricing as defined herein is valid for sixty (60) days unless mutually agreed otherwise. All parties agree to keep the terms of this agreement strictly confidential and shall not disclose these terms to any outside parties.'
-  bLines = doc.splitTextToSize(availabilityParagraph, CONTRACT_W)
-  checkPage(bLines.length * CONTRACT_LINE_H + 16)
-  doc.text(bLines, CONTRACT_L, y)
-  y += bLines.length * CONTRACT_LINE_H + 20
-
-  // ── Speaker Requirements ──────────────────────────────────────────────────────
-  const speakerRequirements = [
-    "Speaker agrees to present to the best of her ability the information and material described herein and in conversations between the parties as well as to coordinate the details of this program with the Client in order to achieve the outcomes that the Client has stated.",
-    "The Speaker or Speaker's Representatives will pre-approve all promotional material and advertising related to the Speaker with reference to the Client's event. Approvals will be provided within 48 hours and will not be unduly withheld. Promotional materials include, but are not limited to, Speaker's biography, photographs, speech title, and speech description. Speaker will provide headshot(s) and biography.",
-    "No other photographs, information, or materials pertaining to the Speaker may be used without the prior written approval of the Speaker or Speaker's Representatives.",
-    "No videotaping without written consent given by the speaker. If videotaping is to be performed and approved by the speaker, the client agrees to supply a copy of all recorded footage to Speaker within thirty (30) days of event.",
-    "Client grants Speaker permission to use Client's logo on Speaker's website and to list Client as a customer.",
-  ]
-  checkPage(80)
-  y = addSectionRule(doc, y)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setFontSize(CONTRACT_SIZE)
-  doc.setTextColor(15, 14, 12)
-  doc.text('SPEAKER REQUIREMENTS:', CONTRACT_L, y)
-  y += 16
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const speakerReqIntroLines = doc.splitTextToSize('As part of the engagement, the Client and Speaker agree to the following terms:', CONTRACT_W)
-  doc.text(speakerReqIntroLines, CONTRACT_L, y)
-  y += speakerReqIntroLines.length * CONTRACT_LINE_H + 6
-  for (const item of speakerRequirements) {
-    const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
-    checkPage(lineCount * CONTRACT_LINE_H + 6)
-    y = addBullet(doc, s(item), CONTRACT_L + 8, y, CONTRACT_W - 8)
-    y += 6
-  }
-  y += 6
-
-  // ── Technical and Logistical Requirements ────────────────────────────────────
-  const technicalRequirements = [
-    'The Client will manage the technical setup and provide a brief technical walkthrough to address any questions prior to the event.',
-    'The Client will make copies of all handouts.',
-    'Client will provide the following: One (1) easel or whiteboard, a laptop and a clicker for the advancement of slides, and a wireless microphone (if necessary).',
-    'Speaker will provide all materials necessary for the workshop, including slides and handouts, to Client no later than three (3) days prior to the event.',
-    "The Client will support the Speaker's administrative needs for the event, including, but not limited to, distributing handouts and recording participants' results after the negotiation exercises.",
-  ]
-  checkPage(80)
-  y = addSectionRule(doc, y)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setFontSize(CONTRACT_SIZE)
-  doc.setTextColor(15, 14, 12)
-  doc.text('TECHNICAL AND LOGISTICAL REQUIREMENTS:', CONTRACT_L, y)
-  y += 16
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const technicalReqIntroLines = doc.splitTextToSize('As part of the engagement, the Client and the Speaker agree to the following terms:', CONTRACT_W)
-  doc.text(technicalReqIntroLines, CONTRACT_L, y)
-  y += technicalReqIntroLines.length * CONTRACT_LINE_H + 6
-  for (const item of technicalRequirements) {
-    const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
-    checkPage(lineCount * CONTRACT_LINE_H + 6)
-    y = addBullet(doc, s(item), CONTRACT_L + 8, y, CONTRACT_W - 8)
-    y += 6
-  }
-  y += 10
-
-  // ── Cancellation Policy ──────────────────────────────────────────────────────
-  checkPage(80)
-  y = addSectionRule(doc, y)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setFontSize(CONTRACT_SIZE)
-  doc.setTextColor(15, 14, 12)
-  doc.text('CANCELLATION POLICY', CONTRACT_L, y)
-  y += 16
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  const cancellationParagraphs = [
-    "If the Client changes the event dates, the deposit sum will be retained by the Speaker and applied to future presentations or consulting assignments on Client's behalf for a period of one year. If the change is made within thirty (30) days of the event date, the Speaker will retain the deposit without refund to the Client.",
-    'In the event of cancellation of this Agreement by Speaker due to illness, death in the family, or an unforeseen emergency or travel delay, MT Global Strategies will not have any liability for expenses or losses incurred by Client. However, in such an event, MT Global Strategies agrees to refund to Client any advances or deposits received from the Client.',
-    'In addition and notwithstanding any other provision of this agreement, in the event that the performance of any obligation under this agreement by any party to this agreement is prevented due to acts of God, any government restriction, wars, hostilities, civil disturbances, revolutions, strikes, terrorist attacks, lockouts, or any other cause beyond the reasonable control of any party, then such party shall not be responsible to the other parties for failure or delay in performance of its obligations under this agreement. The terms of this clause shall not exempt, but merely suspend, any party from its duty to perform the obligations under this agreement as soon as practicable after a force majeure condition ceases to exist.',
-  ]
-  for (const para of cancellationParagraphs) {
-    const lines = doc.splitTextToSize(para, CONTRACT_W)
-    checkPage(lines.length * CONTRACT_LINE_H + 12)
-    doc.text(lines, CONTRACT_L, y)
-    y += lines.length * CONTRACT_LINE_H + 12
+  for (const block of blocks) {
+    if (block.type === 'heading') {
+      checkPage(block.rule ? 80 : 30)
+      if (block.rule) y = addSectionRule(doc, y)
+      doc.setFont(CONTRACT_FONT, 'bold')
+      doc.setFontSize(CONTRACT_SIZE)
+      doc.setTextColor(15, 14, 12)
+      doc.text(substituteMergeFields(block.text, mergeData).toUpperCase(), CONTRACT_L, y)
+      y += 16
+    } else if (block.type === 'paragraph') {
+      const text = substituteMergeFields(block.text, mergeData)
+      const lines = doc.splitTextToSize(text, CONTRACT_W)
+      checkPage(lines.length * CONTRACT_LINE_H + 12)
+      doc.setFont(CONTRACT_FONT, 'normal')
+      doc.setTextColor(40, 38, 34)
+      doc.text(lines, CONTRACT_L, y)
+      y += lines.length * CONTRACT_LINE_H + 12
+    } else if (block.type === 'key_value') {
+      checkPage(20)
+      doc.setFont(CONTRACT_FONT, 'bold')
+      doc.setTextColor(...(block.emphasis === 'muted' ? [80, 78, 72] as const : [15, 14, 12] as const))
+      doc.text(substituteMergeFields(block.text, mergeData), CONTRACT_L, y)
+      y += 20
+    } else if (block.type === 'bullet_list') {
+      doc.setFont(CONTRACT_FONT, 'normal')
+      doc.setTextColor(40, 38, 34)
+      for (const item of block.items) {
+        const text = substituteMergeFields(item, mergeData)
+        const lineCount = doc.splitTextToSize(text, CONTRACT_W - 20).length
+        checkPage(lineCount * CONTRACT_LINE_H + 6)
+        y = addBullet(doc, text, CONTRACT_L + 8, y, CONTRACT_W - 8)
+        y += 6
+      }
+    } else if (block.type === 'line_list') {
+      doc.setFont(CONTRACT_FONT, 'normal')
+      doc.setTextColor(40, 38, 34)
+      for (const item of block.items) {
+        const text = substituteMergeFields(item, mergeData)
+        const lines = doc.splitTextToSize(text, CONTRACT_W)
+        checkPage(lines.length * CONTRACT_LINE_H + 4)
+        doc.text(lines, CONTRACT_L, y)
+        y += lines.length * CONTRACT_LINE_H + 4
+      }
+    }
   }
   y += 10
 

@@ -134,7 +134,7 @@ export default function ContractsPage() {
       const { fetchBusinessProfile } = await import('@/lib/business-client')
       const client = snapshotToClient(contract)
       const business = await fetchBusinessProfile()
-      const blob = await generateContract(client, business)
+      const blob = await generateContract(client, business, contract.blocks_snapshot)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -155,10 +155,16 @@ export default function ContractsPage() {
 
   return (
     <div className="p-8 max-w-5xl mx-auto animate-fade-in">
-      <div className="mb-8">
-        <h1 className="font-display text-3xl font-semibold text-ink">Contracts</h1>
-        <p className="text-ink-400 text-sm mt-1">{count} total</p>
-        <div className="accent-line mt-3 w-24" />
+      <div className="mb-8 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-ink">Contracts</h1>
+          <p className="text-ink-400 text-sm mt-1">{count} total</p>
+          <div className="accent-line mt-3 w-24" />
+        </div>
+        <Link href="/contracts/templates"
+          className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all mt-1">
+          Manage Templates
+        </Link>
       </div>
 
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">

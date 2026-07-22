@@ -18,6 +18,7 @@ export async function createContract(input: {
   snapshot?: ContractSnapshot
   origin?: ContractOrigin
   label?: string
+  templateId?: string
 }): Promise<Contract> {
   const { data, error } = await supabase.rpc('create_contract', {
     p_engagement_id: input.engagementId ?? null,
@@ -26,6 +27,7 @@ export async function createContract(input: {
     p_snapshot: input.snapshot ?? {},
     p_origin: input.origin ?? 'drafted',
     p_label: input.label ?? 'Speaking Agreement',
+    p_template_id: input.templateId ?? null,
   })
   if (error) throw new Error(`createContract: ${error.message}`)
   return data as Contract

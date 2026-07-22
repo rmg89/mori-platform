@@ -488,6 +488,36 @@ export interface Contract {
   signed_file_url?: string
   signed_file_name?: string
   snapshot: ContractSnapshot
+  template_id?: string
+  // The template's blocks, frozen at document-creation time — not a live
+  // reference. Editing a template later must not retroactively change the
+  // wording of a contract someone may have already signed.
+  blocks_snapshot: ContractTemplateBlock[]
+}
+
+// ─── Contract Templates ─────────────────────────────────────────────────────────
+// The legal/business content of a "drafted" contract — everything from
+// "Compensation and Billing" through "Cancellation Policy" in the current
+// template. Structural elements (header, Program Details table, Project
+// Scope, Authorization signature blocks) are data-shaped, not prose, and stay
+// hardcoded in the renderer rather than becoming template blocks.
+
+export type ContractBlockEmphasis = 'strong' | 'muted'
+
+export type ContractTemplateBlock =
+  | { type: 'heading'; text: string; rule: boolean }      // rule: hairline before it (major section) vs not (sub-heading)
+  | { type: 'paragraph'; text: string }                    // wrapped prose, {{merge_field}} substituted
+  | { type: 'key_value'; text: string; emphasis?: ContractBlockEmphasis }  // one bold line, e.g. "SERVICES FEE: {{fee}} (USD)"
+  | { type: 'bullet_list'; items: string[] }                // addBullet-rendered, hanging indent
+  | { type: 'line_list'; items: string[] }                  // plain sequential lines, no bullet, tight gap
+
+export interface ContractTemplate {
+  id: string
+  name: string
+  is_default: boolean
+  blocks: ContractTemplateBlock[]
+  created_at: string
+  updated_at: string
 }
 
 // ─── AI Types ─────────────────────────────────────────────────────────────────

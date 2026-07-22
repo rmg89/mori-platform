@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState, useCallback, useEffect, useRef, useTransition, createContext, useContext } from 'react'
 import { useStore } from '@/lib/store'
 import {
-  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact, Invoice, Contract
+  Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact, Invoice, Contract, ContractTemplate
 } from '@/types'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import {
@@ -1473,6 +1473,8 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
   const [addingDocument, setAddingDocument] = useState(false)
   const [newDocLabel, setNewDocLabel] = useState('')
   const [newDocOrigin, setNewDocOrigin] = useState<'drafted' | 'received'>('drafted')
+  const [templates, setTemplates] = useState<ContractTemplate[]>([])
+  const [newDocTemplateId, setNewDocTemplateId] = useState('')
 
   const {
     outgoing, incoming, contractRequired,
@@ -1503,6 +1505,17 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
     setContracts(prev => prev.map(c => c.id === updated.id ? updated : c))
   }
 
+  // Templates only matter for drafted documents — load once, the moment the
+  // add-document form opens, rather than on every page load.
+  async function openAddDocument() {
+    setAddingDocument(true)
+    if (templates.length > 0) return
+    const { fetchContractTemplates } = await import('@/lib/contract-templates-client')
+    const found = await fetchContractTemplates()
+    setTemplates(found)
+    setNewDocTemplateId(found.find(t => t.is_default)?.id ?? found[0]?.id ?? '')
+  }
+
   async function handleAddDocument() {
     const { createContract, buildContractSnapshot } = await import('@/lib/contracts-client')
     const created = await createContract({
@@ -1510,7 +1523,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
       organization: e.organization,
       origin: newDocOrigin,
       label: newDocLabel.trim() || (newDocOrigin === 'drafted' ? 'Speaking Agreement' : 'Document'),
-      ...(newDocOrigin === 'drafted' ? { amount: e.fee, snapshot: buildContractSnapshot(e) } : {}),
+      ...(newDocOrigin === 'drafted' ? { amount: e.fee, snapshot: buildContractSnapshot(e), templateId: newDocTemplateId || undefined } : {}),
     })
     setContracts(prev => [...prev, created])
     setAddingDocument(false)
@@ -1532,7 +1545,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
       const { snapshotToClient } = await import('@/lib/contracts-client')
       const business = await fetchBusinessProfile()
       const client = snapshotToClient(doc)
-      const blob = await generateContract(client, business)
+      const blob = await generateContract(client, business, doc.blocks_snapshot)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -1738,6 +1751,17 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
                       Client Provided
                     </button>
                   </div>
+                  {newDocOrigin === 'drafted' && (
+                    <select
+                      value={newDocTemplateId}
+                      onChange={ev => setNewDocTemplateId(ev.target.value)}
+                      className="text-xs font-medium bg-parchment border border-ink-100 rounded-lg px-2.5 py-1.5 outline-none focus:border-gold/40 text-ink-500">
+                      {templates.length === 0 && <option value="">Loading templates…</option>}
+                      {templates.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (default)' : ''}</option>
+                      ))}
+                    </select>
+                  )}
                   <button onClick={handleAddDocument}
                     className="text-xs font-medium text-white bg-ink hover:bg-ink-700 rounded-lg px-3 py-1.5 transition-all">
                     Add
@@ -1749,7 +1773,7 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
                 </div>
               ) : (
                 <button
-                  onClick={() => setAddingDocument(true)}
+                  onClick={openAddDocument}
                   className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-ink-200 text-xs text-ink-300 hover:border-gold/40 hover:text-ink-500 transition-all">
                   <Plus size={11} /> Add document
                 </button>
