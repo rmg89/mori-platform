@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
 import { fetchContracts, setContractStatus, snapshotToClient } from '@/lib/contracts-client'
-import type { Contract, ContractStatus } from '@/types'
+import type { Contract, ContractOrigin, ContractStatus } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { Download, Search } from 'lucide-react'
 import ContractEditModal from '@/components/ContractEditModal'
@@ -39,6 +39,11 @@ function StatusBadge({ status }: { status: ContractStatus }) {
     : 'bg-parchment text-ink-300'
   const label = status === 'signed' ? 'Signed' : status === 'sent' ? 'Sent' : status === 'finalized' ? 'Finalized' : 'Draft'
   return <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cls}`}>{label}</span>
+}
+
+function OriginBadge({ origin }: { origin: ContractOrigin }) {
+  const cls = origin === 'drafted' ? 'bg-gold/10 text-gold-dark' : 'bg-sage/10 text-sage'
+  return <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${cls}`}>{origin === 'drafted' ? 'We draft' : 'From client'}</span>
 }
 
 function FilterTabs<T extends string>({ tabs, value, onChange }: {
@@ -185,50 +190,70 @@ export default function ContractsPage() {
                     <span className="font-mono text-sm text-ink-700">{contract.contract_number}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    {href ? (
-                      <Link href={href} className="text-sm font-medium text-ink hover:text-gold-dark transition-colors truncate block">
-                        {contract.organization}
-                      </Link>
-                    ) : (
-                      <span className="text-sm font-medium text-ink truncate block">{contract.organization}</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {href ? (
+                        <Link href={href} className="text-sm font-medium text-ink hover:text-gold-dark transition-colors truncate">
+                          {contract.organization}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-medium text-ink truncate">{contract.organization}</span>
+                      )}
+                      <OriginBadge origin={contract.origin} />
+                    </div>
                     <span className="text-xs text-ink-300">
-                      Created {formatDate(contract.created_at)}
+                      {contract.label} · Created {formatDate(contract.created_at)}
                       {contract.snapshot.event_date ? ` · Event ${formatDate(contract.snapshot.event_date)}` : ''}
                     </span>
                   </div>
                   <div className="w-24 flex-shrink-0 text-right">
-                    <span className="text-sm font-semibold text-ink">{formatCurrency(contract.amount)}</span>
+                    <span className="text-sm font-semibold text-ink">{contract.amount != null ? formatCurrency(contract.amount) : '—'}</span>
                   </div>
                   <div className="w-20 flex-shrink-0 flex justify-center">
-                    <StatusBadge status={contract.status} />
+                    {contract.origin === 'drafted' ? (
+                      <StatusBadge status={contract.status} />
+                    ) : (
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${contract.signed_file_url ? 'bg-sage/10 text-sage' : 'bg-parchment text-ink-300'}`}>
+                        {contract.signed_file_url ? 'On File' : 'Awaiting'}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-shrink-0 flex items-center gap-2">
-                    {contract.status !== 'signed' && (
-                      <button
-                        onClick={() => setEditingContract(contract)}
-                        className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2.5 py-1.5 transition-all"
-                      >
-                        Edit
-                      </button>
+                    {contract.origin === 'drafted' ? (
+                      <>
+                        {contract.status !== 'signed' && (
+                          <button
+                            onClick={() => setEditingContract(contract)}
+                            className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2.5 py-1.5 transition-all"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {contract.status !== 'signed' && (
+                          <button
+                            onClick={() => handleAdvanceStatus(contract)}
+                            disabled={updatingId === contract.id}
+                            className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2.5 py-1.5 transition-all disabled:opacity-40"
+                          >
+                            {NEXT_STATUS_LABEL[contract.status]}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDownload(contract)}
+                          disabled={downloadingId === contract.id}
+                          className="text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg p-1.5 transition-all disabled:opacity-40"
+                          title="Download"
+                        >
+                          <Download size={13} />
+                        </button>
+                      </>
+                    ) : contract.signed_file_url ? (
+                      <a href={contract.signed_file_url} target="_blank" rel="noopener noreferrer"
+                        className="text-xs font-medium text-gold hover:underline border border-ink-100 hover:border-gold/30 rounded-lg px-2.5 py-1.5 transition-all">
+                        View file
+                      </a>
+                    ) : (
+                      <span className="text-xs text-ink-200 italic px-2.5 py-1.5">Upload from the engagement page</span>
                     )}
-                    {contract.status !== 'signed' && (
-                      <button
-                        onClick={() => handleAdvanceStatus(contract)}
-                        disabled={updatingId === contract.id}
-                        className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2.5 py-1.5 transition-all disabled:opacity-40"
-                      >
-                        {NEXT_STATUS_LABEL[contract.status]}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDownload(contract)}
-                      disabled={downloadingId === contract.id}
-                      className="text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg p-1.5 transition-all disabled:opacity-40"
-                      title="Download"
-                    >
-                      <Download size={13} />
-                    </button>
                   </div>
                 </div>
               )

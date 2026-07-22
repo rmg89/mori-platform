@@ -436,6 +436,12 @@ export interface Invoice {
 
 export type ContractStatus = 'draft' | 'finalized' | 'sent' | 'signed'
 
+// 'drafted': we generate and send it (the full fill-in/download/send/sign flow).
+// 'received': the client sent us theirs (an NDA, their own contract template,
+// etc.) — no PDF to generate, just upload their file and track it. An
+// engagement can have any number of documents of either origin.
+export type ContractOrigin = 'drafted' | 'received'
+
 // Minimal snapshot of the fields generateContract reads, captured at generation
 // time so a later re-download reproduces the original PDF even if the live
 // engagement has since changed. Fields with no Engagement equivalent
@@ -472,8 +478,10 @@ export interface Contract {
   contract_number: string
   sequence_number: number
   organization: string
-  amount: number
+  amount?: number
   status: ContractStatus
+  origin: ContractOrigin
+  label: string
   finalized_at?: string
   sent_at?: string
   signed_at?: string

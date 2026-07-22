@@ -7,21 +7,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { supabaseAdmin } from '@/lib/supabase'
-import type { Contract, ContractSnapshot, ContractStatus } from '@/types'
+import type { Contract, ContractOrigin, ContractSnapshot, ContractStatus } from '@/types'
 
 const supabase = supabaseAdmin()
 
 export async function createContract(input: {
   engagementId?: string
   organization: string
-  amount: number
-  snapshot: ContractSnapshot
+  amount?: number
+  snapshot?: ContractSnapshot
+  origin?: ContractOrigin
+  label?: string
 }): Promise<Contract> {
   const { data, error } = await supabase.rpc('create_contract', {
     p_engagement_id: input.engagementId ?? null,
     p_organization: input.organization,
-    p_amount: input.amount,
-    p_snapshot: input.snapshot,
+    p_amount: input.amount ?? null,
+    p_snapshot: input.snapshot ?? {},
+    p_origin: input.origin ?? 'drafted',
+    p_label: input.label ?? 'Speaking Agreement',
   })
   if (error) throw new Error(`createContract: ${error.message}`)
   return data as Contract
@@ -31,6 +35,19 @@ export async function fetchContractById(id: string): Promise<Contract | null> {
   const { data, error } = await supabase.from('contracts').select('*').eq('id', id).maybeSingle()
   if (error) throw new Error(`fetchContractById: ${error.message}`)
   return data as Contract | null
+}
+
+// All documents attached to an engagement, of any origin — an engagement can
+// have several (e.g. the speaking agreement we draft, plus an NDA the client
+// sent us). Ordered oldest-first, the order they'd naturally have been added.
+export async function fetchContractsForEngagement(engagementId: string): Promise<Contract[]> {
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('engagement_id', engagementId)
+    .order('sequence_number', { ascending: true })
+  if (error) throw new Error(`fetchContractsForEngagement: ${error.message}`)
+  return (data ?? []) as Contract[]
 }
 
 // Strip characters that would break PostgREST's comma-delimited `.or()` filter
@@ -151,4 +168,10 @@ export async function updateContractSnapshot(contract: Contract, patch: Partial<
     .single()
   if (error) throw new Error(`updateContractSnapshot: ${error.message}`)
   return data as Contract
+}
+
+// Removes a document — e.g. one added by mistake through "+ Add document".
+export async function deleteContract(id: string): Promise<void> {
+  const { error } = await supabase.from('contracts').delete().eq('id', id)
+  if (error) throw new Error(`deleteContract: ${error.message}`)
 }

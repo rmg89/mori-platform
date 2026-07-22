@@ -6,7 +6,7 @@
 // helpers are re-exported from contract-utils.ts for convenience.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { Contract, ContractSnapshot, ContractStatus } from '@/types'
+import type { Contract, ContractOrigin, ContractSnapshot, ContractStatus } from '@/types'
 
 export { buildContractSnapshot, snapshotToClient } from '@/lib/contract-utils'
 
@@ -25,10 +25,18 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 export async function createContract(input: {
   engagementId?: string
   organization: string
-  amount: number
-  snapshot: ContractSnapshot
+  amount?: number
+  snapshot?: ContractSnapshot
+  origin?: ContractOrigin
+  label?: string
 }): Promise<Contract> {
   return req('/api/contracts', { method: 'POST', body: JSON.stringify(input) })
+}
+
+// All documents attached to an engagement, of any origin.
+export async function fetchContractsForEngagement(engagementId: string): Promise<Contract[]> {
+  const params = new URLSearchParams({ engagement_id: engagementId })
+  return req(`/api/contracts/for-engagement?${params}`)
 }
 
 export async function fetchContracts(opts: {
@@ -77,4 +85,9 @@ export async function ensureDraftContract(input: {
 
 export async function updateContractSnapshot(contract: Contract, patch: Partial<ContractSnapshot>): Promise<Contract> {
   return req(`/api/contracts/${contract.id}/snapshot`, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+// Removes a document — e.g. one added by mistake through "+ Add document".
+export async function deleteContract(id: string): Promise<void> {
+  await req(`/api/contracts/${id}`, { method: 'DELETE' })
 }
