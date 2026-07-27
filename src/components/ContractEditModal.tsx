@@ -87,6 +87,13 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
       const attendeesNum = parseInt(estimatedAttendees.replace(/[^0-9]/g, ''), 10)
       const depositNum = parseFloat(deposit.replace(/[^0-9.]/g, ''))
       const bookQtyNum = parseInt(bookQuantity.replace(/[^0-9]/g, ''), 10) || 0
+      // "Include book order" is on but no quantity — don't silently save an
+      // empty order (which renders nothing); make the requirement explicit.
+      if (bookIncluded && bookQtyNum <= 0) {
+        setError('Enter a book quantity, or turn off "Include book order".')
+        setSaving(false)
+        return
+      }
       const patch: Partial<ContractSnapshot> = {
         organization: organization.trim(),
         contact_first_name: contactFirstName.trim() || undefined,
