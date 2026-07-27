@@ -173,7 +173,30 @@ export async function updateContractSnapshot(contract: Contract, patch: Partial<
 }
 
 // Removes a document — e.g. one added by mistake through "+ Add document".
+// If it was attached to an engagement, re-derive that engagement's mirrored
+// contract-status timestamps from whatever documents remain, so deleting an
+// engagement's only signed contract doesn't leave it showing "signed"/complete.
 export async function deleteContract(id: string): Promise<void> {
+  const existing = await fetchContractById(id)
   const { error } = await supabase.from('contracts').delete().eq('id', id)
   if (error) throw new Error(`deleteContract: ${error.message}`)
+  if (existing?.engagement_id) await recomputeEngagementContractMirror(existing.engagement_id)
+}
+
+// Deleting can only ever remove justification for a mirror timestamp (never add
+// one), so this nulls any of contract_finalized_at / contract_sent_at /
+// contract_signed_at no longer supported by a remaining document, and leaves
+// the rest untouched (a still-signed sibling keeps the engagement signed).
+async function recomputeEngagementContractMirror(engagementId: string): Promise<void> {
+  const remaining = await fetchContractsForEngagement(engagementId)
+  const anyFinalized = remaining.some(c => c.origin === 'drafted' && ['finalized', 'sent', 'signed'].includes(c.status))
+  const anySent = remaining.some(c => c.origin === 'drafted' && ['sent', 'signed'].includes(c.status))
+  const anySigned = remaining.some(c => (c.origin === 'drafted' && c.status === 'signed') || (c.origin === 'received' && !!c.signed_file_url))
+
+  const patch: Record<string, unknown> = {}
+  if (!anyFinalized) patch.contract_finalized_at = null
+  if (!anySent) patch.contract_sent_at = null
+  if (!anySigned) patch.contract_signed_at = null
+  if (Object.keys(patch).length === 0) return
+  await supabase.from('engagements').update(patch).eq('id', engagementId)
 }
