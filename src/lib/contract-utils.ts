@@ -68,5 +68,8 @@ export function snapshotToClient(contract: Contract): any {
     attendee_location: s.attendee_location,
     project_scope: s.project_scope,
     travel_fee: s.travel_fee,
+    book_quantity: s.book_quantity,
+    book_title: s.book_title,
+    book_vendor: s.book_vendor,
   }
 }

@@ -12,6 +12,7 @@ const BLOCK_TYPE_LABELS: Record<ContractTemplateBlock['type'], string> = {
   key_value: 'Key / Value line',
   bullet_list: 'Bullet list',
   line_list: 'Plain line list',
+  book_section: 'Book order (auto)',
 }
 
 const MERGE_FIELDS: { tag: string; note: string }[] = [
@@ -41,6 +42,7 @@ function newBlockOfType(type: ContractTemplateBlock['type']): ContractTemplateBl
     case 'key_value': return { type: 'key_value', text: 'LABEL: {{fee}}' }
     case 'bullet_list': return { type: 'bullet_list', items: [] }
     case 'line_list': return { type: 'line_list', items: [] }
+    case 'book_section': return { type: 'book_section' }
   }
 }
 
@@ -78,6 +80,14 @@ function BlockEditor({ block, onChange }: { block: ContractTemplateBlock; onChan
           <option value="muted">Muted (gray)</option>
         </select>
       </div>
+    )
+  }
+  if (block.type === 'book_section') {
+    return (
+      <p className="text-xs text-ink-400 bg-parchment border border-ink-100 rounded-lg px-3 py-2">
+        Generated from the contract&apos;s book-order fields (quantity, title, vendor), set in Edit Contract Details.
+        Omitted from the PDF entirely when no book order is set.
+      </p>
     )
   }
   // bullet_list / line_list — one item per line

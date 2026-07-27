@@ -463,6 +463,30 @@ export async function generateContract(client: Client, business: BusinessProfile
         y += lines.length * CONTRACT_LINE_H + 2
       }
       y += 8
+    } else if (block.type === 'book_section') {
+      // Heading + clause built from the contract's book-order fields; omitted
+      // entirely when there's no order. The Client buys the books directly from
+      // the vendor, so this never affects the total program fee.
+      const qty = Number(anyClient.book_quantity)
+      if (!qty || qty <= 0) continue
+      const title = s(anyClient.book_title) || 'Bring Yourself'
+      const vendor = s(anyClient.book_vendor)
+      const qtyFmt = qty.toLocaleString('en-US')
+      const clause = vendor
+        ? `The Client will purchase ${qtyFmt} copies of ${title} directly from ${vendor}. Books will be shipped to the address provided by Client to ${vendor}.`
+        : `The Client will purchase ${qtyFmt} copies of ${title}.`
+      checkPage(CONTRACT_LINE_H + 8)
+      doc.setFont(CONTRACT_FONT, 'bold')
+      doc.setFontSize(CONTRACT_SIZE)
+      doc.setTextColor(15, 14, 12)
+      doc.text('Book fee & logistics:', CONTRACT_L, y)
+      y += CONTRACT_LINE_H + 4
+      const lines = doc.splitTextToSize(s(clause), CONTRACT_W)
+      checkPage(lines.length * CONTRACT_LINE_H + 10)
+      doc.setFont(CONTRACT_FONT, 'normal')
+      doc.setTextColor(40, 38, 34)
+      doc.text(lines, CONTRACT_L, y)
+      y += lines.length * CONTRACT_LINE_H + 10
     }
   }
   y += 8

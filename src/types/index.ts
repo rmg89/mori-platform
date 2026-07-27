@@ -462,6 +462,12 @@ export interface ContractSnapshot {
   fee?: number
   deposit_amount?: number
   travel_fee?: string
+  // Optional book order — presence of book_quantity (> 0) is what turns the
+  // "Book fee & logistics" section on. The Client buys these directly from the
+  // vendor, so it never affects the total program fee.
+  book_quantity?: number
+  book_title?: string
+  book_vendor?: string
   project_scope?: string[]
   run_of_show?: { time: string; what: string; notes?: string }[]
   contact_first_name?: string
@@ -511,6 +517,7 @@ export type ContractTemplateBlock =
   | { type: 'key_value'; text: string; emphasis?: ContractBlockEmphasis }  // one bold line, e.g. "SERVICES FEE: {{fee}} (USD)"
   | { type: 'bullet_list'; items: string[] }                // addBullet-rendered, hanging indent
   | { type: 'line_list'; items: string[] }                  // plain sequential lines, no bullet, tight gap
+  | { type: 'book_section' }                                // auto: heading + clause built from the contract's book-order fields; omitted when none
 
 export interface ContractTemplate {
   id: string

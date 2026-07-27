@@ -72,6 +72,10 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
   const [travelFee, setTravelFee] = useState(s.travel_fee ?? 'TBD')
   const [fee, setFee] = useState(String(s.fee ?? ''))
   const [deposit, setDeposit] = useState(String(s.deposit_amount ?? ''))
+  const [bookIncluded, setBookIncluded] = useState(!!s.book_quantity)
+  const [bookQuantity, setBookQuantity] = useState(String(s.book_quantity ?? ''))
+  const [bookTitle, setBookTitle] = useState(s.book_title ?? 'Bring Yourself')
+  const [bookVendor, setBookVendor] = useState(s.book_vendor ?? 'Porchlight Book Company')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -82,6 +86,7 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
       const feeNum = parseFloat(fee.replace(/[^0-9.]/g, '')) || 0
       const attendeesNum = parseInt(estimatedAttendees.replace(/[^0-9]/g, ''), 10)
       const depositNum = parseFloat(deposit.replace(/[^0-9.]/g, ''))
+      const bookQtyNum = parseInt(bookQuantity.replace(/[^0-9]/g, ''), 10) || 0
       const patch: Partial<ContractSnapshot> = {
         organization: organization.trim(),
         contact_first_name: contactFirstName.trim() || undefined,
@@ -105,6 +110,11 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
         // Empty deposit falls back to the PDF's default 50% split; a number
         // overrides it (undefined, not 0, so a blank field never bills $0).
         deposit_amount: isNaN(depositNum) ? undefined : depositNum,
+        // Book order — only when the toggle is on and a positive quantity is
+        // set; otherwise cleared so the section drops out of the PDF.
+        book_quantity: bookIncluded && bookQtyNum > 0 ? bookQtyNum : undefined,
+        book_title: bookIncluded && bookQtyNum > 0 ? (bookTitle.trim() || undefined) : undefined,
+        book_vendor: bookIncluded && bookQtyNum > 0 ? (bookVendor.trim() || undefined) : undefined,
       }
       const updated = await updateContractSnapshot(contract, patch)
       onSaved(updated)
@@ -166,6 +176,22 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
             <Field label="Services fee" value={fee} onChange={setFee} placeholder="25000" />
           </div>
           <Field label="Deposit (blank = 50% of total)" value={deposit} onChange={setDeposit} placeholder="Auto (50%)" />
+
+          <div className="pt-1">
+            <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input type="checkbox" checked={bookIncluded} onChange={e => setBookIncluded(e.target.checked)} />
+              Include book order
+            </label>
+            {bookIncluded && (
+              <div className="space-y-3 mt-3 pl-1 border-l-2 border-ink-100">
+                <div className="pl-3 space-y-3">
+                  <Field label="Quantity" value={bookQuantity} onChange={setBookQuantity} placeholder="50" />
+                  <Field label="Book title" value={bookTitle} onChange={setBookTitle} placeholder="Bring Yourself" />
+                  <Field label="Vendor (blank = no vendor named)" value={bookVendor} onChange={setBookVendor} placeholder="Porchlight Book Company" />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {error && (
