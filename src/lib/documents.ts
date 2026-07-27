@@ -525,10 +525,17 @@ export async function generateContract(client: Client, business: BusinessProfile
   doc.text('All parties agree with the terms set forth in this document.', CONTRACT_L, y)
   y += CONTRACT_LINE_H + 24
 
-  // Plain signature lines with labels beneath — no table, no caps.
+  // One signing block per party: a bold header naming the party (the client's
+  // own organization is filled in, not left as a blank "Company" line), then a
+  // signature line and a date line with plain labels beneath. No table, no caps.
   const sigLineW = 250, dateX = CONTRACT_L + 300, dateLineW = 120
-  const signatureBlock = (nameLabel: string, includeCompany: boolean) => {
-    checkPage(includeCompany ? 70 : 46)
+  const signatureBlock = (partyHeader: string) => {
+    checkPage(64)
+    doc.setFont(CONTRACT_FONT, 'bold')
+    doc.setFontSize(CONTRACT_SIZE)
+    doc.setTextColor(15, 14, 12)
+    doc.text(partyHeader, CONTRACT_L, y)
+    y += CONTRACT_LINE_H + 16
     doc.setDrawColor(15, 14, 12)
     doc.setLineWidth(0.5)
     doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
@@ -537,18 +544,15 @@ export async function generateContract(client: Client, business: BusinessProfile
     doc.setFont(CONTRACT_FONT, 'normal')
     doc.setFontSize(CONTRACT_SIZE)
     doc.setTextColor(80, 78, 72)
-    doc.text(nameLabel, CONTRACT_L, y)
+    doc.text('Name & title', CONTRACT_L, y)
     doc.text('Date', dateX, y)
     y += CONTRACT_LINE_H
-    if (includeCompany) {
-      doc.text('Company', CONTRACT_L, y)
-      y += CONTRACT_LINE_H
-    }
   }
 
-  signatureBlock('Name & title', true)
-  y += 22
-  signatureBlock('Name & title (MT Global Strategies)', false)
+  const clientOrg = s(client.organization)
+  signatureBlock(`Accepted on behalf of ${clientOrg || 'the Client'}:`)
+  y += 24
+  signatureBlock('Accepted on behalf of MT Global Strategies:')
 
   // Plain page numbers.
   const pageCount = doc.getNumberOfPages()
