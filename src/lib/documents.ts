@@ -381,6 +381,11 @@ export async function generateContract(client: Client, business: BusinessProfile
   const travelFeeNum = parseFloat(travelRaw.replace(/[^0-9.]/g, ''))
   const hasNumericTravel = !isNaN(travelFeeNum) && /\d/.test(travelRaw)
   const totalProgramFee = (client.fee ?? 0) + (hasNumericTravel ? travelFeeNum : 0)
+  // Travel fee is free text. If it's just a number (with optional $, commas,
+  // decimals), format it as currency so it matches the other fee lines; leave
+  // any prose ("billed at cost", "up to $3,000 + expenses") exactly as typed.
+  const travelClean = travelRaw.replace(/[$,\s]/g, '')
+  const travelIsPureNumber = !travelEmpty && travelClean !== '' && !isNaN(Number(travelClean))
   const depositAmt = client.deposit_amount ?? Math.round(totalProgramFee * 0.5)
   const balanceAmt = totalProgramFee - depositAmt
 
@@ -395,7 +400,7 @@ export async function generateContract(client: Client, business: BusinessProfile
     event_city: s(client.event_city),
     event_location: s(client.event_location),
     fee: feeSet ? formatCurrency(client.fee) : '',
-    travel_fee: travelEmpty ? '' : travelRaw,
+    travel_fee: travelEmpty ? '' : (travelIsPureNumber ? formatCurrency(Number(travelClean)) : travelRaw),
     total_program_fee: feeSet ? formatCurrency(totalProgramFee) : '',
     deposit_due: feeSet ? formatCurrency(depositAmt) : '',
     balance_due: feeSet ? formatCurrency(balanceAmt) : '',
