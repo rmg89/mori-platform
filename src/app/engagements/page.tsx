@@ -73,7 +73,12 @@ function getProgressSteps(e: Engagement) {
   const outgoingDone = outgoing.filter(m => m.done).length
   const incomingDone = incoming.filter(m => m.received).length
 
-  const contractComplete = contractRequired === false || (contractRequired === true && contractSent && contractSigned)
+  // Signed implies complete: a drafted document can't be signed without first
+  // being sent, and a received (client-provided) document only ever sets
+  // contract_signed_at (never contract_sent_at, since we never send it) — so
+  // requiring both would leave a received doc on file showing "Signed" yet
+  // never marked complete.
+  const contractComplete = contractRequired === false || (contractRequired === true && contractSigned)
   const contractSub = contractRequired === undefined ? 'Not set'
     : contractRequired === false ? 'Not required'
     : contractSigned ? 'Signed'
