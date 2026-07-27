@@ -343,8 +343,8 @@ export async function generateContract(client: Client, business: BusinessProfile
     doc.setFont(CONTRACT_FONT, 'normal')
     doc.setTextColor(40, 38, 34)
     for (const line of rosLines) {
-      checkPage(CONTRACT_LINE_H + 2)
       const wrapped: string[] = doc.splitTextToSize(line, CONTRACT_W - 14)
+      checkPage(wrapped.length * CONTRACT_LINE_H)
       wrapped.forEach((ln, i) => doc.text(ln, CONTRACT_L + 14, y + i * CONTRACT_LINE_H))
       y += wrapped.length * CONTRACT_LINE_H
     }
