@@ -5,18 +5,48 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { scanEngagement } from '@/lib/ai-scan'
 import { getBackwardTransition } from '@/lib/pipeline'
 
-// Gate every request behind MCP_SECRET_TOKEN (sent as "Authorization: Bearer <token>").
+// Gate every request behind a bearer token (sent as "Authorization: Bearer <token>").
 // Without this, /api/[transport] lets anyone call any of the tools below —
 // including field edits, contact deletion, and engagement archiving — with no auth at all.
-function isAuthorized(req: Request): boolean {
-  const expected = process.env.MCP_SECRET_TOKEN
-  if (!expected) return false // fail closed if the token isn't configured
-
-  const provided = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+//
+// Two credential sources, both accepted:
+//   1. MCP_SECRET_TOKEN — the original single shared token (kept as-is, first-class).
+//   2. MCP_TOKENS — optional, comma-separated "name:token" pairs (e.g. "chi:abc,mori:def"),
+//      one token per person so individuals can be issued and revoked independently.
+// If neither env var is set nothing matches, so it still fails closed.
+function constantTimeEqual(provided: string, expected: string): boolean {
   const a = Buffer.from(provided)
   const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
+  if (a.length !== b.length) return false // length check first: timingSafeEqual throws on mismatched lengths
   return timingSafeEqual(a, b)
+}
+
+// Returns a label identifying the matched credential (the MCP_TOKENS entry name, or
+// 'legacy' for MCP_SECRET_TOKEN) so callers can log who connected, or null if the
+// bearer token matches nothing. Never returns or logs the token itself.
+function authenticate(req: Request): string | null {
+  const provided = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!provided) return null // no token → fail closed, never match an empty entry
+
+  // 1. Legacy single-token path — unchanged behavior, checked first.
+  const expected = process.env.MCP_SECRET_TOKEN
+  if (expected && constantTimeEqual(provided, expected)) return 'legacy'
+
+  // 2. Multi-token path. Parse defensively: MCP_TOKENS may be unset, empty, or have
+  //    stray whitespace around names/tokens. Split each pair on the first ':' only.
+  const raw = process.env.MCP_TOKENS ?? ''
+  for (const entry of raw.split(',')) {
+    const trimmed = entry.trim()
+    if (!trimmed) continue
+    const sep = trimmed.indexOf(':')
+    if (sep === -1) continue // no "name:token" shape — skip malformed entry
+    const name = trimmed.slice(0, sep).trim()
+    const token = trimmed.slice(sep + 1).trim()
+    if (!name || !token) continue // skip entries missing a name or a token
+    if (constantTimeEqual(provided, token)) return name
+  }
+
+  return null
 }
 
 const supabase = supabaseAdmin()
@@ -724,9 +754,11 @@ const handler = createMcpHandler(
 )
 
 async function authorizedHandler(req: Request) {
-  if (!isAuthorized(req)) {
+  const identity = authenticate(req)
+  if (!identity) {
     return new Response('Unauthorized', { status: 401 })
   }
+  console.log(`[mcp] authenticated as "${identity}"`) // label only, never the token
   return handler(req)
 }
 
