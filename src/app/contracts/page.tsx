@@ -2,10 +2,10 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useStore } from '@/lib/store'
-import { fetchContracts, setContractStatus, snapshotToClient } from '@/lib/contracts-client'
+import { fetchContracts, setContractStatus, snapshotToClient, deleteContract } from '@/lib/contracts-client'
 import type { Contract, ContractOrigin, ContractStatus } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import { Download, Search } from 'lucide-react'
+import { Download, Search, Trash2 } from 'lucide-react'
 import ContractEditModal from '@/components/ContractEditModal'
 
 const PAGE_SIZE = 30
@@ -73,6 +73,7 @@ export default function ContractsPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
 
   useEffect(() => {
@@ -145,6 +146,24 @@ export default function ContractsPage() {
       alert(`Could not generate the contract PDF: ${err?.message ?? 'unknown error'}`)
     } finally {
       setDownloadingId(null)
+    }
+  }
+
+  async function handleDelete(contract: Contract) {
+    const closed = contract.origin === 'drafted' ? contract.status === 'signed' : !!contract.signed_file_url
+    const warning = closed
+      ? `${contract.contract_number} (${contract.organization}) is marked closed. Delete it anyway? This can't be undone.`
+      : `Delete ${contract.contract_number} (${contract.organization})? This can't be undone.`
+    if (!window.confirm(warning)) return
+    setDeletingId(contract.id)
+    try {
+      await deleteContract(contract.id)
+      setRows(prev => prev.filter(r => r.id !== contract.id))
+      setCount(c => Math.max(0, c - 1))
+    } catch (err: any) {
+      alert(`Could not delete the contract: ${err?.message ?? 'unknown error'}`)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -262,6 +281,14 @@ export default function ContractsPage() {
                     ) : (
                       <span className="text-xs text-ink-200 italic px-2.5 py-1.5">Upload from the engagement page</span>
                     )}
+                    <button
+                      onClick={() => handleDelete(contract)}
+                      disabled={deletingId === contract.id}
+                      className="text-ink-300 hover:text-red-500 border border-ink-100 hover:border-red-200 rounded-lg p-1.5 transition-all disabled:opacity-40"
+                      title="Delete contract"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               )
