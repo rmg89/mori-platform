@@ -411,32 +411,76 @@ export async function generateContract(client: Client, business: BusinessProfile
   const emptyFields = new Set(Object.entries(mergeData).filter(([, v]) => v === '').map(([k]) => k))
   const referencesEmpty = (text: string) => referencedFields(text).some(k => emptyFields.has(k))
 
+  // One consistent rhythm: a small gap after every body block, a slightly
+  // larger gap above a major (rule:true) section heading, and a tight gap
+  // below any heading — so section breaks read as deliberate, not as stray
+  // double paragraph breaks.
+  const BLOCK_GAP = 8
+  const SECTION_ABOVE = 8
+  const HEADING_BELOW = 5
+
+  // Book fee & logistics — heading + clause from the contract's book-order
+  // fields; renders nothing when there's no order. The Client buys the books
+  // directly from the vendor, so this never affects the total program fee.
+  // Reached both from a `book_section` marker (new contracts) and from the
+  // legacy hardcoded "Book fee & logistics" heading in older frozen snapshots.
+  const renderBookSection = () => {
+    const qty = Number(anyClient.book_quantity)
+    if (!qty || qty <= 0) return
+    const title = s(anyClient.book_title) || 'Bring Yourself'
+    const vendor = s(anyClient.book_vendor)
+    const qtyFmt = qty.toLocaleString('en-US')
+    const clause = vendor
+      ? `The Client will purchase ${qtyFmt} copies of ${title} directly from ${vendor}. Books will be shipped to the address provided by Client to ${vendor}.`
+      : `The Client will purchase ${qtyFmt} copies of ${title}.`
+    checkPage(CONTRACT_LINE_H + 8)
+    doc.setFont(CONTRACT_FONT, 'bold')
+    doc.setFontSize(CONTRACT_SIZE)
+    doc.setTextColor(15, 14, 12)
+    doc.text('Book fee & logistics:', CONTRACT_L, y)
+    y += CONTRACT_LINE_H + HEADING_BELOW
+    const lines = doc.splitTextToSize(s(clause), CONTRACT_W)
+    checkPage(lines.length * CONTRACT_LINE_H + BLOCK_GAP)
+    doc.setFont(CONTRACT_FONT, 'normal')
+    doc.setTextColor(40, 38, 34)
+    doc.text(lines, CONTRACT_L, y)
+    y += lines.length * CONTRACT_LINE_H + BLOCK_GAP
+  }
+  const isLegacyBookHeading = (text: string) => /^book fee (&|and) logistics:?$/i.test(text.trim())
+  const isLegacyBookParagraph = (text: string) => /^the client will purchase 50 copies of bring yourself/i.test(text.trim())
+
   for (const block of blocks) {
     if (block.type === 'heading') {
+      // Older contracts hardcoded the book section as a "Book fee & logistics"
+      // heading + "50 copies..." paragraph instead of a book_section marker.
+      // Route the heading through the data-driven renderer (its paragraph is
+      // skipped below) so the book toggle controls it in those contracts too.
+      if (isLegacyBookHeading(block.text)) { renderBookSection(); continue }
       if (referencesEmpty(block.text)) continue
-      if (block.rule) y += 8 // extra breathing room above a major section (no rule line)
+      if (block.rule) y += SECTION_ABOVE
       checkPage(CONTRACT_LINE_H + 8)
       doc.setFont(CONTRACT_FONT, 'bold')
       doc.setFontSize(CONTRACT_SIZE)
       doc.setTextColor(15, 14, 12)
       doc.text(substituteMergeFields(block.text, mergeData), CONTRACT_L, y)
-      y += CONTRACT_LINE_H + 4
+      y += CONTRACT_LINE_H + HEADING_BELOW
     } else if (block.type === 'paragraph') {
+      if (isLegacyBookParagraph(block.text)) continue // rendered by renderBookSection at its heading
       if (referencesEmpty(block.text)) continue
       const text = substituteMergeFields(block.text, mergeData)
       const lines = doc.splitTextToSize(text, CONTRACT_W)
-      checkPage(lines.length * CONTRACT_LINE_H + 10)
+      checkPage(lines.length * CONTRACT_LINE_H + BLOCK_GAP)
       doc.setFont(CONTRACT_FONT, 'normal')
       doc.setTextColor(40, 38, 34)
       doc.text(lines, CONTRACT_L, y)
-      y += lines.length * CONTRACT_LINE_H + 10
+      y += lines.length * CONTRACT_LINE_H + BLOCK_GAP
     } else if (block.type === 'key_value') {
       if (referencesEmpty(block.text)) continue
-      checkPage(CONTRACT_LINE_H + 6)
+      checkPage(CONTRACT_LINE_H + BLOCK_GAP)
       doc.setFont(CONTRACT_FONT, 'bold')
       doc.setTextColor(...(block.emphasis === 'muted' ? [80, 78, 72] as const : [15, 14, 12] as const))
       doc.text(substituteMergeFields(block.text, mergeData), CONTRACT_L, y)
-      y += CONTRACT_LINE_H + 6
+      y += CONTRACT_LINE_H + BLOCK_GAP
     } else if (block.type === 'bullet_list') {
       const items = block.items.filter(item => !referencesEmpty(item))
       if (!items.length) continue
@@ -449,7 +493,7 @@ export async function generateContract(client: Client, business: BusinessProfile
         y = addBullet(doc, text, CONTRACT_L, y, CONTRACT_W)
         y += 6
       }
-      y += 6
+      y += BLOCK_GAP
     } else if (block.type === 'line_list') {
       const items = block.items.filter(item => !referencesEmpty(item))
       if (!items.length) continue
@@ -462,31 +506,9 @@ export async function generateContract(client: Client, business: BusinessProfile
         doc.text(lines, CONTRACT_L, y)
         y += lines.length * CONTRACT_LINE_H + 2
       }
-      y += 8
+      y += BLOCK_GAP
     } else if (block.type === 'book_section') {
-      // Heading + clause built from the contract's book-order fields; omitted
-      // entirely when there's no order. The Client buys the books directly from
-      // the vendor, so this never affects the total program fee.
-      const qty = Number(anyClient.book_quantity)
-      if (!qty || qty <= 0) continue
-      const title = s(anyClient.book_title) || 'Bring Yourself'
-      const vendor = s(anyClient.book_vendor)
-      const qtyFmt = qty.toLocaleString('en-US')
-      const clause = vendor
-        ? `The Client will purchase ${qtyFmt} copies of ${title} directly from ${vendor}. Books will be shipped to the address provided by Client to ${vendor}.`
-        : `The Client will purchase ${qtyFmt} copies of ${title}.`
-      checkPage(CONTRACT_LINE_H + 8)
-      doc.setFont(CONTRACT_FONT, 'bold')
-      doc.setFontSize(CONTRACT_SIZE)
-      doc.setTextColor(15, 14, 12)
-      doc.text('Book fee & logistics:', CONTRACT_L, y)
-      y += CONTRACT_LINE_H + 4
-      const lines = doc.splitTextToSize(s(clause), CONTRACT_W)
-      checkPage(lines.length * CONTRACT_LINE_H + 10)
-      doc.setFont(CONTRACT_FONT, 'normal')
-      doc.setTextColor(40, 38, 34)
-      doc.text(lines, CONTRACT_L, y)
-      y += lines.length * CONTRACT_LINE_H + 10
+      renderBookSection()
     }
   }
   y += 8
