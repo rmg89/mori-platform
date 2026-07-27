@@ -265,12 +265,18 @@ function addContractHeader(doc: any, signature: SignatureImage | null, dateStr: 
 // wrap independently and the row grows to fit whichever is taller — some
 // labels ("Event / Hotel Venue / Virtual Platform:") are long enough at this
 // size to need more than one line.
-function addProgramRow(doc: any, y: number, label: string, valueLines: string[], labelW = 175): number {
+// `reserve(needed)` page-breaks if the row won't fit and returns the y to draw
+// at — a row's real height is dynamic (many run-of-show entries or contacts
+// can push it well past 30pt), so it has to reserve its own computed height
+// rather than trusting a fixed guess at the call site, or a tall row starting
+// near the bottom of a page renders straight off the edge.
+function addProgramRow(doc: any, y: number, label: string, valueLines: string[], reserve: (needed: number) => number, labelW = 175): number {
   const content = valueLines.length ? valueLines : ['—']
   doc.setFont(CONTRACT_FONT, 'bold')
   doc.setFontSize(CONTRACT_SIZE)
   const labelLines: string[] = doc.splitTextToSize(label.toUpperCase(), labelW - 16)
   const rowH = Math.max(Math.max(labelLines.length, content.length) * CONTRACT_LINE_H + 12, 28)
+  y = reserve(rowH)
   doc.setFillColor(248, 246, 242)
   doc.rect(CONTRACT_L, y, labelW, rowH, 'F')
   doc.setDrawColor(205, 202, 196)
@@ -327,6 +333,10 @@ export async function generateContract(client: Client, business: BusinessProfile
   const checkPage = (needed = 40) => {
     if (y + needed > CONTRACT_PAGE_H) { doc.addPage(); y = 50 }
   }
+  // Page-break for a block of the given height, then hand back the y to draw
+  // at (whichever page we ended up on). Used by addProgramRow, whose real
+  // height it only knows after measuring.
+  const reserve = (needed: number) => { checkPage(needed); return y }
 
   const businessAddress = (business.address || '2425 L Street NW, #409 Washington, DC 20037').replace(/\n+/g, ', ')
   const clientAddress = s(c?.address)
@@ -357,28 +367,22 @@ export async function generateContract(client: Client, business: BusinessProfile
     : []
   const scopeItems: string[] = (anyClient.project_scope ?? []).filter((x: string) => x && x.trim())
 
-  checkPage(30)
-  y = addProgramRow(doc, y, 'Speaker:', ['Mori Taheripour'])
-  checkPage(30)
+  y = addProgramRow(doc, y, 'Speaker:', ['Mori Taheripour'], reserve)
   y = addProgramRow(doc, y, 'Event Details:', [
     `Client: ${s(client.organization)}`,
     `Estimated Attendees: ${anyClient.audience_size ?? '—'}`,
     `Attendee Location: ${s(anyClient.attendee_location) || s(client.event_city) || '—'}`,
-  ])
-  checkPage(30)
+  ], reserve)
   y = addProgramRow(doc, y, 'Date & Time:', [
     `Date: ${formatDate(client.event_date)}`,
     `Time: ${s(client.event_time) || '—'}`,
-  ])
-  checkPage(30)
+  ], reserve)
   y = addProgramRow(doc, y, 'Event / Hotel Venue / Virtual Platform:', [
     `Location: ${s(client.event_location) || (isVirtual ? 'Virtual' : '—')}`,
     `Tech Platform: ${s(anyClient.tech_platform) || '—'}`,
-  ])
-  checkPage(30)
-  y = addProgramRow(doc, y, 'Primary Contact(s):', contactLines)
-  checkPage(30)
-  y = addProgramRow(doc, y, 'Run of Show:', rosLines)
+  ], reserve)
+  y = addProgramRow(doc, y, 'Primary Contact(s):', contactLines, reserve)
+  y = addProgramRow(doc, y, 'Run of Show:', rosLines, reserve)
   y += 16
 
   // ── Project Scope Includes ───────────────────────────────────────────────────

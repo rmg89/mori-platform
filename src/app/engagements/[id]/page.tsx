@@ -1580,6 +1580,8 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
       a.download = `${doc.label.toLowerCase().replace(/\s+/g, '-')}-${e.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`Could not generate the contract PDF: ${err?.message ?? 'unknown error'}`)
     } finally {
       setDownloadingContractId(null)
     }
@@ -1618,11 +1620,17 @@ function ProgressTrack({ e, save }: { e: Engagement; save: (p: Partial<Engagemen
       formData.append('engagement_id', e.id)
       formData.append('folder', 'contracts')
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      if (!res.ok) return
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        alert(`Upload failed: ${body.error ?? res.statusText}`)
+        return
+      }
       const { url } = await res.json()
       const { attachSignedContractFile } = await import('@/lib/contracts-client')
       const updated = await attachSignedContractFile(doc, url, file.name)
       replaceContract(updated)
+    } catch (err: any) {
+      alert(`Upload failed: ${err?.message ?? 'unknown error'}`)
     } finally {
       setUploadingFileForId(null)
     }

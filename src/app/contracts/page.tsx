@@ -141,6 +141,8 @@ export default function ContractsPage() {
       a.download = `${contract.contract_number.toLowerCase()}-${contract.organization.toLowerCase().replace(/\s+/g, '-')}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`Could not generate the contract PDF: ${err?.message ?? 'unknown error'}`)
     } finally {
       setDownloadingId(null)
     }

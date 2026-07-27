@@ -71,13 +71,17 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
   const [projectScope, setProjectScope] = useState((s.project_scope ?? []).join('\n'))
   const [travelFee, setTravelFee] = useState(s.travel_fee ?? 'TBD')
   const [fee, setFee] = useState(String(s.fee ?? ''))
+  const [deposit, setDeposit] = useState(String(s.deposit_amount ?? ''))
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleSave() {
     setSaving(true)
+    setError(null)
     try {
       const feeNum = parseFloat(fee.replace(/[^0-9.]/g, '')) || 0
       const attendeesNum = parseInt(estimatedAttendees.replace(/[^0-9]/g, ''), 10)
+      const depositNum = parseFloat(deposit.replace(/[^0-9.]/g, ''))
       const patch: Partial<ContractSnapshot> = {
         organization: organization.trim(),
         contact_first_name: contactFirstName.trim() || undefined,
@@ -98,10 +102,15 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
         project_scope: projectScope.split('\n').map(x => x.trim()).filter(Boolean),
         travel_fee: travelFee.trim() || 'TBD',
         fee: feeNum,
+        // Empty deposit falls back to the PDF's default 50% split; a number
+        // overrides it (undefined, not 0, so a blank field never bills $0).
+        deposit_amount: isNaN(depositNum) ? undefined : depositNum,
       }
       const updated = await updateContractSnapshot(contract, patch)
       onSaved(updated)
       onClose()
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not save. Check your connection and try again.')
     } finally {
       setSaving(false)
     }
@@ -156,7 +165,12 @@ export default function ContractEditModal({ contract, onClose, onSaved }: Contra
             <Field label="Travel fee" value={travelFee} onChange={setTravelFee} placeholder="TBD" />
             <Field label="Services fee" value={fee} onChange={setFee} placeholder="25000" />
           </div>
+          <Field label="Deposit (blank = 50% of total)" value={deposit} onChange={setDeposit} placeholder="Auto (50%)" />
         </div>
+
+        {error && (
+          <p className="text-xs text-red-500 mt-4">{error}</p>
+        )}
 
         <div className="flex items-center justify-end gap-2 mt-6">
           <button onClick={onClose}
