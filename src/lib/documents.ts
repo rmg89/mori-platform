@@ -198,113 +198,55 @@ function addLineItemsTableHeader(doc: any, y: number, L: number, R: number, W: n
 }
 
 // ─── Contract ─────────────────────────────────────────────────────────────────
-// Matches the firm's real "Agreement: Speaking Engagement" template, letterhead
-// and terms verbatim — this is a document a client actually signs, not a
-// stylistic mock-up, so section wording follows the supplied boilerplate.
-//
-// One font, one size, throughout (CONTRACT_FONT/CONTRACT_SIZE below) — headers,
-// labels, and emphasis are distinguished only by bold weight and, where it
-// helps scanning, all caps. The one exception is the fallback text wordmark in
-// the header, which stands in for a graphic logo when no signature image is
-// configured, not for document content.
+// A plain, letter-like document — closer to a Word letter than a branded
+// template. One font, one body size throughout; headings are the same size,
+// just bold and sentence case. No rules, borders, or shading anywhere. Empty
+// fields are omitted entirely rather than printed as "—"/"TBD" placeholders,
+// so a half-filled contract still reads clean. The only decoration kept is the
+// centered logo lockup at the very top (the graphic wordmark).
 
 const CONTRACT_L = 50, CONTRACT_R = 562, CONTRACT_W = CONTRACT_R - CONTRACT_L
 const CONTRACT_PAGE_H = 740
 const CONTRACT_FONT = 'helvetica'
-const CONTRACT_SIZE = 10
-const CONTRACT_LINE_H = 13
+const CONTRACT_SIZE = 11
+const CONTRACT_LINE_H = 15
 
-// Centered logo (falls back to a text wordmark), DATE line, and the title —
-// same plain, monochrome treatment as the invoice header (addInvoiceHeader):
-// no accent color anywhere in the document, just ink and gray.
+// Centered logo lockup (signature image, or the MT / GLOBAL STRATEGIES text
+// wordmark as its graphic stand-in), a plain date line, and a plain bold
+// sentence-case title sitting close to the body. No rules.
 function addContractHeader(doc: any, signature: SignatureImage | null, dateStr: string) {
   doc.setFont(CONTRACT_FONT, 'normal')
   doc.setFontSize(CONTRACT_SIZE)
-  doc.setTextColor(15, 14, 12)
-  doc.text(dateStr, CONTRACT_L, 40)
+  doc.setTextColor(80, 78, 72)
+  doc.text(dateStr, CONTRACT_L, 46)
 
   if (signature) {
-    const maxW = 160, maxH = 46
+    const maxW = 160, maxH = 44
     const scale = Math.min(maxH / signature.height, maxW / signature.width, 1)
     const w = signature.width * scale, h = signature.height * scale
-    doc.addImage(signature.dataUrl, 'PNG', (612 - w) / 2, 44, w, h)
+    doc.addImage(signature.dataUrl, 'PNG', (612 - w) / 2, 36, w, h)
   } else {
-    // Stands in for a graphic logo — not document content, so exempt from
-    // the body's font/size rule the same way an <img> alt text would be.
+    // The graphic wordmark stand-in — kept as-is (the one bit of branding).
     doc.setFont(CONTRACT_FONT, 'bold')
     doc.setFontSize(15)
-    doc.text('MT GLOBAL STRATEGIES', 306, 68, { align: 'center' })
+    doc.setTextColor(15, 14, 12)
+    doc.text('MT GLOBAL STRATEGIES', 306, 62, { align: 'center' })
   }
 
-  // Light hairline, then the bold uppercase title, then a stronger rule
-  // closing the header — identical two-rule structure to addInvoiceHeader.
-  doc.setDrawColor(205, 202, 196)
-  doc.setLineWidth(0.5)
-  doc.line(CONTRACT_L, 100, CONTRACT_R, 100)
-
   doc.setFont(CONTRACT_FONT, 'bold')
   doc.setFontSize(CONTRACT_SIZE)
-  doc.setTextColor(80, 78, 72)
-  doc.text('AGREEMENT: SPEAKING ENGAGEMENT', CONTRACT_L, 118)
+  doc.setTextColor(15, 14, 12)
+  doc.text('Speaking agreement', CONTRACT_L, 98)
 
-  doc.setDrawColor(15, 14, 12)
-  doc.setLineWidth(0.6)
-  doc.line(CONTRACT_L, 126, CONTRACT_R, 126)
-
-  doc.setDrawColor(15, 14, 12)
-  doc.setLineWidth(0.5)
   doc.setFont(CONTRACT_FONT, 'normal')
   doc.setFontSize(CONTRACT_SIZE)
   doc.setTextColor(15, 14, 12)
-}
-
-// One bordered two-column row of the Program Details table (label | wrapped value lines).
-// Quiet hairline borders + a pale shaded label cell, matching the invoice's
-// table-header treatment. Label is bold caps, value is plain — same font and
-// size as everything else, distinguished only by weight/case. Both columns
-// wrap independently and the row grows to fit whichever is taller — some
-// labels ("Event / Hotel Venue / Virtual Platform:") are long enough at this
-// size to need more than one line.
-// `reserve(needed)` page-breaks if the row won't fit and returns the y to draw
-// at — a row's real height is dynamic (many run-of-show entries or contacts
-// can push it well past 30pt), so it has to reserve its own computed height
-// rather than trusting a fixed guess at the call site, or a tall row starting
-// near the bottom of a page renders straight off the edge.
-function addProgramRow(doc: any, y: number, label: string, valueLines: string[], reserve: (needed: number) => number, labelW = 175): number {
-  const content = valueLines.length ? valueLines : ['—']
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setFontSize(CONTRACT_SIZE)
-  const labelLines: string[] = doc.splitTextToSize(label.toUpperCase(), labelW - 16)
-  const rowH = Math.max(Math.max(labelLines.length, content.length) * CONTRACT_LINE_H + 12, 28)
-  y = reserve(rowH)
-  doc.setFillColor(248, 246, 242)
-  doc.rect(CONTRACT_L, y, labelW, rowH, 'F')
-  doc.setDrawColor(205, 202, 196)
-  doc.setLineWidth(0.5)
-  doc.rect(CONTRACT_L, y, CONTRACT_W, rowH)
-  doc.line(CONTRACT_L + labelW, y, CONTRACT_L + labelW, y + rowH)
-  doc.setTextColor(80, 78, 72)
-  doc.text(labelLines, CONTRACT_L + 8, y + 16)
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(15, 14, 12)
-  doc.text(content, CONTRACT_L + labelW + 8, y + 16)
-  return y + rowH
-}
-
-// Hairline rule that opens a new major section — the invoice's segmented,
-// breathable feel rather than one dense block of legal text.
-function addSectionRule(doc: any, y: number): number {
-  doc.setDrawColor(205, 202, 196)
-  doc.setLineWidth(0.4)
-  doc.line(CONTRACT_L, y, CONTRACT_R, y)
-  return y + 18
 }
 
 // Hanging-indent bullet: the bullet sits at x, wrapped continuation lines
-// align under the text (not flush back to the bullet) — matches how a
-// professionally typeset bullet list wraps.
+// align under the text (not flush back to the bullet).
 function addBullet(doc: any, text: string, x: number, y: number, width: number, lineH = CONTRACT_LINE_H): number {
-  const bulletW = 12
+  const bulletW = 14
   const lines = doc.splitTextToSize(text, width - bulletW)
   doc.text('•', x, y)
   for (let i = 0; i < lines.length; i++) {
@@ -320,6 +262,13 @@ function substituteMergeFields(text: string, data: Record<string, string>): stri
   return s(text.replace(/\{\{(\w+)\}\}/g, (_match, key) => data[key] ?? ''))
 }
 
+// Which {{fields}} a piece of template text references.
+function referencedFields(text: string): string[] {
+  const out: string[] = []
+  text.replace(/\{\{(\w+)\}\}/g, (_m, key) => { out.push(key); return '' })
+  return out
+}
+
 export async function generateContract(client: Client, business: BusinessProfile, blocks: ContractTemplateBlock[]): Promise<Blob> {
   const doc = createDoc()
   const signature = await loadSignatureImage()
@@ -329,14 +278,10 @@ export async function generateContract(client: Client, business: BusinessProfile
   const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   addContractHeader(doc, signature, dateStr)
 
-  let y = 145
+  let y = 120
   const checkPage = (needed = 40) => {
     if (y + needed > CONTRACT_PAGE_H) { doc.addPage(); y = 50 }
   }
-  // Page-break for a block of the given height, then hand back the y to draw
-  // at (whichever page we ended up on). Used by addProgramRow, whose real
-  // height it only knows after measuring.
-  const reserve = (needed: number) => { checkPage(needed); return y }
 
   const businessAddress = (business.address || '2425 L Street NW, #409 Washington, DC 20037').replace(/\n+/g, ', ')
   const clientAddress = s(c?.address)
@@ -344,71 +289,97 @@ export async function generateContract(client: Client, business: BusinessProfile
   doc.setFont(CONTRACT_FONT, 'normal')
   doc.setFontSize(CONTRACT_SIZE)
   doc.setTextColor(40, 38, 34)
-  const intro = `This agreement is between MT GLOBAL STRATEGIES (the "Speaker"), located at ${businessAddress}, and ${s(client.organization)} (the "Client")${clientAddress ? `, with offices at ${clientAddress}` : ''}.`
-  let introLines = doc.splitTextToSize(intro, CONTRACT_W)
+  const intro = `This agreement is between MT Global Strategies (the "Speaker"), located at ${businessAddress}, and ${s(client.organization)} (the "Client")${clientAddress ? `, with offices at ${clientAddress}` : ''}.`
+  const introLines = doc.splitTextToSize(intro, CONTRACT_W)
   doc.text(introLines, CONTRACT_L, y)
-  y += introLines.length * CONTRACT_LINE_H + 14
+  y += introLines.length * CONTRACT_LINE_H + 16
 
-  const progIntro = 'Program Details: Client wishes to retain the services of "Speaker" for the purpose and terms below:'
-  introLines = doc.splitTextToSize(progIntro, CONTRACT_W)
-  doc.text(introLines, CONTRACT_L, y)
-  y += introLines.length * CONTRACT_LINE_H + 12
-
-  // ── Program Details table ──────────────────────────────────────────────────
+  // ── Program details — flat bold-label / value lines, empties omitted ─────────
   const isVirtual = client.event_format === 'virtual'
-  const contactLines = c
-    ? [`${s(c.first_name)} ${s(c.last_name)}`, c.title ? s(c.title) : null, c.email ? s(c.email) : null, c.phone ? s(c.phone) : null].filter(Boolean) as string[]
-    : []
-  const rosLines = (anyClient.run_of_show as Record<string, unknown>[] | undefined)?.length
+  const contactValue = c
+    ? [`${s(c.first_name)} ${s(c.last_name)}`.trim(), s(c.title), s(c.email), s(c.phone)].filter(Boolean).join(', ')
+    : ''
+  const rosLines: string[] = (anyClient.run_of_show as Record<string, unknown>[] | undefined)?.length
     ? anyClient.run_of_show.map((r: Record<string, unknown>) => {
         const n = normalizeRosForPdf(r)
-        return [n.date, n.time, n.what].filter(Boolean).join(' — ')
-      })
+        return s([n.date, n.time, n.what].filter(Boolean).join(' - '))
+      }).filter((l: string) => l.trim())
     : []
   const scopeItems: string[] = (anyClient.project_scope ?? []).filter((x: string) => x && x.trim())
 
-  y = addProgramRow(doc, y, 'Speaker:', ['Mori Taheripour'], reserve)
-  y = addProgramRow(doc, y, 'Event Details:', [
-    `Client: ${s(client.organization)}`,
-    `Estimated Attendees: ${anyClient.audience_size ?? '—'}`,
-    `Attendee Location: ${s(anyClient.attendee_location) || s(client.event_city) || '—'}`,
-  ], reserve)
-  y = addProgramRow(doc, y, 'Date & Time:', [
-    `Date: ${formatDate(client.event_date)}`,
-    `Time: ${s(client.event_time) || '—'}`,
-  ], reserve)
-  y = addProgramRow(doc, y, 'Event / Hotel Venue / Virtual Platform:', [
-    `Location: ${s(client.event_location) || (isVirtual ? 'Virtual' : '—')}`,
-    `Tech Platform: ${s(anyClient.tech_platform) || '—'}`,
-  ], reserve)
-  y = addProgramRow(doc, y, 'Primary Contact(s):', contactLines, reserve)
-  y = addProgramRow(doc, y, 'Run of Show:', rosLines, reserve)
-  y += 16
-
-  // ── Project Scope Includes ───────────────────────────────────────────────────
-  checkPage(30)
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setFontSize(CONTRACT_SIZE)
-  doc.setTextColor(15, 14, 12)
-  doc.text('PROJECT SCOPE INCLUDES:', CONTRACT_L, y)
-  y += 16
-  doc.setFont(CONTRACT_FONT, 'normal')
-  doc.setTextColor(40, 38, 34)
-  for (const item of (scopeItems.length ? scopeItems : [''])) {
-    const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
-    checkPage(lineCount * CONTRACT_LINE_H + 4)
-    y = addBullet(doc, s(item), CONTRACT_L + 8, y, CONTRACT_W - 8)
-    y += 4
+  // One "Label: value" line, label bold + value normal, value wrapping under
+  // itself. Omitted entirely when the value is empty.
+  const labeledLine = (label: string, value: string) => {
+    if (!value) return
+    doc.setFont(CONTRACT_FONT, 'bold')
+    doc.setFontSize(CONTRACT_SIZE)
+    const labelText = `${label} `
+    const labelW = doc.getTextWidth(labelText)
+    const valueLines: string[] = doc.splitTextToSize(value, CONTRACT_W - labelW)
+    checkPage(valueLines.length * CONTRACT_LINE_H + 2)
+    doc.setTextColor(15, 14, 12)
+    doc.text(labelText, CONTRACT_L, y)
+    doc.setFont(CONTRACT_FONT, 'normal')
+    doc.setTextColor(40, 38, 34)
+    valueLines.forEach((ln, i) => doc.text(ln, CONTRACT_L + labelW, y + i * CONTRACT_LINE_H))
+    y += valueLines.length * CONTRACT_LINE_H + 2
   }
-  y += 8
 
-  // ── Template body: Compensation and Billing through Cancellation Policy ──────
-  // Everything below is editable template content (see /contracts/templates),
-  // not hardcoded — the structural sections above and Authorization below stay
-  // fixed since they're data-shaped, not prose.
-  const travelFee = s(anyClient.travel_fee) || 'TBD'
-  const travelFeeNum = parseFloat(travelFee.replace(/[^0-9.]/g, ''))
-  const hasNumericTravel = !isNaN(travelFeeNum) && /\d/.test(travelFee)
+  labeledLine('Speaker:', 'Mori Taheripour')
+  labeledLine('Client:', s(client.organization))
+  labeledLine('Estimated attendees:', anyClient.audience_size ? String(anyClient.audience_size) : '')
+  labeledLine('Attendee location:', s(anyClient.attendee_location) || s(client.event_city))
+  labeledLine('Date:', client.event_date ? formatDate(client.event_date) : '')
+  labeledLine('Time:', s(client.event_time))
+  labeledLine('Location:', s(client.event_location) || (isVirtual ? 'Virtual' : ''))
+  labeledLine('Tech platform:', s(anyClient.tech_platform))
+  labeledLine('Primary contact:', contactValue)
+  if (rosLines.length) {
+    checkPage(CONTRACT_LINE_H * (rosLines.length + 1))
+    doc.setFont(CONTRACT_FONT, 'bold')
+    doc.setTextColor(15, 14, 12)
+    doc.text('Run of show:', CONTRACT_L, y)
+    y += CONTRACT_LINE_H
+    doc.setFont(CONTRACT_FONT, 'normal')
+    doc.setTextColor(40, 38, 34)
+    for (const line of rosLines) {
+      checkPage(CONTRACT_LINE_H + 2)
+      const wrapped: string[] = doc.splitTextToSize(line, CONTRACT_W - 14)
+      wrapped.forEach((ln, i) => doc.text(ln, CONTRACT_L + 14, y + i * CONTRACT_LINE_H))
+      y += wrapped.length * CONTRACT_LINE_H
+    }
+    y += 2
+  }
+  y += 10
+
+  // ── Project scope — omitted entirely when there are no items ─────────────────
+  if (scopeItems.length) {
+    checkPage(30)
+    doc.setFont(CONTRACT_FONT, 'bold')
+    doc.setFontSize(CONTRACT_SIZE)
+    doc.setTextColor(15, 14, 12)
+    doc.text('Project scope includes:', CONTRACT_L, y)
+    y += CONTRACT_LINE_H + 2
+    doc.setFont(CONTRACT_FONT, 'normal')
+    doc.setTextColor(40, 38, 34)
+    for (const item of scopeItems) {
+      const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
+      checkPage(lineCount * CONTRACT_LINE_H + 4)
+      y = addBullet(doc, s(item), CONTRACT_L, y, CONTRACT_W)
+      y += 4
+    }
+    y += 12
+  }
+
+  // ── Template body: editable content (see /contracts/templates) ───────────────
+  // Money fields resolve to '' when unset (not "—"), and any block/item that
+  // references an empty field is omitted — so a fee-less contract simply drops
+  // its fee lines instead of printing "-- (USD)".
+  const feeSet = !!client.fee
+  const travelRaw = s(anyClient.travel_fee)
+  const travelEmpty = !travelRaw || /^tbd$/i.test(travelRaw.trim())
+  const travelFeeNum = parseFloat(travelRaw.replace(/[^0-9.]/g, ''))
+  const hasNumericTravel = !isNaN(travelFeeNum) && /\d/.test(travelRaw)
   const totalProgramFee = (client.fee ?? 0) + (hasNumericTravel ? travelFeeNum : 0)
   const depositAmt = client.deposit_amount ?? Math.round(totalProgramFee * 0.5)
   const balanceAmt = totalProgramFee - depositAmt
@@ -420,117 +391,122 @@ export async function generateContract(client: Client, business: BusinessProfile
     contact_email: s(c?.email),
     contact_phone: s(c?.phone),
     event_name: s(client.event_name),
-    event_date: formatDate(client.event_date),
+    event_date: client.event_date ? formatDate(client.event_date) : '',
     event_city: s(client.event_city),
     event_location: s(client.event_location),
-    fee: formatCurrency(client.fee),
-    travel_fee: travelFee,
-    total_program_fee: formatCurrency(totalProgramFee),
-    deposit_due: formatCurrency(depositAmt),
-    balance_due: formatCurrency(balanceAmt),
-    business_name: s(business.name) || 'MT GLOBAL STRATEGIES',
+    fee: feeSet ? formatCurrency(client.fee) : '',
+    travel_fee: travelEmpty ? '' : travelRaw,
+    total_program_fee: feeSet ? formatCurrency(totalProgramFee) : '',
+    deposit_due: feeSet ? formatCurrency(depositAmt) : '',
+    balance_due: feeSet ? formatCurrency(balanceAmt) : '',
+    business_name: s(business.name) || 'MT Global Strategies',
     business_address: s(business.address),
     date: dateStr,
   }
+  const emptyFields = new Set(Object.entries(mergeData).filter(([, v]) => v === '').map(([k]) => k))
+  const referencesEmpty = (text: string) => referencedFields(text).some(k => emptyFields.has(k))
 
   for (const block of blocks) {
     if (block.type === 'heading') {
-      checkPage(block.rule ? 80 : 30)
-      if (block.rule) y = addSectionRule(doc, y)
+      if (referencesEmpty(block.text)) continue
+      if (block.rule) y += 8 // extra breathing room above a major section (no rule line)
+      checkPage(CONTRACT_LINE_H + 8)
       doc.setFont(CONTRACT_FONT, 'bold')
       doc.setFontSize(CONTRACT_SIZE)
       doc.setTextColor(15, 14, 12)
-      doc.text(substituteMergeFields(block.text, mergeData).toUpperCase(), CONTRACT_L, y)
-      y += 16
+      doc.text(substituteMergeFields(block.text, mergeData), CONTRACT_L, y)
+      y += CONTRACT_LINE_H + 4
     } else if (block.type === 'paragraph') {
+      if (referencesEmpty(block.text)) continue
       const text = substituteMergeFields(block.text, mergeData)
       const lines = doc.splitTextToSize(text, CONTRACT_W)
-      checkPage(lines.length * CONTRACT_LINE_H + 12)
+      checkPage(lines.length * CONTRACT_LINE_H + 10)
       doc.setFont(CONTRACT_FONT, 'normal')
       doc.setTextColor(40, 38, 34)
       doc.text(lines, CONTRACT_L, y)
-      y += lines.length * CONTRACT_LINE_H + 12
+      y += lines.length * CONTRACT_LINE_H + 10
     } else if (block.type === 'key_value') {
-      checkPage(20)
+      if (referencesEmpty(block.text)) continue
+      checkPage(CONTRACT_LINE_H + 6)
       doc.setFont(CONTRACT_FONT, 'bold')
       doc.setTextColor(...(block.emphasis === 'muted' ? [80, 78, 72] as const : [15, 14, 12] as const))
       doc.text(substituteMergeFields(block.text, mergeData), CONTRACT_L, y)
-      y += 20
+      y += CONTRACT_LINE_H + 6
     } else if (block.type === 'bullet_list') {
+      const items = block.items.filter(item => !referencesEmpty(item))
+      if (!items.length) continue
       doc.setFont(CONTRACT_FONT, 'normal')
       doc.setTextColor(40, 38, 34)
-      for (const item of block.items) {
+      for (const item of items) {
         const text = substituteMergeFields(item, mergeData)
-        const lineCount = doc.splitTextToSize(text, CONTRACT_W - 20).length
+        const lineCount = doc.splitTextToSize(text, CONTRACT_W - 14).length
         checkPage(lineCount * CONTRACT_LINE_H + 6)
-        y = addBullet(doc, text, CONTRACT_L + 8, y, CONTRACT_W - 8)
+        y = addBullet(doc, text, CONTRACT_L, y, CONTRACT_W)
         y += 6
       }
+      y += 6
     } else if (block.type === 'line_list') {
+      const items = block.items.filter(item => !referencesEmpty(item))
+      if (!items.length) continue
       doc.setFont(CONTRACT_FONT, 'normal')
       doc.setTextColor(40, 38, 34)
-      for (const item of block.items) {
+      for (const item of items) {
         const text = substituteMergeFields(item, mergeData)
         const lines = doc.splitTextToSize(text, CONTRACT_W)
-        checkPage(lines.length * CONTRACT_LINE_H + 4)
+        checkPage(lines.length * CONTRACT_LINE_H + 2)
         doc.text(lines, CONTRACT_L, y)
-        y += lines.length * CONTRACT_LINE_H + 4
+        y += lines.length * CONTRACT_LINE_H + 2
       }
+      y += 8
     }
   }
-  y += 10
+  y += 8
 
-  // ── Authorization ─────────────────────────────────────────────────────────────
-  checkPage(140)
-  y = addSectionRule(doc, y)
+  // ── Authorization ────────────────────────────────────────────────────────────
+  checkPage(160)
   doc.setFont(CONTRACT_FONT, 'bold')
   doc.setFontSize(CONTRACT_SIZE)
   doc.setTextColor(15, 14, 12)
-  doc.text('AUTHORIZATION', CONTRACT_L, y)
-  y += 16
+  doc.text('Authorization', CONTRACT_L, y)
+  y += CONTRACT_LINE_H + 2
   doc.setFont(CONTRACT_FONT, 'normal')
   doc.setTextColor(40, 38, 34)
   doc.text('All parties agree with the terms set forth in this document.', CONTRACT_L, y)
-  y += 26
+  y += CONTRACT_LINE_H + 24
 
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(15, 14, 12)
-  doc.text('ACCEPTED ON BEHALF OF (CLIENT) BY:', CONTRACT_L, y)
-  y += 24
-  doc.setDrawColor(15, 14, 12)
-  doc.setLineWidth(0.5)
-  doc.line(CONTRACT_L, y, CONTRACT_L + 300, y)
-  y += 12
-  doc.setTextColor(100, 97, 90)
-  doc.text('NAME & TITLE', CONTRACT_L, y)
+  // Plain signature lines with labels beneath — no table, no caps.
+  const sigLineW = 250, dateX = CONTRACT_L + 300, dateLineW = 120
+  const signatureBlock = (nameLabel: string, includeCompany: boolean) => {
+    checkPage(includeCompany ? 70 : 46)
+    doc.setDrawColor(15, 14, 12)
+    doc.setLineWidth(0.5)
+    doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
+    doc.line(dateX, y, dateX + dateLineW, y)
+    y += 13
+    doc.setFont(CONTRACT_FONT, 'normal')
+    doc.setFontSize(CONTRACT_SIZE)
+    doc.setTextColor(80, 78, 72)
+    doc.text(nameLabel, CONTRACT_L, y)
+    doc.text('Date', dateX, y)
+    y += CONTRACT_LINE_H
+    if (includeCompany) {
+      doc.text('Company', CONTRACT_L, y)
+      y += CONTRACT_LINE_H
+    }
+  }
+
+  signatureBlock('Name & title', true)
   y += 22
-  doc.line(CONTRACT_L, y, CONTRACT_L + 300, y)
-  y += 12
-  doc.text('COMPANY', CONTRACT_L, y)
-  doc.text('DATE', CONTRACT_L + 340, y)
-  y += 36
+  signatureBlock('Name & title (MT Global Strategies)', false)
 
-  doc.setFont(CONTRACT_FONT, 'bold')
-  doc.setTextColor(15, 14, 12)
-  checkPage(90)
-  doc.text('ACCEPTED ON BEHALF OF MT GLOBAL STRATEGIES BY:', CONTRACT_L, y)
-  y += 24
-  doc.setDrawColor(15, 14, 12)
-  doc.line(CONTRACT_L, y, CONTRACT_L + 300, y)
-  y += 12
-  doc.setTextColor(100, 97, 90)
-  doc.text('NAME & TITLE', CONTRACT_L, y)
-  y += 22
-  doc.text('DATE', CONTRACT_L, y)
-
-  // Page numbers
+  // Plain page numbers.
   const pageCount = doc.getNumberOfPages()
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p)
     doc.setFont(CONTRACT_FONT, 'normal')
-    doc.setFontSize(CONTRACT_SIZE)
-    doc.setTextColor(160, 157, 150)
-    doc.text(`PAGE ${p} OF ${pageCount}`, CONTRACT_R, 775, { align: 'right' })
+    doc.setFontSize(9)
+    doc.setTextColor(150, 148, 144)
+    doc.text(`Page ${p} of ${pageCount}`, CONTRACT_R, 772, { align: 'right' })
   }
 
   return doc.output('blob')
