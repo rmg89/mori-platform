@@ -11,6 +11,22 @@ One entry per work session. Newest at the top.
 - Follow-ups / open questions:
 ```
 
+## 2026-07-27
+- Branch: `add-mcp-multi-token-auth` — merged to `main` this session (via `/wrap`, gated auto-merge; user explicitly approved merging past the one manual-check item, see Decisions).
+- What I did:
+  - Added multi-token auth to the MCP endpoint (`src/app/api/[transport]/route.ts`) without disturbing the existing single-token connection. The old `MCP_SECRET_TOKEN` check is kept as a first-class path and is still checked *first*, byte-for-byte the same behavior; a new optional `MCP_TOKENS` env var holds comma-separated `name:token` pairs so each person (Chi, Mori, etc.) can get their own token, revocable independently.
+  - Replaced the boolean `isAuthorized()` with `authenticate()` returning a label (the matched entry name, or `legacy`) or `null`; refactored the constant-time compare into a `constantTimeEqual()` helper reused by both paths. `MCP_TOKENS` is parsed defensively (unset/empty/stray-whitespace/malformed entries tolerated, split on the first `:` only so tokens may contain colons).
+  - On success, logs `[mcp] authenticated as "<name>"` (label only, never the token). The 401 failure response is unchanged. Only this one file changed — nothing outside the auth check touched.
+  - Verified: `tsc --noEmit` clean; a 12-case standalone unit test of the exact function body (legacy still works alongside `MCP_TOKENS`, whitespace, empty/malformed entries, colon-in-token, fail-closed) all passed; real `npm run build` green (with env vars); live probes against production confirmed the rejection paths still 401 (no header / wrong token / GET).
+  - Ran `/test` this session — no clear bugs, no judgment calls. Then checked a Claude-Desktop-authored reconnect guide PDF (for Chi) against the code: the server URL `https://team-taheripour-platform.vercel.app/api/mcp` and the Bearer-header mechanism are accurate (verified with a live 401), but flagged that the guide can't work until this branch is live in production *and* `MCP_TOKENS` is set in Vercel. Generated fresh 24-byte tokens for Chi and Mori for the user to paste post-merge.
+- Bugs found: none.
+- Decisions:
+  - **Merged past the `/test` manual-check list with explicit user approval.** The one unverified item — that a *valid* token actually reaches the handler (the happy path) — is inherently a post-deploy check: it can't be exercised until the code is live and `MCP_TOKENS` is set. The rejection side was verified live (401) and the legacy path proven unchanged by reading + unit test, so the residual risk was limited to the happy path, which the user chose to verify in production right after the deploy rather than block on.
+  - Kept the legacy `MCP_SECRET_TOKEN` alongside `MCP_TOKENS` rather than migrating off it — the user no longer has its plaintext, and their live connection depends on it, so it stays until a named `MCP_TOKENS` entry is confirmed working.
+- Follow-ups / open for next session:
+  - **Post-merge, still required for anyone new to connect:** set `MCP_TOKENS` in Vercel (Production) to the generated `chi:…,mori:…` string and redeploy, then verify a per-person token reaches the handler (new test-checklist item). Until then, only the legacy token works.
+  - Consider giving the user's own connection a named `MCP_TOKENS` entry and retiring the legacy shared token once the per-person tokens are confirmed live.
+
 ## 2026-07-17
 - Branch: `fix-call-tracking` — merged to `main` this session.
 - What I did:
