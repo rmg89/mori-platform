@@ -5,8 +5,9 @@ import { useStore } from '@/lib/store'
 import { fetchContracts, setContractStatus, snapshotToClient, deleteContract } from '@/lib/contracts-client'
 import type { Contract, ContractOrigin, ContractStatus } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import { Download, Search, Trash2 } from 'lucide-react'
+import { Download, Search, Trash2, Plus } from 'lucide-react'
 import ContractEditModal from '@/components/ContractEditModal'
+import NewContractModal from '@/components/NewContractModal'
 
 const PAGE_SIZE = 30
 
@@ -75,6 +76,7 @@ export default function ContractsPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
+  const [creatingNew, setCreatingNew] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -182,10 +184,16 @@ export default function ContractsPage() {
           <p className="text-ink-400 text-sm mt-1">{count} total</p>
           <div className="accent-line mt-3 w-24" />
         </div>
-        <Link href="/contracts/templates"
-          className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all mt-1">
-          Manage Templates
-        </Link>
+        <div className="flex items-center gap-2 mt-1">
+          <Link href="/contracts/templates"
+            className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-3 py-1.5 transition-all">
+            Manage Templates
+          </Link>
+          <button onClick={() => setCreatingNew(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-white bg-ink hover:bg-ink-700 rounded-lg px-3 py-1.5 transition-all">
+            <Plus size={13} /> New Contract
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -311,6 +319,17 @@ export default function ContractsPage() {
           contract={editingContract}
           onClose={() => setEditingContract(null)}
           onSaved={updated => setRows(prev => prev.map(r => r.id === updated.id ? updated : r))}
+        />
+      )}
+
+      {creatingNew && (
+        <NewContractModal
+          engagements={engagements}
+          onClose={() => setCreatingNew(false)}
+          onCreated={created => {
+            setRows(prev => [created, ...prev])
+            setCount(c => c + 1)
+          }}
         />
       )}
     </div>
