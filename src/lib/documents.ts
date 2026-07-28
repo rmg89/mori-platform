@@ -297,6 +297,18 @@ export async function generateContract(client: Client, business: BusinessProfile
     if (y + needed > CONTRACT_PAGE_H) { doc.addPage(); y = 50 }
   }
 
+  // One spacing rhythm for the whole document, so every transition of the same
+  // kind gets the same gap:
+  //   • lines within a block (paragraph, detail list, line list): CONTRACT_LINE_H
+  //   • bullet-to-bullet: CONTRACT_LINE_H + BULLET_GAP
+  //   • block-to-block: CONTRACT_LINE_H + BLOCK_GAP
+  //   • heading-to-its-content: CONTRACT_LINE_H + HEADING_BELOW (tighter than a block gap)
+  //   • extra space above a major (rule:true) section heading: SECTION_ABOVE
+  const BLOCK_GAP = 8
+  const BULLET_GAP = 4
+  const HEADING_BELOW = 4
+  const SECTION_ABOVE = 6
+
   const businessAddress = (business.address || '2425 L Street NW, #409 Washington, DC 20037').replace(/\n+/g, ', ')
   const clientAddress = s(c?.address)
 
@@ -306,7 +318,7 @@ export async function generateContract(client: Client, business: BusinessProfile
   const intro = `This agreement is between MT Global Strategies (the "Speaker"), located at ${businessAddress}, and ${s(client.organization)} (the "Client")${clientAddress ? `, with offices at ${clientAddress}` : ''}.`
   const introLines = doc.splitTextToSize(intro, CONTRACT_W)
   doc.text(introLines, CONTRACT_L, y)
-  y += introLines.length * CONTRACT_LINE_H + 16
+  y += introLines.length * CONTRACT_LINE_H + BLOCK_GAP
 
   // ── Program details — flat bold-label / value lines, empties omitted ─────────
   const isVirtual = client.event_format === 'virtual'
@@ -330,13 +342,13 @@ export async function generateContract(client: Client, business: BusinessProfile
     const labelText = `${label} `
     const labelW = doc.getTextWidth(labelText)
     const valueLines: string[] = doc.splitTextToSize(value, CONTRACT_W - labelW)
-    checkPage(valueLines.length * CONTRACT_LINE_H + 2)
+    checkPage(valueLines.length * CONTRACT_LINE_H + BLOCK_GAP)
     doc.setTextColor(15, 14, 12)
     doc.text(labelText, CONTRACT_L, y)
     doc.setFont(CONTRACT_FONT, 'normal')
     doc.setTextColor(40, 38, 34)
     valueLines.forEach((ln, i) => doc.text(ln, CONTRACT_L + labelW, y + i * CONTRACT_LINE_H))
-    y += valueLines.length * CONTRACT_LINE_H + 2
+    y += valueLines.length * CONTRACT_LINE_H
   }
 
   labeledLine('Speaker:', 'Mori Taheripour')
@@ -362,9 +374,8 @@ export async function generateContract(client: Client, business: BusinessProfile
       wrapped.forEach((ln, i) => doc.text(ln, CONTRACT_L + 14, y + i * CONTRACT_LINE_H))
       y += wrapped.length * CONTRACT_LINE_H
     }
-    y += 2
   }
-  y += 10
+  y += BLOCK_GAP
 
   // ── Project scope — omitted entirely when there are no items ─────────────────
   if (scopeItems.length) {
@@ -373,16 +384,16 @@ export async function generateContract(client: Client, business: BusinessProfile
     doc.setFontSize(CONTRACT_SIZE)
     doc.setTextColor(15, 14, 12)
     doc.text('Project scope includes:', CONTRACT_L, y)
-    y += CONTRACT_LINE_H + 2
+    y += CONTRACT_LINE_H + HEADING_BELOW
     doc.setFont(CONTRACT_FONT, 'normal')
     doc.setTextColor(40, 38, 34)
     for (const item of scopeItems) {
       const lineCount = doc.splitTextToSize(s(item), CONTRACT_W - 20).length
-      checkPage(lineCount * CONTRACT_LINE_H + 4)
+      checkPage(lineCount * CONTRACT_LINE_H + BULLET_GAP)
       y = addBullet(doc, s(item), CONTRACT_L, y, CONTRACT_W)
-      y += 4
+      y += BULLET_GAP
     }
-    y += 12
+    y += BLOCK_GAP - BULLET_GAP
   }
 
   // ── Template body: editable content (see /contracts/templates) ───────────────
@@ -424,14 +435,6 @@ export async function generateContract(client: Client, business: BusinessProfile
   }
   const emptyFields = new Set(Object.entries(mergeData).filter(([, v]) => v === '').map(([k]) => k))
   const referencesEmpty = (text: string) => referencedFields(text).some(k => emptyFields.has(k))
-
-  // One consistent rhythm: a small gap after every body block, a slightly
-  // larger gap above a major (rule:true) section heading, and a tight gap
-  // below any heading — so section breaks read as deliberate, not as stray
-  // double paragraph breaks.
-  const BLOCK_GAP = 8
-  const SECTION_ABOVE = 8
-  const HEADING_BELOW = 5
 
   // Book fee & logistics — heading + clause from the contract's book-order
   // fields; renders nothing when there's no order. The Client buys the books
@@ -503,11 +506,11 @@ export async function generateContract(client: Client, business: BusinessProfile
       for (const item of items) {
         const text = substituteMergeFields(item, mergeData)
         const lineCount = doc.splitTextToSize(text, CONTRACT_W - 14).length
-        checkPage(lineCount * CONTRACT_LINE_H + 6)
+        checkPage(lineCount * CONTRACT_LINE_H + BULLET_GAP)
         y = addBullet(doc, text, CONTRACT_L, y, CONTRACT_W)
-        y += 6
+        y += BULLET_GAP
       }
-      y += BLOCK_GAP
+      y += BLOCK_GAP - BULLET_GAP
     } else if (block.type === 'line_list') {
       const items = block.items.filter(item => !referencesEmpty(item))
       if (!items.length) continue
@@ -516,39 +519,42 @@ export async function generateContract(client: Client, business: BusinessProfile
       for (const item of items) {
         const text = substituteMergeFields(item, mergeData)
         const lines = doc.splitTextToSize(text, CONTRACT_W)
-        checkPage(lines.length * CONTRACT_LINE_H + 2)
+        checkPage(lines.length * CONTRACT_LINE_H + BLOCK_GAP)
         doc.text(lines, CONTRACT_L, y)
-        y += lines.length * CONTRACT_LINE_H + 2
+        y += lines.length * CONTRACT_LINE_H
       }
       y += BLOCK_GAP
     } else if (block.type === 'book_section') {
       renderBookSection()
     }
   }
-  y += 8
+  y += SECTION_ABOVE // Authorization opens a new section, same break as the others
 
   // ── Authorization ────────────────────────────────────────────────────────────
-  checkPage(160)
+  checkPage(180)
   doc.setFont(CONTRACT_FONT, 'bold')
   doc.setFontSize(CONTRACT_SIZE)
   doc.setTextColor(15, 14, 12)
   doc.text('Authorization', CONTRACT_L, y)
-  y += CONTRACT_LINE_H + 2
+  y += CONTRACT_LINE_H + HEADING_BELOW
   doc.setFont(CONTRACT_FONT, 'normal')
   doc.setTextColor(40, 38, 34)
   doc.text('All parties agree with the terms set forth in this document.', CONTRACT_L, y)
-  y += CONTRACT_LINE_H + 24
+  y += CONTRACT_LINE_H
 
   // One signing block per party: a bold header naming the party (the client's
   // own organization is filled in, not left as a blank "Company" line), then a
-  // signature line and a date line with plain labels beneath. No table, no caps.
+  // signature line and a date line with plain labels beneath. Each party gets
+  // the same SIG_ABOVE of room, so the two blocks are spaced identically.
   const sigLineW = 250, dateX = CONTRACT_L + 300, dateLineW = 120
+  const SIG_ABOVE = 22
   const signatureBlock = (partyHeader: string) => {
+    y += SIG_ABOVE
     doc.setFont(CONTRACT_FONT, 'bold')
     doc.setFontSize(CONTRACT_SIZE)
     // Wrap the header — it embeds the client's organization, which can be long.
     const headerLines: string[] = doc.splitTextToSize(partyHeader, CONTRACT_W)
-    checkPage(headerLines.length * CONTRACT_LINE_H + 48)
+    checkPage(headerLines.length * CONTRACT_LINE_H + 46)
     doc.setTextColor(15, 14, 12)
     doc.text(headerLines, CONTRACT_L, y)
     y += headerLines.length * CONTRACT_LINE_H + 16
@@ -567,7 +573,6 @@ export async function generateContract(client: Client, business: BusinessProfile
 
   const clientOrg = s(client.organization)
   signatureBlock(`Accepted on behalf of ${clientOrg || 'the Client'}:`)
-  y += 24
   signatureBlock('Accepted on behalf of MT Global Strategies:')
 
   // Plain page numbers.
