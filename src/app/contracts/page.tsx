@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store'
 import { fetchContracts, setContractStatus, snapshotToClient, deleteContract } from '@/lib/contracts-client'
 import type { Contract, ContractOrigin, ContractStatus } from '@/types'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import { Download, Search, Trash2, Plus } from 'lucide-react'
+import { Download, Search, Trash2, Plus, Undo2 } from 'lucide-react'
 import ContractEditModal from '@/components/ContractEditModal'
 import NewContractModal from '@/components/NewContractModal'
 
@@ -31,6 +31,27 @@ const NEXT_STATUS_LABEL: Record<ContractStatus, string> = {
   finalized: 'Mark Sent',
   sent: 'Mark Signed',
   signed: '',
+}
+// signed → sent → finalized → draft
+const PREV_STATUS: Record<ContractStatus, ContractStatus | null> = {
+  draft: null,
+  finalized: 'draft',
+  sent: 'finalized',
+  signed: 'sent',
+}
+const PREV_STATUS_LABEL: Record<ContractStatus, string> = {
+  draft: '',
+  finalized: 'Un-finalize',
+  sent: 'Un-send',
+  signed: 'Un-sign',
+}
+
+// The timestamp + label of the furthest stage a contract has reached.
+function stageStamp(c: Contract): { label: string; at?: string } | null {
+  if (c.status === 'signed') return { label: 'Signed', at: c.signed_at }
+  if (c.status === 'sent') return { label: 'Sent', at: c.sent_at }
+  if (c.status === 'finalized') return { label: 'Finalized', at: c.finalized_at }
+  return null
 }
 
 function StatusBadge({ status }: { status: ContractStatus }) {
@@ -124,6 +145,25 @@ export default function ContractsPage() {
         finalized_at: status === 'finalized' ? now : r.finalized_at,
         sent_at: status === 'sent' ? now : r.sent_at,
         signed_at: status === 'signed' ? now : r.signed_at,
+      } : r))
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  async function handleReverseStatus(contract: Contract) {
+    const status = PREV_STATUS[contract.status]
+    if (!status) return
+    setUpdatingId(contract.id)
+    try {
+      await setContractStatus(contract, status)
+      // Moving back clears the timestamps of stages stepped out of.
+      const reached = ['draft', 'finalized', 'sent', 'signed'].indexOf(status)
+      setRows(prev => prev.map(r => r.id === contract.id ? {
+        ...r, status,
+        finalized_at: reached >= 1 ? r.finalized_at : undefined,
+        sent_at: reached >= 2 ? r.sent_at : undefined,
+        signed_at: reached >= 3 ? r.signed_at : undefined,
       } : r))
     } finally {
       setUpdatingId(null)
@@ -237,6 +277,7 @@ export default function ContractsPage() {
                     </div>
                     <span className="text-xs text-ink-300">
                       {contract.label} · Created {formatDate(contract.created_at)}
+                      {(() => { const st = stageStamp(contract); return st?.at ? ` · ${st.label} ${formatDate(st.at)}` : '' })()}
                       {contract.snapshot.event_date ? ` · Event ${formatDate(contract.snapshot.event_date)}` : ''}
                     </span>
                   </div>
@@ -261,6 +302,16 @@ export default function ContractsPage() {
                             className="text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2.5 py-1.5 transition-all"
                           >
                             Edit
+                          </button>
+                        )}
+                        {PREV_STATUS[contract.status] && (
+                          <button
+                            onClick={() => handleReverseStatus(contract)}
+                            disabled={updatingId === contract.id}
+                            title={PREV_STATUS_LABEL[contract.status]}
+                            className="flex items-center gap-1 text-xs font-medium text-ink-400 hover:text-ink border border-ink-100 hover:border-ink-300 rounded-lg px-2 py-1.5 transition-all disabled:opacity-40"
+                          >
+                            <Undo2 size={12} /> {PREV_STATUS_LABEL[contract.status]}
                           </button>
                         )}
                         {contract.status !== 'signed' && (

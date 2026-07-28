@@ -82,26 +82,32 @@ export async function fetchContracts(opts: {
 // Updates the contract row and, if it's linked to an engagement, best-effort
 // mirrors the status onto the existing fields the engagement/wrap-up "Contract"
 // zone already reads — so both surfaces agree without either owning the other.
+const STATUS_ORDER: ContractStatus[] = ['draft', 'finalized', 'sent', 'signed']
+
+// Sets the contract's status and its stage timestamps in either direction.
+// Moving forward stamps the newly-reached stage with `now`; moving backward
+// (e.g. un-finalizing) clears the timestamps of the stages it has stepped out
+// of, while preserving those still reached. The engagement's mirror columns
+// track the same, so un-finalizing a contract also un-finalizes the engagement.
 export async function setContractStatus(contract: Contract, status: ContractStatus): Promise<void> {
   const now = new Date().toISOString()
-  const patch: Record<string, unknown> = { status }
-  if (status === 'finalized') patch.finalized_at = now
-  if (status === 'sent') patch.sent_at = now
-  if (status === 'signed') patch.signed_at = now
+  const reached = STATUS_ORDER.indexOf(status)
+  const finalized_at = reached >= 1 ? (contract.finalized_at ?? now) : null
+  const sent_at = reached >= 2 ? (contract.sent_at ?? now) : null
+  const signed_at = reached >= 3 ? (contract.signed_at ?? now) : null
 
-  const { error } = await supabase.from('contracts').update(patch).eq('id', contract.id)
+  const { error } = await supabase
+    .from('contracts')
+    .update({ status, finalized_at, sent_at, signed_at })
+    .eq('id', contract.id)
   if (error) throw new Error(`setContractStatus: ${error.message}`)
 
   if (!contract.engagement_id) return
-
-  const engagementPatch: Record<string, unknown> =
-    status === 'finalized' ? { contract_finalized_at: now }
-    : status === 'sent' ? { contract_sent_at: now }
-    : status === 'signed' ? { contract_signed_at: now }
-    : {}
-
-  if (Object.keys(engagementPatch).length === 0) return
-  await supabase.from('engagements').update(engagementPatch).eq('id', contract.engagement_id)
+  await supabase.from('engagements').update({
+    contract_finalized_at: finalized_at,
+    contract_sent_at: sent_at,
+    contract_signed_at: signed_at,
+  }).eq('id', contract.engagement_id)
 }
 
 // Convenience wrapper — marks a contract reviewed/ready-to-send.
