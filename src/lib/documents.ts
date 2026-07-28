@@ -544,8 +544,9 @@ export async function generateContract(client: Client, business: BusinessProfile
 
   // One signing block per party: a bold header naming the party (the client's
   // own organization is filled in, not left as a blank "Company" line), then a
-  // signature line and a date line with plain labels beneath. Each party gets
-  // the same SIG_ABOVE of room, so the two blocks are spaced identically.
+  // signature line + date line, and a separate printed-name-&-title line — each
+  // with a plain label beneath. Each party gets the same SIG_ABOVE of room, so
+  // the two blocks are spaced identically.
   const sigLineW = 250, dateX = CONTRACT_L + 300, dateLineW = 120
   const SIG_ABOVE = 22
   const signatureBlock = (partyHeader: string) => {
@@ -554,10 +555,11 @@ export async function generateContract(client: Client, business: BusinessProfile
     doc.setFontSize(CONTRACT_SIZE)
     // Wrap the header — it embeds the client's organization, which can be long.
     const headerLines: string[] = doc.splitTextToSize(partyHeader, CONTRACT_W)
-    checkPage(headerLines.length * CONTRACT_LINE_H + 46)
+    checkPage(headerLines.length * CONTRACT_LINE_H + 100)
     doc.setTextColor(15, 14, 12)
     doc.text(headerLines, CONTRACT_L, y)
-    y += headerLines.length * CONTRACT_LINE_H + 16
+    y += headerLines.length * CONTRACT_LINE_H + 22
+    // Signature line + date line, labels beneath.
     doc.setDrawColor(15, 14, 12)
     doc.setLineWidth(0.5)
     doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
@@ -566,8 +568,13 @@ export async function generateContract(client: Client, business: BusinessProfile
     doc.setFont(CONTRACT_FONT, 'normal')
     doc.setFontSize(CONTRACT_SIZE)
     doc.setTextColor(80, 78, 72)
-    doc.text('Name & title', CONTRACT_L, y)
+    doc.text('Signature', CONTRACT_L, y)
     doc.text('Date', dateX, y)
+    y += CONTRACT_LINE_H + 18
+    // Printed name & title line, label beneath.
+    doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
+    y += 13
+    doc.text('Printed name & title', CONTRACT_L, y)
     y += CONTRACT_LINE_H
   }
 
