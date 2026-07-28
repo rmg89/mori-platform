@@ -279,6 +279,12 @@ function referencedFields(text: string): string[] {
 
 export async function generateContract(client: Client, business: BusinessProfile, blocks: ContractTemplateBlock[]): Promise<Blob> {
   const doc = createDoc()
+  // Draw wrapped/multi-line text at exactly CONTRACT_LINE_H per line. Without
+  // this, jsPDF spaces the lines inside a doc.text(array) call by its own
+  // default leading (~1.15x font size), which is tighter than the
+  // CONTRACT_LINE_H we advance y by — so the trailing gap after a paragraph
+  // grew with its line count and section spacing looked inconsistent.
+  doc.setLineHeightFactor(CONTRACT_LINE_H / CONTRACT_SIZE)
   const signature = await loadSignatureImage()
   const c = pc(client) as any
   const anyClient = client as any
