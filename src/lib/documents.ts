@@ -297,17 +297,16 @@ export async function generateContract(client: Client, business: BusinessProfile
     if (y + needed > CONTRACT_PAGE_H) { doc.addPage(); y = 50 }
   }
 
-  // One spacing rhythm for the whole document, so every transition of the same
-  // kind gets the same gap:
+  // One flat spacing rhythm for the whole document, so every transition of the
+  // same kind gets the same gap — no special "section break", headings are
+  // marked by bold weight alone:
   //   • lines within a block (paragraph, detail list, line list): CONTRACT_LINE_H
   //   • bullet-to-bullet: CONTRACT_LINE_H + BULLET_GAP
-  //   • block-to-block: CONTRACT_LINE_H + BLOCK_GAP
+  //   • block-to-block (incl. above any heading): CONTRACT_LINE_H + BLOCK_GAP
   //   • heading-to-its-content: CONTRACT_LINE_H + HEADING_BELOW (tighter than a block gap)
-  //   • extra space above a major (rule:true) section heading: SECTION_ABOVE
   const BLOCK_GAP = 8
   const BULLET_GAP = 4
   const HEADING_BELOW = 4
-  const SECTION_ABOVE = 6
 
   const businessAddress = (business.address || '2425 L Street NW, #409 Washington, DC 20037').replace(/\n+/g, ', ')
   const clientAddress = s(c?.address)
@@ -379,7 +378,7 @@ export async function generateContract(client: Client, business: BusinessProfile
 
   // ── Project scope — omitted entirely when there are no items ─────────────────
   if (scopeItems.length) {
-    checkPage(30)
+    checkPage(CONTRACT_LINE_H * 3) // keep the heading with its first bullets
     doc.setFont(CONTRACT_FONT, 'bold')
     doc.setFontSize(CONTRACT_SIZE)
     doc.setTextColor(15, 14, 12)
@@ -450,7 +449,7 @@ export async function generateContract(client: Client, business: BusinessProfile
     const clause = vendor
       ? `The Client will purchase ${qtyFmt} copies of ${title} directly from ${vendor}. Books will be shipped to the address provided by Client to ${vendor}.`
       : `The Client will purchase ${qtyFmt} copies of ${title}.`
-    checkPage(CONTRACT_LINE_H + 8)
+    checkPage(CONTRACT_LINE_H * 3) // keep the heading with its clause
     doc.setFont(CONTRACT_FONT, 'bold')
     doc.setFontSize(CONTRACT_SIZE)
     doc.setTextColor(15, 14, 12)
@@ -474,8 +473,7 @@ export async function generateContract(client: Client, business: BusinessProfile
       // skipped below) so the book toggle controls it in those contracts too.
       if (isLegacyBookHeading(block.text)) { renderBookSection(); continue }
       if (referencesEmpty(block.text)) continue
-      if (block.rule) y += SECTION_ABOVE
-      checkPage(CONTRACT_LINE_H + 8)
+      checkPage(CONTRACT_LINE_H * 3) // keep the heading with the start of its content (no orphan at a page break)
       doc.setFont(CONTRACT_FONT, 'bold')
       doc.setFontSize(CONTRACT_SIZE)
       doc.setTextColor(15, 14, 12)
@@ -528,8 +526,6 @@ export async function generateContract(client: Client, business: BusinessProfile
       renderBookSection()
     }
   }
-  y += SECTION_ABOVE // Authorization opens a new section, same break as the others
-
   // ── Authorization ────────────────────────────────────────────────────────────
   checkPage(180)
   doc.setFont(CONTRACT_FONT, 'bold')
