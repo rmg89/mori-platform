@@ -530,12 +530,14 @@ export async function generateContract(client: Client, business: BusinessProfile
   // signature line and a date line with plain labels beneath. No table, no caps.
   const sigLineW = 250, dateX = CONTRACT_L + 300, dateLineW = 120
   const signatureBlock = (partyHeader: string) => {
-    checkPage(64)
     doc.setFont(CONTRACT_FONT, 'bold')
     doc.setFontSize(CONTRACT_SIZE)
+    // Wrap the header — it embeds the client's organization, which can be long.
+    const headerLines: string[] = doc.splitTextToSize(partyHeader, CONTRACT_W)
+    checkPage(headerLines.length * CONTRACT_LINE_H + 48)
     doc.setTextColor(15, 14, 12)
-    doc.text(partyHeader, CONTRACT_L, y)
-    y += CONTRACT_LINE_H + 16
+    doc.text(headerLines, CONTRACT_L, y)
+    y += headerLines.length * CONTRACT_LINE_H + 16
     doc.setDrawColor(15, 14, 12)
     doc.setLineWidth(0.5)
     doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
