@@ -92,6 +92,10 @@ export async function updateCommRow(id: string, patch: Record<string, unknown>):
   await req(`/api/communications/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
 }
 
+export async function deleteCommRow(id: string): Promise<void> {
+  await req(`/api/communications/${id}`, { method: 'DELETE' })
+}
+
 export async function fetchReviewItems(): Promise<ReviewItem[]> {
   try {
     return await req('/api/review-items')

@@ -247,7 +247,7 @@ function WrapUpLogCommPanel({ engagementId, onClose }: { engagementId: string; o
     const now = new Date().toISOString()
     const defaultDue = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
     addComm(engagementId, {
-      id: `cm_${Date.now()}`, type, date: now,
+      id: crypto.randomUUID(), type, date: now,
       subject: subject || undefined, body,
       from_name: "Mori's Team", staff_name: 'Ryan G.', needs_response: false,
       next_step: nextStep || undefined,
