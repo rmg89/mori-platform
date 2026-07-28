@@ -9,18 +9,26 @@ function pc(client: Client) {
 }
 import { formatDate, formatCurrency } from './utils'
 
-// Sanitize unicode characters that Helvetica can't render
+// Sanitize unicode characters that Helvetica can't render. Normalize the common
+// "smart"/typographic variants to plain ASCII first (so, e.g., any flavour of
+// dash becomes a hyphen rather than a "?"), then fall back to "?" only for
+// genuinely unsupported characters. Uses codepoint escapes so the intended
+// characters are unambiguous.
 function s(text: string | undefined | null): string {
   if (!text) return ''
   return String(text)
-    .replace(/→|➔|⟶/g, '->')
-    .replace(/←/g, '<-')
-    .replace(/–/g, '-')
-    .replace(/—/g, '--')
-    .replace(/’|‘/g, "'")
-    .replace(/“|”/g, '"')
-    .replace(/…/g, '...')
-    .replace(/[^\x00-\xFF]/g, '?') // replace any remaining non-latin-1
+    .replace(/[\u2192\u2794\u27F6]/g, '->')
+    .replace(/\u2190/g, '<-')
+    // Dashes: em dash / horizontal bar -> "--"; every other dash & minus -> "-"
+    .replace(/[\u2014\u2015]/g, '--')
+    .replace(/[\u2010-\u2013\u2043\u2212\u2796\uFE58\uFE63\uFF0D]/g, '-')
+    // Quotes: single & double, straight or curly, and primes
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+    // Ellipsis, and the various unicode spaces -> a normal space
+    .replace(/\u2026/g, '...')
+    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[^\x00-\xFF]/g, '?') // anything still outside latin-1
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
