@@ -548,7 +548,23 @@ export async function generateContract(client: Client, business: BusinessProfile
   // with a plain label beneath. Each party gets the same SIG_ABOVE of room, so
   // the two blocks are spaced identically.
   const sigLineW = 250, dateX = CONTRACT_L + 300, dateLineW = 120
-  const SIG_ABOVE = 22
+  const SIG_ABOVE = 22  // space above each party's header
+  const SIG_ROOM = 20   // blank room above each fill-in line (identical for both lines)
+  const SIG_LABEL = 13  // a label sits just under its line
+  // Draws a fill-in line (plus an optional aligned Date line) with labels beneath.
+  const sigLine = (label: string, withDate: boolean) => {
+    doc.setDrawColor(15, 14, 12)
+    doc.setLineWidth(0.5)
+    doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
+    if (withDate) doc.line(dateX, y, dateX + dateLineW, y)
+    y += SIG_LABEL
+    doc.setFont(CONTRACT_FONT, 'normal')
+    doc.setFontSize(CONTRACT_SIZE)
+    doc.setTextColor(80, 78, 72)
+    doc.text(label, CONTRACT_L, y)
+    if (withDate) doc.text('Date', dateX, y)
+    y += CONTRACT_LINE_H
+  }
   const signatureBlock = (partyHeader: string) => {
     y += SIG_ABOVE
     doc.setFont(CONTRACT_FONT, 'bold')
@@ -558,24 +574,10 @@ export async function generateContract(client: Client, business: BusinessProfile
     checkPage(headerLines.length * CONTRACT_LINE_H + 100)
     doc.setTextColor(15, 14, 12)
     doc.text(headerLines, CONTRACT_L, y)
-    y += headerLines.length * CONTRACT_LINE_H + 22
-    // Signature line + date line, labels beneath.
-    doc.setDrawColor(15, 14, 12)
-    doc.setLineWidth(0.5)
-    doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
-    doc.line(dateX, y, dateX + dateLineW, y)
-    y += 13
-    doc.setFont(CONTRACT_FONT, 'normal')
-    doc.setFontSize(CONTRACT_SIZE)
-    doc.setTextColor(80, 78, 72)
-    doc.text('Signature', CONTRACT_L, y)
-    doc.text('Date', dateX, y)
-    y += CONTRACT_LINE_H + 18
-    // Printed name & title line, label beneath.
-    doc.line(CONTRACT_L, y, CONTRACT_L + sigLineW, y)
-    y += 13
-    doc.text('Printed name & title', CONTRACT_L, y)
-    y += CONTRACT_LINE_H
+    y += headerLines.length * CONTRACT_LINE_H + SIG_ROOM
+    sigLine('Signature', true)
+    y += SIG_ROOM
+    sigLine('Printed name & title', false)
   }
 
   const clientOrg = s(client.organization)
