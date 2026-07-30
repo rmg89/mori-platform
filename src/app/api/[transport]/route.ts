@@ -5,15 +5,23 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { scanEngagement } from '@/lib/ai-scan'
 import { getBackwardTransition } from '@/lib/pipeline'
 
-// Gate every request behind a bearer token (sent as "Authorization: Bearer <token>").
-// Without this, /api/[transport] lets anyone call any of the tools below —
-// including field edits, contact deletion, and engagement archiving — with no auth at all.
+// Gate every request behind a token. Without this, /api/[transport] lets anyone call
+// any of the tools below — including field edits, contact deletion, and engagement
+// archiving — with no auth at all.
 //
 // Two credential sources, both accepted:
 //   1. MCP_SECRET_TOKEN — the original single shared token (kept as-is, first-class).
 //   2. MCP_TOKENS — optional, comma-separated "name:token" pairs (e.g. "chi:abc,mori:def"),
 //      one token per person so individuals can be issued and revoked independently.
 // If neither env var is set nothing matches, so it still fails closed.
+//
+// Two ways to *present* that token, checked in order:
+//   a. "Authorization: Bearer <token>" — unchanged, used by Claude Code and Claude Desktop.
+//   b. "?t=<token>" (or "?token=") on the URL — required by claude.ai custom connectors,
+//      whose Advanced settings only accept an OAuth client id/secret and offer no way to
+//      set a request header at all. The URL is therefore the secret for those clients:
+//      it lands in Vercel request logs, so issue one MCP_TOKENS entry per person and
+//      rotate that entry rather than sharing a single URL.
 function constantTimeEqual(provided: string, expected: string): boolean {
   const a = Buffer.from(provided)
   const b = Buffer.from(expected)
@@ -24,8 +32,24 @@ function constantTimeEqual(provided: string, expected: string): boolean {
 // Returns a label identifying the matched credential (the MCP_TOKENS entry name, or
 // 'legacy' for MCP_SECRET_TOKEN) so callers can log who connected, or null if the
 // bearer token matches nothing. Never returns or logs the token itself.
+// Pull the presented token off the request: Authorization header first, then the URL.
+// Returns '' when nothing usable is present, which callers treat as fail-closed.
+function presentedToken(req: Request): string {
+  const header = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  if (header) return header
+
+  // claude.ai connectors can only carry the token on the URL. Tolerate a malformed URL
+  // rather than throwing a 500 out of the auth path.
+  try {
+    const params = new URL(req.url).searchParams
+    return (params.get('t') ?? params.get('token') ?? '').trim()
+  } catch {
+    return ''
+  }
+}
+
 function authenticate(req: Request): string | null {
-  const provided = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  const provided = presentedToken(req)
   if (!provided) return null // no token → fail closed, never match an empty entry
 
   // 1. Legacy single-token path — unchanged behavior, checked first.
