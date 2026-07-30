@@ -29,29 +29,44 @@ function constantTimeEqual(provided: string, expected: string): boolean {
   return timingSafeEqual(a, b)
 }
 
-// Returns a label identifying the matched credential (the MCP_TOKENS entry name, or
-// 'legacy' for MCP_SECRET_TOKEN) so callers can log who connected, or null if the
-// bearer token matches nothing. Never returns or logs the token itself.
-// Pull the presented token off the request: Authorization header first, then the URL.
-// Returns '' when nothing usable is present, which callers treat as fail-closed.
-function presentedToken(req: Request): string {
+// Every credential the request presents, header first. Both are returned rather than
+// just the first one: a client that sends its own unrelated Authorization header must
+// not shadow a valid token on the URL, or the connector silently stops working.
+// Empty values are dropped so they can never match an empty entry.
+function presentedTokens(req: Request): string[] {
+  const candidates: string[] = []
+
   const header = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
-  if (header) return header
+  if (header) candidates.push(header)
 
   // claude.ai connectors can only carry the token on the URL. Tolerate a malformed URL
   // rather than throwing a 500 out of the auth path.
   try {
     const params = new URL(req.url).searchParams
-    return (params.get('t') ?? params.get('token') ?? '').trim()
+    for (const key of ['t', 'token']) {
+      const value = (params.get(key) ?? '').trim()
+      if (value) candidates.push(value)
+    }
   } catch {
-    return ''
+    // no usable URL → header-only
   }
+
+  return candidates
 }
 
 function authenticate(req: Request): string | null {
-  const provided = presentedToken(req)
-  if (!provided) return null // no token → fail closed, never match an empty entry
+  for (const provided of presentedTokens(req)) {
+    const identity = matchToken(provided)
+    if (identity) return identity
+  }
+  return null // nothing presented, or nothing matched → fail closed
+}
 
+// Match one presented token against both credential sources. Returns a label identifying
+// the matched credential (the MCP_TOKENS entry name, or 'legacy' for MCP_SECRET_TOKEN) so
+// callers can log who connected, or null if it matches nothing. Never returns or logs the
+// token itself.
+function matchToken(provided: string): string | null {
   // 1. Legacy single-token path — unchanged behavior, checked first.
   const expected = process.env.MCP_SECRET_TOKEN
   if (expected && constantTimeEqual(provided, expected)) return 'legacy'
