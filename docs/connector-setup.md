@@ -21,8 +21,8 @@ Don't paste it into email or Slack if you can avoid it, and don't put it in a sc
 Each person gets their own URL. If yours leaks, Ryan revokes just yours and the others
 keep working.
 
-You also need to be on Claude Pro, Max, Team, or Enterprise. Custom connectors aren't
-available on the free plan.
+This works on every Claude plan, the free one included. On the free plan you can only have
+one custom connector at a time, so if you already have another one set up, remove it first.
 
 ## Step 1. Remove the old connector
 
