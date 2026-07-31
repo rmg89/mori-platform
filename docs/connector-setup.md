@@ -57,7 +57,23 @@ Adding the connector doesn't switch it on. Enable it per chat.
 2. Click the **+** button near the message box
 3. Find **Team Taheripour Platform** in the list and toggle it on
 
-## Step 4. Test it
+## Step 4. Allow the tools to run
+
+The connector brings a set of tools for reading and updating the pipeline. Claude asks
+permission before it uses one, and it keeps asking unless you tell it not to.
+
+1. In the same conversation, open the **Search and tools** menu
+2. Make sure the Team Taheripour Platform tools are switched on. Anything switched off,
+   Claude can't use.
+3. The first time Claude asks to use a tool, choose **Allow always** rather than allowing
+   it once
+
+**Allow always** means Claude can use that tool again later without checking with you.
+That's the right answer here because this is your own platform, but the tools can edit and
+delete records, so keep it to this connector and read the prompt before approving anything
+else.
+
+## Step 5. Test it
 
 In that same new conversation, type:
 
@@ -78,7 +94,11 @@ and try again. Known quirk. The connection gets into a stale state and retrying 
 same chat never works. A fresh chat clears it.
 
 **Claude says it can't find the tools.** Check Step 3. The connector has to be toggled on
-inside each conversation, not just added in Settings.
+inside each conversation, not just added in Settings. If it's on and the tools still aren't
+there, check the **Search and tools** menu from Step 4 and switch them on.
+
+**Claude asks permission for every single action.** You approved a tool once instead of
+always. Next time the prompt appears, choose **Allow always**.
 
 **Tools behave like they're out of date, or a field is missing.** Same fix, new
 conversation. Claude caches the tool list when a chat starts. If Ryan deployed an update
@@ -95,6 +115,8 @@ and the error message. Crop out the URL, or blur the part after `?t=`.
 | Advanced settings | Not used. Leave OAuth fields empty. |
 | Settings path | Profile icon, Settings, Connectors |
 | Enable in chat | **+** button, toggle connector on |
+| Tools | **Search and tools** menu, all switched on |
+| When asked to approve | **Allow always** |
 | Fix for almost anything | Start a new conversation |
 
 ## For Ryan: issuing and revoking tokens
