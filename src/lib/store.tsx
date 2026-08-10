@@ -892,12 +892,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     }))
-    updateCommRow(commId, {
-      next_step: patch.next_step ?? undefined,
-      next_step_due_at: patch.next_step_due_at ?? undefined,
-      next_step_snoozed_until: patch.next_step_snoozed_until ?? undefined,
-      next_step_cleared: patch.next_step_cleared ?? undefined,
-    } as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
+    // Send only the keys the caller actually supplied, and map an explicit
+    // `undefined` to null so a field can be cleared. The old shape spread all four
+    // keys through `?? undefined`, so "wake" (which passes next_step_snoozed_until:
+    // undefined to un-snooze) serialised to `{}` — a 204 that changed nothing, and
+    // the snooze came back on the next refresh.
+    const FIELDS = ['next_step', 'next_step_due_at', 'next_step_snoozed_until', 'next_step_cleared'] as const
+    const dbPatch: Record<string, unknown> = {}
+    for (const k of FIELDS) if (k in patch) dbPatch[k] = patch[k] ?? null
+    if (Object.keys(dbPatch).length === 0) return
+    updateCommRow(commId, dbPatch as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
   }, [])
 
   const deleteComm = useCallback((engagementId: string, commId: string) => {
