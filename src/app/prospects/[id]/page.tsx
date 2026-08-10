@@ -599,7 +599,11 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
   const [callType, setCallType] = useState<'discovery' | 'mori'>('discovery')
   const [status, setStatus] = useState<'requested' | 'scheduled'>('requested')
   const [date, setDate] = useState('')
+  // "Scheduled" without a date built the string 'T00:00:00Z', which Postgres rejects
+  // as an invalid timestamp. It was masked while the id bug failed the insert first.
+  const incomplete = status === 'scheduled' && !date
   const submit = () => {
+    if (incomplete) return
     const sameType = (existingCalls ?? []).filter(c => c.type === callType)
     addCall(engagementId, {
       // calls.id is a uuid column — a `call_<timestamp>` placeholder is rejected
@@ -632,7 +636,9 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
           className="w-full text-sm border border-ink-100 rounded-lg px-3 py-2 outline-none focus:border-gold bg-white" />
       )}
       <div className="flex gap-2">
-        <button onClick={submit} className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all">Add</button>
+        <button onClick={submit} disabled={incomplete}
+          title={incomplete ? 'Pick a date for a scheduled call' : undefined}
+          className="text-xs font-medium text-white bg-ink px-4 py-2 rounded-lg hover:bg-ink-700 transition-all disabled:opacity-40 disabled:hover:bg-ink">Add</button>
         <button onClick={onClose} className="text-xs font-medium text-ink-400 px-4 py-2 rounded-lg hover:text-ink transition-all">Cancel</button>
       </div>
     </div>

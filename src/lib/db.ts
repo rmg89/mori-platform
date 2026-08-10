@@ -89,6 +89,7 @@ interface EngagementRow {
   post_event_testimonial_link: string | null
   post_event_testimonial_text: string | null
   post_event_follow_up_date: string | null
+  post_event_stages: Record<string, string> | null
 }
 
 interface ContactRow {
@@ -361,7 +362,11 @@ function assembleEngagement(
     engagement_flags: deriveEngagementFlags(row),
     media_flags: deriveMediaFlags(row),
     post_event_flags: postEvent.done,
-    post_event_stages: postEvent.stages,
+    // Start from the stored column, then let the derived stages win for the two
+    // they own (invoice/media come from authoritative timestamp columns). Reading
+    // only the derived value discarded every stage the user set by hand for
+    // thank_you / testimonial / social_media / follow_up.
+    post_event_stages: { ...(row.post_event_stages ?? {}), ...postEvent.stages } as WrapUpFlagStages,
     post_event_needed: postEvent.needed,
     post_event_not_needed: postEvent.not_needed,
     post_event_follow_up_details: row.follow_up_details ?? undefined,
@@ -550,8 +555,11 @@ export async function upsertContact(contact: Partial<ContactRow> & { engagement_
   // before resolving the conflict, so any partial patch (anything without
   // first_name) died on the NOT NULL constraint instead of updating the row.
   const { id, ...patch } = contact
-  const { error } = await supabase.from('contacts').update(patch).eq('id', id)
+  // Ask for the affected row back: an UPDATE that matches nothing succeeds with no
+  // error, which is the same silent-write failure this file is meant to stop.
+  const { data, error } = await supabase.from('contacts').update(patch).eq('id', id).select('id')
   if (error) throw new Error(`upsertContact: ${error.message}`)
+  if (!data?.length) throw new Error(`upsertContact: no contact matched id ${id}`)
 }
 
 // Contacts with no engagement_id — created directly from the Contacts directory,

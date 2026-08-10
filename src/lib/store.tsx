@@ -135,6 +135,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Pending debounced post-event-note writes, keyed by engagement id.
+  const notesTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   const trackSave = useCallback((promise: Promise<unknown>) => {
     setSaveStatus('saving')
@@ -288,6 +290,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const deleteContact = useCallback((id: string) => {
     setEngagements(prev => prev.map(e => ({ ...e, contacts: e.contacts.filter(c => c.id !== id) })))
     setUnassignedContacts(prev => prev.filter(c => c.id !== id))
+    // A contact added or linked earlier in this session still carries a new_/lnk_
+    // placeholder until the next refetch. Sending that to a uuid column errors while
+    // the real row survives, so the contact reappears on refresh.
+    if (/^(new_|lnk_)/.test(id)) return
     deleteContactRow(id).catch(onWriteError)
   }, [])
 
@@ -337,6 +343,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (contacts) {
       contacts.forEach(c => {
         if (/^(new_|lnk_)/.test(c.id)) {
+          const tempId = c.id
           insertContact(id, {
             first_name: c.first_name,
             last_name: c.last_name ?? '',
@@ -350,6 +357,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             notes: c.notes ?? null,
             company_id: c.company_id ?? null,
             team_id: c.team_id ?? null,
+          }).then(realId => {
+            // Swap the placeholder for the id the database actually assigned.
+            // Left in place, every later action on this contact (remove, set point
+            // of contact, edit) targeted an id no row has.
+            if (!realId) { onWriteError(new Error(`Failed to save contact ${c.first_name}`)); return }
+            setEngagements(prev => prev.map(en => en.id !== id ? en : {
+              ...en,
+              contacts: en.contacts.map(x => x.id === tempId ? { ...x, id: realId } : x),
+            }))
           }).catch(onWriteError)
         }
       })
@@ -375,14 +391,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setEngagements(prev => prev.map(e => {
           if (e.id !== id) return e
           const next: Engagement = { ...e, ...(patch ?? {}), updated_at: new Date().toISOString() }
-          if (summary) {
+          // Only show the note when the server actually stored one and told us its
+          // id. Inventing an id for a note that may not exist just moves the failure
+          // to the next resolve/delete, which would update 0 rows and report success.
+          if (summary && note) {
             next.briefing_notes = [...(e.briefing_notes ?? []), {
-              // Use the row the server actually created, so resolving or deleting
-              // this note before the next refetch targets a real id.
-              id: note?.id ?? crypto.randomUUID(),
+              id: note.id,
               body: summary,
               resolved: false,
-              created_at: note?.created_at ?? new Date().toISOString(),
+              created_at: note.created_at,
             }]
           }
           return next
@@ -709,8 +726,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ))
     // Was writing to `notes` — the engagement's general notes field — which both
     // lost the post-event note and clobbered the general one on every keystroke.
-    updateEngagementRow(id, { post_event_notes: notes }).catch(onWriteError)
-  }, [])
+    // Debounced because this fires per keystroke: overlapping PATCHes can land out
+    // of order and leave an earlier draft as the stored value.
+    const timers = notesTimersRef.current
+    if (timers[id]) clearTimeout(timers[id])
+    timers[id] = setTimeout(() => {
+      delete timers[id]
+      updateEngagementRow(id, { post_event_notes: notes }).catch(onWriteError)
+    }, 600)
+  }, [onWriteError])
 
   const updatePostEventStage = useCallback((id: string, stages: Partial<WrapUpFlagStages>) => {
     setEngagements(prev => prev.map(e => {

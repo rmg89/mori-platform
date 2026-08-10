@@ -162,12 +162,13 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
       // Hand the real row back to the caller. The client used to invent a `tmp_` id
       // for its optimistic copy, so resolving or deleting the note before the next
       // full refetch sent that placeholder to a uuid column and failed.
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('briefing_notes')
         .insert({ engagement_id: engagementId, body: summary, resolved: false })
         .select('id,created_at')
         .single()
-      if (data) note = { id: data.id as string, created_at: data.created_at as string }
+      if (error) console.error('scanEngagement briefing note insert:', error.message)
+      else if (data) note = { id: data.id as string, created_at: data.created_at as string }
     }
 
     return { patch, summary, note }
