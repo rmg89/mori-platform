@@ -602,7 +602,9 @@ function AddCallPanel({ engagementId, existingCalls, onClose }: {
   const submit = () => {
     const sameType = (existingCalls ?? []).filter(c => c.type === callType)
     addCall(engagementId, {
-      id: `call_${Date.now()}`, type: callType, status, number: sameType.length + 1,
+      // calls.id is a uuid column — a `call_<timestamp>` placeholder is rejected
+      // outright, so every logged call failed to save while still rendering locally.
+      id: crypto.randomUUID(), type: callType, status, number: sameType.length + 1,
       scheduled_at: status === 'scheduled' ? date + 'T00:00:00Z' : undefined, added_by: 'manual',
     })
     onClose()

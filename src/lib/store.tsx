@@ -683,60 +683,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_notes: notes, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { notes }).catch(onWriteError)
+    // Was writing to `notes` — the engagement's general notes field — which both
+    // lost the post-event note and clobbered the general one on every keystroke.
+    updateEngagementRow(id, { post_event_notes: notes }).catch(onWriteError)
   }, [])
 
   const updatePostEventStage = useCallback((id: string, stages: Partial<WrapUpFlagStages>) => {
-    setEngagements(prev => prev.map(e =>
-      e.id === id ? { ...e, post_event_stages: { ...e.post_event_stages, ...stages }, updated_at: new Date().toISOString() } : e
-    ))
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const post_event_stages = { ...e.post_event_stages, ...stages }
+      updateEngagementRow(id, { post_event_stages }).catch(onWriteError)
+      return { ...e, post_event_stages, updated_at: new Date().toISOString() }
+    }))
   }, [])
+
+  // Proposed dates live in the engagements.proposed_dates jsonb column. Every one of
+  // these used to be local-state-only, so a prospect's whole set of date/time options
+  // looked saved and was gone on the next refresh.
+  const setProposedDates = useCallback((id: string, next: (current: { date: string; times?: string[] }[]) => { date: string; times?: string[] }[] | null) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const proposed_dates = next(e.proposed_dates ?? [])
+      if (proposed_dates === null) return e
+      updateEngagementRow(id, { proposed_dates }).catch(onWriteError)
+      return { ...e, proposed_dates, updated_at: new Date().toISOString() }
+    }))
+  }, [onWriteError])
 
   const addProposedDate = useCallback((id: string, date: string) => {
-    setEngagements(prev => prev.map(e => {
-      if (e.id !== id) return e
-      const existing = e.proposed_dates ?? []
-      if (existing.some(d => d.date === date)) return e
-      const newDates = [...existing, { date }].sort((a, b) => a.date > b.date ? 1 : -1)
-      return { ...e, proposed_dates: newDates, updated_at: new Date().toISOString() }
-    }))
-  }, [])
+    setProposedDates(id, current => current.some(d => d.date === date)
+      ? null
+      : [...current, { date }].sort((a, b) => a.date > b.date ? 1 : -1))
+  }, [setProposedDates])
 
   const removeProposedDate = useCallback((id: string, date: string) => {
-    setEngagements(prev => prev.map(e =>
-      e.id !== id ? e : {
-        ...e,
-        proposed_dates: (e.proposed_dates ?? []).filter(d => d.date !== date),
-        updated_at: new Date().toISOString(),
-      }
-    ))
-  }, [])
+    setProposedDates(id, current => current.filter(d => d.date !== date))
+  }, [setProposedDates])
 
   const addProposedTime = useCallback((id: string, date: string, time: string) => {
-    setEngagements(prev => prev.map(e => {
-      if (e.id !== id) return e
-      return {
-        ...e,
-        proposed_dates: (e.proposed_dates ?? []).map(d =>
-          d.date === date ? { ...d, times: [...(d.times ?? []), time] } : d
-        ),
-        updated_at: new Date().toISOString(),
-      }
-    }))
-  }, [])
+    setProposedDates(id, current => current.map(d =>
+      d.date === date ? { ...d, times: [...(d.times ?? []), time] } : d
+    ))
+  }, [setProposedDates])
 
   const removeProposedTime = useCallback((id: string, date: string, time: string) => {
-    setEngagements(prev => prev.map(e => {
-      if (e.id !== id) return e
-      return {
-        ...e,
-        proposed_dates: (e.proposed_dates ?? []).map(d =>
-          d.date === date ? { ...d, times: (d.times ?? []).filter(t => t !== time) } : d
-        ),
-        updated_at: new Date().toISOString(),
-      }
-    }))
-  }, [])
+    setProposedDates(id, current => current.map(d =>
+      d.date === date ? { ...d, times: (d.times ?? []).filter(t => t !== time) } : d
+    ))
+  }, [setProposedDates])
 
   const confirmProposedDate = useCallback((id: string, date: string, time?: string) => {
     setEngagements(prev => prev.map(e =>
@@ -748,7 +742,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     ))
-    updateEngagementRow(id, { event_date: date, event_time: time ?? null }).catch(onWriteError)
+    // Clear proposed_dates in the DB too — local state emptied it either way, so
+    // without this the options came back on the next load.
+    updateEngagementRow(id, { event_date: date, event_time: time ?? null, proposed_dates: [] }).catch(onWriteError)
   }, [])
 
   const addCall = useCallback((engagementId: string, call: EngagementCall) => {
