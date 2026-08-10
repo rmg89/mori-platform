@@ -20,6 +20,7 @@ const LABEL_KEY = 'mori.error.userLabel'
 const MAX_BREADCRUMBS = 25
 const MAX_RECENT = 10
 const DEDUPE_MS = 10_000
+const MAX_TRACKED = 500
 
 export interface Breadcrumb {
   at: string
@@ -161,6 +162,13 @@ export function captureError(input: CaptureInput): void {
     const now = Date.now()
     const previous = lastSent.get(fp)
     if (previous && now - previous < DEDUPE_MS) return
+
+    // Bounded: a message carrying a changing value produces a new fingerprint
+    // every time, and this tab may stay open all day.
+    if (lastSent.size > MAX_TRACKED) {
+      lastSent.forEach((t, k) => { if (now - t >= DEDUPE_MS) lastSent.delete(k) })
+      if (lastSent.size > MAX_TRACKED) lastSent.clear()
+    }
     lastSent.set(fp, now)
 
     const payload = {

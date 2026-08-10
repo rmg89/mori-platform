@@ -39,9 +39,24 @@ const NAV = [
   { href: '/archive',     label: 'Archive',     icon: FolderArchive },
 ]
 
+function LoadFailureBanner({ failures }: { failures: string[] }) {
+  if (failures.length === 0) return null
+  const list = failures.length === 1
+    ? failures[0]
+    : `${failures.slice(0, -1).join(', ')} and ${failures[failures.length - 1]}`
+  return (
+    <div className="flex items-center gap-2 px-5 py-2 bg-red-50 border-b border-red-100 flex-shrink-0">
+      <AlertCircle size={13} className="text-red-500 flex-shrink-0" />
+      <p className="text-xs text-ink-600">
+        Couldn&apos;t load {list}. The rest of the app is working, but what you see here is incomplete. Refresh to try again.
+      </p>
+    </div>
+  )
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { reviewItems, saveStatus, saveError } = useStore()
+  const { reviewItems, saveStatus, saveError, loadFailures } = useStore()
   const reviewCount = reviewItems.filter(i => !i.confirmed_by).length
 
   return (
@@ -110,6 +125,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             MT
           </div>
         </header>
+
+        {/* A resource that failed to load says so until the page is reloaded,
+            rather than presenting a partial view as if it were complete. */}
+        <LoadFailureBanner failures={loadFailures} />
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">

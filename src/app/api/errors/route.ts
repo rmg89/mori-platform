@@ -9,6 +9,7 @@ const MAX_BODY_BYTES = 64_000
 const RATE_LIMIT_PER_MINUTE = 30
 
 const buckets = new Map<string, { count: number; resetAt: number }>()
+const MAX_BUCKETS = 5000
 
 /**
  * Per-client rate limit. Keyed on the LAST x-forwarded-for entry, which the
@@ -20,6 +21,15 @@ function rateLimited(req: Request): boolean {
   const key = parts.length ? parts[parts.length - 1] : 'unknown'
 
   const now = Date.now()
+
+  // Drop expired buckets before they accumulate. Without this the map grows
+  // with every distinct caller for the life of the instance, and an attacker
+  // rotating addresses could grow it without bound.
+  if (buckets.size > MAX_BUCKETS) {
+    buckets.forEach((v, k) => { if (now > v.resetAt) buckets.delete(k) })
+    if (buckets.size > MAX_BUCKETS) buckets.clear()
+  }
+
   const bucket = buckets.get(key)
   if (!bucket || now > bucket.resetAt) {
     buckets.set(key, { count: 1, resetAt: now + 60_000 })

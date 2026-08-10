@@ -23,6 +23,7 @@ interface Toast {
 /** Plain-language version of an error, since the raw message is developer text. */
 function toastMessage(error: RecentError): string {
   if (error.kind === 'render') return "This page hit an error and couldn't finish loading."
+  if (error.kind === 'window' || error.kind === 'promise') return 'Something went wrong on this page.'
   if (error.httpStatus === 404) return "That record couldn't be found."
   if (error.method && error.method !== 'GET') return "That didn't save. Your change may not have been kept."
   return "Something didn't load. What you're seeing may be incomplete."

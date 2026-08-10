@@ -37,6 +37,7 @@ export interface ServerErrorInput {
 // otherwise write thousands of identical rows. One per fingerprint per minute
 // per instance is enough to see the problem and its recency.
 const THROTTLE_MS = 60_000
+const MAX_TRACKED = 1000
 const lastLogged = new Map<string, number>()
 
 /** Write one server-side error row. Never throws — logging can't break a route. */
@@ -48,6 +49,14 @@ export async function logServerError(input: ServerErrorInput): Promise<void> {
     const now = Date.now()
     const previous = lastLogged.get(fp)
     if (previous && now - previous < THROTTLE_MS) return
+
+    // Fingerprints vary with the error message, so a failure that embeds a
+    // changing value would otherwise grow this map for the life of the
+    // instance. Expired entries are useless — the throttle window has passed.
+    if (lastLogged.size > MAX_TRACKED) {
+      lastLogged.forEach((t, k) => { if (now - t >= THROTTLE_MS) lastLogged.delete(k) })
+      if (lastLogged.size > MAX_TRACKED) lastLogged.clear()
+    }
     lastLogged.set(fp, now)
 
     await supabaseAdmin()

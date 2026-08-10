@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useMemo, u
 import { Engagement, EngagementContact, EngagementCall, CommEntry, BriefingNote, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
 import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, deleteCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted, insertBriefingNoteRow, updateBriefingNoteRow, deleteBriefingNoteRow } from '@/lib/db-client'
 import { getBackwardTransition } from '@/lib/pipeline'
+import { captureError } from '@/lib/error-reporting'
 import type { ReviewItem, ReviewAction, Company } from '@/types'
 
 // ─── Store shape ──────────────────────────────────────────────────────────────
@@ -17,6 +18,8 @@ interface StoreState {
   unassignedContacts: EngagementContact[]
   loading: boolean
   error: string | null
+  /** Names of the resources whose initial load failed. Empty when all loaded. */
+  loadFailures: string[]
   saveStatus: SaveStatus
   saveError: string | null
 }
@@ -128,6 +131,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [engagements, setEngagements] = useState<Engagement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [loadFailures, setLoadFailures] = useState<string[]>([])
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [unassignedContacts, setUnassignedContacts] = useState<EngagementContact[]>([])
@@ -157,29 +161,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── Load from Supabase on mount ──────────────────────────────────────────
+  // allSettled, not all: one failing table must not blank the whole app. Each
+  // resource is applied on its own, and the ones that failed are named in
+  // `loadFailures` so the UI can say so out loud. The failures themselves are
+  // already recorded and shown by the shared api client — this only decides
+  // what still renders. Per-resource status is read explicitly rather than
+  // inferred from the combined promise settling.
   useEffect(() => {
-    Promise.all([fetchAllEngagements(), fetchCompanies(), fetchReviewItems(), fetchUnassignedContacts()])
-      .then(([engData, coData, reviewData, contactData]) => {
+    Promise.allSettled([fetchAllEngagements(), fetchCompanies(), fetchReviewItems(), fetchUnassignedContacts()])
+      .then(([eng, co, review, contacts]) => {
+        const failed: string[] = []
+
         // Preserve any records created locally (e.g. via the New Inquiry modal)
         // while this initial fetch was still in flight — don't let a stale
         // snapshot wipe out state that already moved on.
-        setEngagements(prev => {
-          const fetchedIds = new Set(engData.map(e => e.id))
-          return [...engData, ...prev.filter(e => !fetchedIds.has(e.id))]
-        })
-        setCompanies(prev => {
-          const fetchedIds = new Set(coData.map(c => c.id))
-          return [...coData, ...prev.filter(c => !fetchedIds.has(c.id))]
-        })
-        setReviewItems(reviewData)
-        setUnassignedContacts(prev => {
-          const fetchedIds = new Set(contactData.map(c => c.id))
-          return [...contactData, ...prev.filter(c => !fetchedIds.has(c.id))]
-        })
+        if (eng.status === 'fulfilled') {
+          const engData = eng.value
+          setEngagements(prev => {
+            const fetchedIds = new Set(engData.map(e => e.id))
+            return [...engData, ...prev.filter(e => !fetchedIds.has(e.id))]
+          })
+        } else failed.push('engagements')
+
+        if (co.status === 'fulfilled') {
+          const coData = co.value
+          setCompanies(prev => {
+            const fetchedIds = new Set(coData.map(c => c.id))
+            return [...coData, ...prev.filter(c => !fetchedIds.has(c.id))]
+          })
+        } else failed.push('companies')
+
+        if (review.status === 'fulfilled') setReviewItems(review.value)
+        else failed.push('review items')
+
+        if (contacts.status === 'fulfilled') {
+          const contactData = contacts.value
+          setUnassignedContacts(prev => {
+            const fetchedIds = new Set(contactData.map(c => c.id))
+            return [...contactData, ...prev.filter(c => !fetchedIds.has(c.id))]
+          })
+        } else failed.push('contacts')
+
+        setLoadFailures(failed)
+        // Engagements are the app. Without them there is nothing to show, so
+        // that one case still gets the full-page message; anything else
+        // degrades to a banner over a working app.
+        if (eng.status === 'rejected') setError('Failed to load data. Please refresh.')
         setLoading(false)
       })
       .catch(err => {
-        console.error('Failed to load data:', err)
+        // allSettled never rejects, so this only fires if applying the results
+        // throws. Without it the app would sit on the loading state forever.
+        captureError({
+          kind: 'promise',
+          message: `Initial load failed while applying results: ${err instanceof Error ? err.message : String(err)}`,
+          stack: err instanceof Error ? err.stack : undefined,
+        })
         setError('Failed to load data. Please refresh.')
         setLoading(false)
       })
@@ -999,7 +1036,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   return (
     <StoreContext.Provider value={{
-      engagements, reviewItems, companies: companiesWithLinks, unassignedContacts, loading, error, saveStatus, saveError,
+      engagements, reviewItems, companies: companiesWithLinks, unassignedContacts, loading, error, loadFailures, saveStatus, saveError,
       updateEngagement, setProspectStep,
       confirmProspect, declineProspect, moveToWrapUp, moveEngagementBack, confirmBookingReview, confirmWrapUpReview,
       addProspect,
