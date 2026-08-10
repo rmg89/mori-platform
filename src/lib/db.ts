@@ -141,6 +141,8 @@ interface CallRow {
   completed_at: string | null
   notes: string | null
   added_by: string | null
+  format: string | null
+  details: string | null
 }
 
 interface MaterialRow {
@@ -216,6 +218,10 @@ function mapCall(row: CallRow): EngagementCall {
     scheduled_at: row.scheduled_at ?? undefined,
     scheduled_tz: row.scheduled_tz ?? undefined,
     completed_at: row.completed_at ?? undefined,
+    // The UI has always read these two; the columns only existed as of 2026-08-10,
+    // so without mapping them here they'd stay undefined on every reload.
+    format: (row.format as EngagementCall['format']) ?? undefined,
+    details: row.details ?? undefined,
     notes: row.notes ?? undefined,
     added_by: (row.added_by as 'ai' | 'manual') ?? 'manual',
   }
