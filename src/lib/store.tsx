@@ -111,6 +111,7 @@ interface StoreActions {
 
   // Contacts (global — updates all engagements sharing the same email)
   updateContact: (email: string, patch: Partial<EngagementContact>) => void
+  setPointOfContact: (engagementId: string, contactId: string) => void
   deleteContact: (id: string) => void
   createContact: (input: {
     first_name: string; last_name?: string; email?: string; phone?: string; title?: string
@@ -263,6 +264,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Point of contact is a column on each contact row, so it needs a real write per
+  // affected contact. It used to go through updateEngagement({ contacts }), which
+  // strips the contacts array before writing — the UI moved the marker and nothing
+  // reached the database.
+  const setPointOfContact = useCallback((engagementId: string, contactId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      e.contacts.forEach(c => {
+        const next = c.id === contactId
+        if (c.is_current_point_of_contact === next) return
+        if (/^(new_|lnk_)/.test(c.id)) return
+        upsertContact({ id: c.id, engagement_id: e.id, is_current_point_of_contact: next } as never).catch(onWriteError)
+      })
+      return {
+        ...e,
+        contacts: e.contacts.map(c => ({ ...c, is_current_point_of_contact: c.id === contactId })),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+  }, [onWriteError])
+
   const deleteContact = useCallback((id: string) => {
     setEngagements(prev => prev.map(e => ({ ...e, contacts: e.contacts.filter(c => c.id !== id) })))
     setUnassignedContacts(prev => prev.filter(c => c.id !== id))
@@ -348,17 +370,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ engagement_id: id, scan_type: scanType }),
     })
       .then(res => res.json())
-      .then((result: { patch?: Record<string, unknown>; summary?: string }) => {
-        const { patch, summary } = result
+      .then((result: { patch?: Record<string, unknown>; summary?: string; note?: { id: string; created_at: string } }) => {
+        const { patch, summary, note } = result
         setEngagements(prev => prev.map(e => {
           if (e.id !== id) return e
           const next: Engagement = { ...e, ...(patch ?? {}), updated_at: new Date().toISOString() }
           if (summary) {
             next.briefing_notes = [...(e.briefing_notes ?? []), {
-              id: `tmp_${Date.now()}`,
+              // Use the row the server actually created, so resolving or deleting
+              // this note before the next refetch targets a real id.
+              id: note?.id ?? crypto.randomUUID(),
               body: summary,
               resolved: false,
-              created_at: new Date().toISOString(),
+              created_at: note?.created_at ?? new Date().toISOString(),
             }]
           }
           return next
@@ -1009,7 +1033,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
-      updateCompany, createCompany, deleteCompany, updateContact, deleteContact, createContact,
+      updateCompany, createCompany, deleteCompany, updateContact, setPointOfContact, deleteContact, createContact,
     }}>
       {children}
     </StoreContext.Provider>

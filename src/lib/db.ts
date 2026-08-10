@@ -544,9 +544,13 @@ export async function insertContact(engagement_id: string | null, contact: Omit<
 }
 
 export async function upsertContact(contact: Partial<ContactRow> & { engagement_id: string | null }): Promise<void> {
-  // Only upsert if the id looks like a real UUID (not a temp id from the UI)
+  // Only write if the id looks like a real UUID (not a temp id from the UI)
   if (!contact.id || /^(new_|lnk_)/.test(contact.id)) return
-  const { error } = await supabase.from('contacts').upsert(contact)
+  // A real UPDATE, not an upsert. Postgres builds the insert branch of an upsert
+  // before resolving the conflict, so any partial patch (anything without
+  // first_name) died on the NOT NULL constraint instead of updating the row.
+  const { id, ...patch } = contact
+  const { error } = await supabase.from('contacts').update(patch).eq('id', id)
   if (error) throw new Error(`upsertContact: ${error.message}`)
 }
 

@@ -101,7 +101,7 @@ function parseJson(text: string): Record<string, unknown> | null {
   }
 }
 
-export async function scanEngagement(supabase: SupabaseClient, engagementId: string, scanType: ScanType): Promise<{ patch: Record<string, unknown>; summary?: string }> {
+export async function scanEngagement(supabase: SupabaseClient, engagementId: string, scanType: ScanType): Promise<{ patch: Record<string, unknown>; summary?: string; note?: { id: string; created_at: string } }> {
   try {
     const [{ data: row, error }, { data: contacts }, { data: comms }] = await Promise.all([
       supabase.from('engagements').select('*').eq('id', engagementId).single(),
@@ -157,11 +157,20 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
     await supabase.from('engagements').update(patch).eq('id', engagementId)
 
     const summary = typeof result.summary === 'string' ? result.summary : undefined
+    let note: { id: string; created_at: string } | undefined
     if (summary) {
-      await supabase.from('briefing_notes').insert({ engagement_id: engagementId, body: summary, resolved: false })
+      // Hand the real row back to the caller. The client used to invent a `tmp_` id
+      // for its optimistic copy, so resolving or deleting the note before the next
+      // full refetch sent that placeholder to a uuid column and failed.
+      const { data } = await supabase
+        .from('briefing_notes')
+        .insert({ engagement_id: engagementId, body: summary, resolved: false })
+        .select('id,created_at')
+        .single()
+      if (data) note = { id: data.id as string, created_at: data.created_at as string }
     }
 
-    return { patch, summary }
+    return { patch, summary, note }
   } catch (err) {
     console.error('scanEngagement error:', err)
     return { patch: {} }
