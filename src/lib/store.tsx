@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react'
 import { Engagement, EngagementContact, EngagementCall, CommEntry, BriefingNote, PostEventFlag, EngagementFlag, MediaFlag, ProspectStep, WrapUpFlagStages, PostEventMediaItem, PostEventMediaType } from '@/types'
-import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, insertComm, updateCommRow, deleteCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted, insertBriefingNoteRow, updateBriefingNoteRow, deleteBriefingNoteRow } from '@/lib/db-client'
+import { fetchAllEngagements, fetchCompanies, fetchUnassignedContacts, updateEngagementRow, deleteEngagementRow, insertEngagementRow, updateCompanyRow, insertCompanyRow, deleteCompanyRow, upsertCall, deleteCallRow, insertComm, updateCommRow, deleteCommRow, upsertContact, insertContact, deleteContactRow, fetchReviewItems, updateReviewItemRow, fetchReviewItemExtracted, insertBriefingNoteRow, updateBriefingNoteRow, deleteBriefingNoteRow } from '@/lib/db-client'
 import { getBackwardTransition } from '@/lib/pipeline'
 import type { ReviewItem, ReviewAction, Company } from '@/types'
 
@@ -86,6 +86,7 @@ interface StoreActions {
   // Calls
   addCall: (engagementId: string, call: EngagementCall) => void
   updateCall: (engagementId: string, callId: string, patch: Partial<EngagementCall>) => void
+  deleteCall: (engagementId: string, callId: string) => void
 
   // Comms
   addComm: (engagementId: string, comm: CommEntry) => void
@@ -851,6 +852,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     upsertCall({ id: callId, engagement_id: engagementId, ...patch } as never).catch(onWriteError)
   }, [])
 
+  const deleteCall = useCallback((engagementId: string, callId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      return {
+        ...e,
+        calls: (e.calls ?? []).filter(c => c.id !== callId),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+    deleteCallRow(callId).catch(onWriteError)
+  }, [])
+
   const addComm = useCallback((engagementId: string, comm: CommEntry) => {
     setEngagements(prev => prev.map(e =>
       e.id === engagementId
@@ -1088,7 +1101,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, flushPostEventNotes, updatePostEventStage,
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
-      addCall, updateCall, addComm, updateComm, deleteComm,
+      addCall, updateCall, deleteCall, addComm, updateComm, deleteComm,
       addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,

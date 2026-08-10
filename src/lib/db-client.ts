@@ -122,6 +122,10 @@ export async function upsertCall(call: Record<string, unknown> & { engagement_id
   await req('/api/calls', { method: 'PUT', body: JSON.stringify(call) })
 }
 
+export async function deleteCallRow(id: string): Promise<void> {
+  await req(`/api/calls/${id}`, { method: 'DELETE' })
+}
+
 export async function insertBriefingNoteRow(note: Record<string, unknown>): Promise<void> {
   await req('/api/briefing-notes', { method: 'POST', body: JSON.stringify(note) })
 }

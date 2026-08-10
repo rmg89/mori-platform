@@ -647,6 +647,11 @@ export async function upsertCall(call: Partial<CallRow> & { engagement_id: strin
   if (error) throw new Error(`upsertCall: ${error.message}`)
 }
 
+export async function deleteCallRow(id: string): Promise<void> {
+  const { error } = await supabase.from('calls').delete().eq('id', id)
+  if (error) throw new Error(`deleteCallRow: ${error.message}`)
+}
+
 export async function insertBriefingNoteRow(note: BriefingNoteRow): Promise<void> {
   const { error } = await supabase.from('briefing_notes').insert(note)
   if (error) throw new Error(`insertBriefingNoteRow: ${error.message}`)

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
+import ContactsPanel from '@/components/ContactsPanel'
 
 function formatDT(iso?: string, tzId?: string) {
   if (!iso) return null
@@ -390,8 +391,9 @@ function LogCommPanel({ engagementId, onClose }: { engagementId: string; onClose
 function CallRow({ call, engagementId, label }: {
   call: EngagementCall; engagementId: string; label: string
 }) {
-  const { updateCall } = useStore()
+  const { updateCall, deleteCall } = useStore()
   const [scheduling, setScheduling] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingDetails, setEditingDetails] = useState(false)
   const [schedDate, setSchedDate] = useState('')
   const [schedTime, setSchedTime] = useState('')
@@ -445,7 +447,8 @@ function CallRow({ call, engagementId, label }: {
   const formatIcon = call.format === 'phone' ? '📞' : call.format === 'in_person' ? '📍' : '🎥'
 
   return (
-    <div className="border border-ink-50 rounded-xl p-3 space-y-2.5">
+    <>
+    <div className="border border-ink-50 rounded-xl p-3 space-y-2.5 group/call">
       {/* Header row */}
       <div className="flex items-center gap-3">
         <Phone size={12} className="text-ink-300 flex-shrink-0" />
@@ -464,6 +467,10 @@ function CallRow({ call, engagementId, label }: {
             </button>
           ))}
         </div>
+        <button onClick={() => setConfirmDelete(true)} title="Delete this call"
+          className="p-1 rounded text-ink-200 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover/call:opacity-100 flex-shrink-0">
+          <Trash2 size={12} />
+        </button>
       </div>
 
       {/* Timestamps */}
@@ -589,6 +596,16 @@ function CallRow({ call, engagementId, label }: {
         </div>
       )}
     </div>
+    <ConfirmModal
+      open={confirmDelete}
+      title="Delete this call?"
+      description={`This removes ${label} and everything recorded on it. This cannot be undone.`}
+      confirmLabel="Delete call"
+      danger
+      onConfirm={() => { deleteCall(engagementId, call.id); setConfirmDelete(false) }}
+      onCancel={() => setConfirmDelete(false)}
+    />
+    </>
   )
 }
 
@@ -850,27 +867,9 @@ export default function ProspectDetailPage() {
           </div>
         </div>
 
-        {/* Contacts */}
-        <div className="bg-white border border-ink-100 rounded-xl p-5">
-          <p className="text-xs text-ink-400 uppercase tracking-widest font-medium mb-4">Contacts</p>
-          <div className="space-y-3">
-            {e.contacts.map(c => (
-              <div key={c.id} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-ink-800 flex items-center justify-center text-xs font-bold text-gold flex-shrink-0">
-                  {getInitials(c.first_name, c.last_name)}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-ink">{c.first_name} {c.last_name}</p>
-                  <p className="text-xs text-ink-400">{c.title} · {c.role}</p>
-                  <p className="text-xs text-ink-300">{c.email}</p>
-                </div>
-                {c.is_current_point_of_contact && (
-                  <span className="ml-auto text-[10px] text-gold bg-gold/10 px-2 py-0.5 rounded-full border border-gold/20 flex-shrink-0">POC</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Contacts — same panel the engagement page uses, so a prospect's contacts
+            can be linked, added, edited and re-pointed without waiting on confirmation */}
+        <ContactsPanel engagement={e} />
       </div>
 
       {/* Notes */}
