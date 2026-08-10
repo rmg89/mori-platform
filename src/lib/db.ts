@@ -122,7 +122,6 @@ interface CommRow {
   to_name: string | null
   staff_name: string | null
   needs_response: boolean
-  response_due_by: string | null
   next_step: string | null
   next_step_due_at: string | null
   next_step_snoozed_until: string | null
@@ -200,7 +199,6 @@ function mapComm(row: CommRow): CommEntry {
     staff_name: row.staff_name ?? undefined,
     channel: row.channel ?? undefined,
     needs_response: row.needs_response,
-    response_due_by: row.response_due_by ?? undefined,
     next_step: row.next_step ?? undefined,
     next_step_due_at: row.next_step_due_at ?? undefined,
     next_step_snoozed_until: row.next_step_snoozed_until ?? undefined,

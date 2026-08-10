@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useCallback, useEffect, useRef, useTransition, createContext, useContext } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, useTransition, createContext, useContext } from 'react'
 import { useStore } from '@/lib/store'
 import {
   Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact, Invoice, Contract, ContractTemplate
@@ -1752,6 +1752,12 @@ function FloatingBriefingButton({ e, save }: { e: Engagement; save: (p: Partial<
 
 type SectionKey = 'header' | 'contact' | 'details' | 'venue' | 'travel' | 'runofshow' | 'prepnotes'
 
+// Section show/hide is stored in engagements.field_statuses under this prefix, next
+// to the individual field statuses. The travel_not_needed / venue_not_needed columns
+// were meant for this and were never wired to anything.
+const SECTION_STATUS_PREFIX = '_section_'
+const sectionStatusKey = (k: SectionKey) => `${SECTION_STATUS_PREFIX}${k}`
+
 const ALL_SECTIONS: { key: SectionKey; label: string; always?: boolean }[] = [
   { key: 'header',     label: 'Event / Date / Format', always: true },
   { key: 'contact',    label: 'Primary Contact',        always: true },
@@ -2243,26 +2249,36 @@ function AddSectionMenu({ available, onAdd }: { available: { key: SectionKey; la
 }
 
 function BriefingDocument({ e }: { e: Engagement }) {
-  const { updateEngagement } = useStore()
+  const { updateEngagement, setFieldStatus } = useStore()
   const ctx = useContext(BriefingFieldContext)
-  const [sections, setSections] = useState<SectionKey[]>(() => getDefaultSections(e))
   const [downloading, setDownloading] = useState(false)
-  const hiddenCount = Object.values(e.field_statuses ?? {}).filter(s => s === 'not_needed').length
+  // Section choices live under their own `_section_` keys, so they don't inflate the
+  // "N hidden" count, which is about individual fields.
+  const hiddenCount = Object.entries(e.field_statuses ?? {})
+    .filter(([k, s]) => s === 'not_needed' && !k.startsWith(SECTION_STATUS_PREFIX)).length
 
   const save = useCallback((patch: Partial<Engagement>): void => {
     updateEngagement(e.id, patch)
   }, [e.id, updateEngagement]) as (p: Partial<Engagement>) => void
 
-  function removeSection(k: SectionKey) { setSections((s: SectionKey[]) => s.filter((x: SectionKey) => x !== k)) }
-  function addSection(k: SectionKey) {
-    setSections((s: SectionKey[]) => {
-      const prepIdx = s.indexOf('prepnotes')
-      const next = [...s]
-      if (prepIdx >= 0) next.splice(prepIdx, 0, k)
-      else next.push(k)
-      return next
-    })
-  }
+  // Which sections show was previously useState seeded from the engagement, so
+  // removing one reverted on the next load. Derive it from field_statuses instead —
+  // the same persisted mechanism the individual fields and _deposit_section use.
+  // 'not_needed' = explicitly removed, 'needed' = explicitly added back, absent = default.
+  const sections = useMemo<SectionKey[]>(() => {
+    const st = e.field_statuses ?? {}
+    const out = getDefaultSections(e).filter(k => st[sectionStatusKey(k)] !== 'not_needed')
+    for (const s of ALL_SECTIONS) {
+      if (st[sectionStatusKey(s.key)] !== 'needed' || out.includes(s.key)) continue
+      const prepIdx = out.indexOf('prepnotes')
+      if (prepIdx >= 0) out.splice(prepIdx, 0, s.key)
+      else out.push(s.key)
+    }
+    return out
+  }, [e])
+
+  function removeSection(k: SectionKey) { setFieldStatus(e.id, sectionStatusKey(k), 'not_needed') }
+  function addSection(k: SectionKey) { setFieldStatus(e.id, sectionStatusKey(k), 'needed') }
 
   const optionalSections = ALL_SECTIONS.filter(s => !s.always)
   const available = optionalSections.filter(s => !sections.includes(s.key))

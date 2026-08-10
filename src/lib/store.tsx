@@ -888,7 +888,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       contact_id: comm.contact_id ?? null,
       staff_name: comm.staff_name ?? null,
       needs_response: comm.needs_response ?? false,
-      response_due_by: comm.response_due_by ?? null,
       next_step: comm.next_step ?? null,
       next_step_due_at: comm.next_step_due_at ?? null,
       next_step_snoozed_until: comm.next_step_snoozed_until ?? null,
