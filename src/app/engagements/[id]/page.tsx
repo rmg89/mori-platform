@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useCallback, useEffect, useRef, useTransition, createContext, useContext } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, useTransition, createContext, useContext } from 'react'
 import { useStore } from '@/lib/store'
 import {
   Engagement, primaryContact, DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, OutgoingMaterial, IncomingMaterial, BriefingNote, EngagementContact, Invoice, Contract, ContractTemplate
@@ -629,28 +629,16 @@ function BriefingZone({ e, save, briefingComplete }: { e: Engagement; save: (p: 
 // ─── Event Details Card ───────────────────────────────────────────────────────
 
 function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
-  const { companies, updateCompany } = useStore()
+  const { companies } = useStore()
   const ctx = useContext(BriefingFieldContext)
-  const [addingTeam, setAddingTeam] = useState(false)
-  const [newTeamName, setNewTeamName] = useState('')
 
   const linkedCompany = companies.find(c => c.id === e.company_id)
     ?? companies.find(c => c.name.toLowerCase() === e.organization.toLowerCase())
-  const linkedTeam = linkedCompany?.teams.find(t => t.id === e.team_id)
 
   // Hide entire row (icon + field) when dismissed
   const shown = (key: string) => ctx?.fieldStatuses[key] !== 'not_needed' || ctx.showHidden
   const detailKeys = ['event_date', 'event_time', 'event_city', 'session_length', 'audience_size']
   const hiddenCount = detailKeys.filter(k => ctx?.fieldStatuses[k] === 'not_needed').length
-
-  function handleAddTeam() {
-    if (!newTeamName.trim() || !linkedCompany) return
-    const newTeam = { id: `t_${Date.now()}`, name: newTeamName.trim() }
-    updateCompany(linkedCompany.id, { teams: [...linkedCompany.teams, newTeam] })
-    save({ team_id: newTeam.id })
-    setNewTeamName('')
-    setAddingTeam(false)
-  }
 
   return (
     <div className="bg-white border border-ink-100 rounded-xl p-5">
@@ -686,50 +674,9 @@ function EventDetailsCard({ e, save }: { e: Engagement; save: (p: Partial<Engage
           </div>
         </div>
 
-        {/* Team — only when company is linked */}
-        {linkedCompany && (
-          <div className="flex items-start gap-2.5 pl-5">
-            <div className="flex-1 min-w-0">
-              {linkedTeam ? (
-                <div className="flex items-center gap-1.5 group/team">
-                  <span className="text-sm text-ink-400">{linkedTeam.name}</span>
-                  <button onClick={() => save({ team_id: undefined })}
-                    className="p-0.5 rounded text-ink-200 hover:text-red-400 hover:bg-red-50 opacity-0 group-hover/team:opacity-100 transition-all flex-shrink-0">
-                    <X size={11} />
-                  </button>
-                </div>
-              ) : addingTeam ? (
-                <div className="flex items-center gap-1.5">
-                  <input autoFocus value={newTeamName}
-                    onChange={(ev: React.ChangeEvent<HTMLInputElement>) => setNewTeamName(ev.target.value)}
-                    onKeyDown={(ev: React.KeyboardEvent<HTMLInputElement>) => {
-                      if (ev.key === 'Enter') handleAddTeam()
-                      if (ev.key === 'Escape') { setAddingTeam(false); setNewTeamName('') }
-                    }}
-                    placeholder="New team name…"
-                    className="flex-1 text-sm text-ink bg-parchment border border-gold/40 rounded px-2 py-1 focus:outline-none focus:border-gold" />
-                  <button onClick={handleAddTeam} className="p-1 text-sage hover:text-sage-dark"><Check size={11} /></button>
-                  <button onClick={() => { setAddingTeam(false); setNewTeamName('') }} className="p-1 text-ink-300 hover:text-ink"><X size={11} /></button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {linkedCompany.teams.length > 0 && (
-                    <select value=""
-                      onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => save({ team_id: ev.target.value || undefined })}
-                      className="text-sm text-ink-400 bg-transparent border-none focus:outline-none cursor-pointer hover:text-ink transition-colors appearance-none">
-                      <option value="">Link a team…</option>
-                      {linkedCompany.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                  )}
-                  <button onClick={() => setAddingTeam(true)}
-                    className="text-xs text-ink-300 hover:text-gold transition-colors flex items-center gap-1">
-                    <Plus size={10} /> {linkedCompany.teams.length === 0 ? 'Add team' : 'New'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Teams UI removed 2026-08-10: there is no `teams` table and `companies` has
+            no `teams` column, so every team created here was discarded on save while
+            still stamping a dangling team_id onto the engagement. */}
 
         <div className="border-t border-ink-50 pt-2 space-y-3">
           {shown('event_date') && (
@@ -853,7 +800,7 @@ function ContactForm({ initial, onSave, onCancel, originalEmail }: {
 }
 
 function ContactsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement>) => void }) {
-  const { engagements, updateContact } = useStore()
+  const { engagements, updateContact, setPointOfContact, deleteContact } = useStore()
   const [mode, setMode] = useState<'idle' | 'search' | 'add'>('idle')
   const [query, setQuery] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -910,11 +857,13 @@ function ContactsCard({ e, save }: { e: Engagement; save: (p: Partial<Engagement
   }
 
   function removeContact(id: string) {
-    save({ contacts: e.contacts.filter(c => c.id !== id) })
+    // updateEngagement strips `contacts` before writing and only ever inserts new
+    // ones, so removing through save() looked right and never persisted.
+    deleteContact(id)
   }
 
   function togglePOC(id: string) {
-    save({ contacts: e.contacts.map(c => ({ ...c, is_current_point_of_contact: c.id === id })) })
+    setPointOfContact(e.id, id)
   }
 
   return (
@@ -2062,6 +2011,12 @@ function FloatingBriefingButton({ e, save }: { e: Engagement; save: (p: Partial<
 
 type SectionKey = 'header' | 'contact' | 'details' | 'venue' | 'travel' | 'runofshow' | 'prepnotes'
 
+// Section show/hide is stored in engagements.field_statuses under this prefix, next
+// to the individual field statuses. The travel_not_needed / venue_not_needed columns
+// were meant for this and were never wired to anything.
+const SECTION_STATUS_PREFIX = '_section_'
+const sectionStatusKey = (k: SectionKey) => `${SECTION_STATUS_PREFIX}${k}`
+
 const ALL_SECTIONS: { key: SectionKey; label: string; always?: boolean }[] = [
   { key: 'header',     label: 'Event / Date / Format', always: true },
   { key: 'contact',    label: 'Primary Contact',        always: true },
@@ -2553,26 +2508,36 @@ function AddSectionMenu({ available, onAdd }: { available: { key: SectionKey; la
 }
 
 function BriefingDocument({ e }: { e: Engagement }) {
-  const { updateEngagement } = useStore()
+  const { updateEngagement, setFieldStatus } = useStore()
   const ctx = useContext(BriefingFieldContext)
-  const [sections, setSections] = useState<SectionKey[]>(() => getDefaultSections(e))
   const [downloading, setDownloading] = useState(false)
-  const hiddenCount = Object.values(e.field_statuses ?? {}).filter(s => s === 'not_needed').length
+  // Section choices live under their own `_section_` keys, so they don't inflate the
+  // "N hidden" count, which is about individual fields.
+  const hiddenCount = Object.entries(e.field_statuses ?? {})
+    .filter(([k, s]) => s === 'not_needed' && !k.startsWith(SECTION_STATUS_PREFIX)).length
 
   const save = useCallback((patch: Partial<Engagement>): void => {
     updateEngagement(e.id, patch)
   }, [e.id, updateEngagement]) as (p: Partial<Engagement>) => void
 
-  function removeSection(k: SectionKey) { setSections((s: SectionKey[]) => s.filter((x: SectionKey) => x !== k)) }
-  function addSection(k: SectionKey) {
-    setSections((s: SectionKey[]) => {
-      const prepIdx = s.indexOf('prepnotes')
-      const next = [...s]
-      if (prepIdx >= 0) next.splice(prepIdx, 0, k)
-      else next.push(k)
-      return next
-    })
-  }
+  // Which sections show was previously useState seeded from the engagement, so
+  // removing one reverted on the next load. Derive it from field_statuses instead —
+  // the same persisted mechanism the individual fields and _deposit_section use.
+  // 'not_needed' = explicitly removed, 'needed' = explicitly added back, absent = default.
+  const sections = useMemo<SectionKey[]>(() => {
+    const st = e.field_statuses ?? {}
+    const out = getDefaultSections(e).filter(k => st[sectionStatusKey(k)] !== 'not_needed')
+    for (const s of ALL_SECTIONS) {
+      if (st[sectionStatusKey(s.key)] !== 'needed' || out.includes(s.key)) continue
+      const prepIdx = out.indexOf('prepnotes')
+      if (prepIdx >= 0) out.splice(prepIdx, 0, s.key)
+      else out.push(s.key)
+    }
+    return out
+  }, [e])
+
+  function removeSection(k: SectionKey) { setFieldStatus(e.id, sectionStatusKey(k), 'not_needed') }
+  function addSection(k: SectionKey) { setFieldStatus(e.id, sectionStatusKey(k), 'needed') }
 
   const optionalSections = ALL_SECTIONS.filter(s => !s.always)
   const available = optionalSections.filter(s => !sections.includes(s.key))
