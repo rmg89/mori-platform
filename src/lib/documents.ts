@@ -671,11 +671,16 @@ function buildBriefingDoc(client: Client) {
   }
 
   // ── WHEN ────────────────────────────────────────────────────────────────────
-  const dateParts = [
-    fieldDropped('event_date') ? null : formatDate(client.event_date),
-    fieldDropped('event_time') ? null : client.event_time,
-  ].filter(Boolean)
-  field('When:', dateParts.join(' | '))
+  // The screen renders date and time as one "Date / Time" row keyed `event_date`, so
+  // dismissing that hides both — printing a bare time here would disagree with it.
+  // `event_time` has its own key in Event Details and drops only the time.
+  if (!fieldDropped('event_date')) {
+    const dateParts = [
+      formatDate(client.event_date),
+      fieldDropped('event_time') ? null : client.event_time,
+    ].filter(Boolean)
+    field('When:', dateParts.join(' | '))
+  }
   if (client.session_length) field('Duration:', `${client.session_length} minutes`, 'session_length')
 
   // ── WHERE ───────────────────────────────────────────────────────────────────
@@ -683,13 +688,16 @@ function buildBriefingDoc(client: Client) {
   // how a virtual event is attended, not venue detail, so removing the venue section
   // must not strip them — they have their own field-level dismissals.
   const venueGone = sectionDropped('venue')
+  const locationDismissed = hasPhysical && fieldDropped('event_location') && fieldDropped('event_city')
   const whereParts = hasPhysical
     ? [
         fieldDropped('event_location') ? null : client.event_location,
         fieldDropped('event_city') ? null : client.event_city,
       ].filter(Boolean)
     : ['Virtual']
-  if (!venueGone) field('Where:', whereParts.join(', ') || '—')
+  // The '—' placeholder means "not filled in yet". Dismissing both location fields
+  // means "don't show this", so print nothing rather than a placeholder.
+  if (!venueGone && !locationDismissed) field('Where:', whereParts.join(', ') || '—')
   if (isVirtual && (client as any).join_link) field('Join Link:', s((client as any).join_link), 'join_link')
   if (isVirtual && (client as any).dial_in_backup) field('Dial-in:', s((client as any).dial_in_backup), 'dial_in_backup')
   if (!venueGone) {
