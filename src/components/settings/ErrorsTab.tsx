@@ -276,7 +276,9 @@ export default function ErrorsTab() {
         <>
           <div className="text-[11px] text-ink-400">
             {groups.length} group{groups.length === 1 ? '' : 's'}
-            {!showResolved && ` · ${openCount} open`}
+            {/* Only worth saying when resolved ones are mixed in — otherwise
+                every group is open and the count just repeats itself. */}
+            {showResolved && ` · ${openCount} open`}
             {' · '}{reports.length} report{reports.length === 1 ? '' : 's'}
           </div>
           <div className="space-y-2">

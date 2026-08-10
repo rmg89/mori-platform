@@ -90,6 +90,10 @@ export function setUserLabel(label: string) {
 
 /** Record a user action so a later failure carries the steps that led to it. */
 export function addBreadcrumb(label: string) {
+  // Skip a repeat of the step already at the top. React re-invokes effects in
+  // development, which otherwise logged every navigation twice and made the
+  // trail read as though the user had clicked twice.
+  if (breadcrumbs[breadcrumbs.length - 1]?.label === label) return
   breadcrumbs.push({ at: new Date().toISOString(), label })
   if (breadcrumbs.length > MAX_BREADCRUMBS) breadcrumbs.shift()
 }
