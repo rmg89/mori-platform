@@ -221,9 +221,10 @@ create table comms (
   staff_name      text,
   channel         text,
   needs_response  boolean default false,
-  response_due_by timestamptz,
-  tagged_manually boolean default false,
-  ai_draft_reply  text
+  tagged_manually boolean default false
+  -- response_due_by and ai_draft_reply dropped 2026-08-10 (both unused, zero rows).
+  -- Note this table is named `communications` live, not `comms`; this file is a
+  -- stale snapshot, not a source of truth. Check the live schema before trusting it.
 );
 
 
