@@ -69,6 +69,7 @@ interface StoreActions {
   updatePostEventTestimonialLink: (id: string, link: string) => void
   updatePostEventTestimonialText: (id: string, text: string) => void
   updatePostEventNotes: (id: string, notes: string) => void
+  flushPostEventNotes: (id: string, notes: string) => void
   updatePostEventItemNote: (id: string, flag: PostEventFlag, note: string) => void
   addPostEventMedia: (id: string, item: { type: PostEventMediaType; name: string; url: string; description?: string }) => void
   removePostEventMedia: (id: string, mediaId: string) => void
@@ -137,6 +138,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Pending debounced post-event-note writes, keyed by engagement id.
   const notesTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  // Temp ids of contacts removed while their INSERT was still in flight, so the row
+  // the insert creates can be deleted once we learn its real id.
+  const abandonedContactsRef = useRef<Set<string>>(new Set())
+  // Point-of-contact flags set on a contact whose INSERT hadn't returned yet, keyed
+  // by temp id and applied once the real id is known.
+  const pendingPocRef = useRef<Map<string, boolean>>(new Map())
 
   const trackSave = useCallback((promise: Promise<unknown>) => {
     setSaveStatus('saving')
@@ -276,7 +283,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       e.contacts.forEach(c => {
         const next = c.id === contactId
         if (c.is_current_point_of_contact === next) return
-        if (/^(new_|lnk_)/.test(c.id)) return
+        // Still waiting on this contact's INSERT — there is no row to update yet, so
+        // hand the flag to the insert's callback instead of dropping the write.
+        if (/^(new_|lnk_)/.test(c.id)) { pendingPocRef.current.set(c.id, next); return }
         upsertContact({ id: c.id, engagement_id: e.id, is_current_point_of_contact: next } as never).catch(onWriteError)
       })
       return {
@@ -291,9 +300,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e => ({ ...e, contacts: e.contacts.filter(c => c.id !== id) })))
     setUnassignedContacts(prev => prev.filter(c => c.id !== id))
     // A contact added or linked earlier in this session still carries a new_/lnk_
-    // placeholder until the next refetch. Sending that to a uuid column errors while
-    // the real row survives, so the contact reappears on refresh.
-    if (/^(new_|lnk_)/.test(id)) return
+    // placeholder until its INSERT resolves. Sending that to a uuid column errors,
+    // and simply skipping the delete leaves the row the insert is about to create —
+    // either way the contact comes back on refresh. Mark it so the insert's callback
+    // deletes the real row once it knows the id.
+    if (/^(new_|lnk_)/.test(id)) { abandonedContactsRef.current.add(id); return }
     deleteContactRow(id).catch(onWriteError)
   }, [])
 
@@ -362,6 +373,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             // Left in place, every later action on this contact (remove, set point
             // of contact, edit) targeted an id no row has.
             if (!realId) { onWriteError(new Error(`Failed to save contact ${c.first_name}`)); return }
+            if (abandonedContactsRef.current.delete(tempId)) {
+              // Removed from the UI while this insert was still in flight.
+              deleteContactRow(realId).catch(onWriteError)
+              return
+            }
+            // Apply any point-of-contact change made while this insert was in flight.
+            const pendingPoc = pendingPocRef.current.get(tempId)
+            if (pendingPoc !== undefined) {
+              pendingPocRef.current.delete(tempId)
+              upsertContact({ id: realId, engagement_id: id, is_current_point_of_contact: pendingPoc } as never).catch(onWriteError)
+            }
             setEngagements(prev => prev.map(en => en.id !== id ? en : {
               ...en,
               contacts: en.contacts.map(x => x.id === tempId ? { ...x, id: realId } : x),
@@ -388,6 +410,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then(res => res.json())
       .then((result: { patch?: Record<string, unknown>; summary?: string; note?: { id: string; created_at: string } }) => {
         const { patch, summary, note } = result
+        // A summary with no note means the server's insert failed. Say so rather
+        // than dropping the scan's output with no signal at all.
+        if (summary && !note) onWriteError(new Error('AI scan ran but its note could not be saved'))
         setEngagements(prev => prev.map(e => {
           if (e.id !== id) return e
           const next: Engagement = { ...e, ...(patch ?? {}), updated_at: new Date().toISOString() }
@@ -736,6 +761,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, 600)
   }, [onWriteError])
 
+  // Write immediately, cancelling any debounced write still pending. Called on blur
+  // so leaving the field can't lose the last keystrokes to the debounce window.
+  const flushPostEventNotes = useCallback((id: string, notes: string) => {
+    const timers = notesTimersRef.current
+    if (!timers[id]) return
+    clearTimeout(timers[id])
+    delete timers[id]
+    updateEngagementRow(id, { post_event_notes: notes }).catch(onWriteError)
+  }, [onWriteError])
+
   const updatePostEventStage = useCallback((id: string, stages: Partial<WrapUpFlagStages>) => {
     setEngagements(prev => prev.map(e => {
       if (e.id !== id) return e
@@ -1050,7 +1085,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       archiveEngagement, unarchiveEngagement, deleteEngagement,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
-      updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, updatePostEventStage,
+      updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, flushPostEventNotes, updatePostEventStage,
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm, updateComm, deleteComm,
