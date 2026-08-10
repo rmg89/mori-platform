@@ -292,6 +292,7 @@ function WrapUpLogCommPanel({ engagementId, onClose }: { engagementId: string; o
 
 
 function WrapUpTimelinePanel({ engagementId, comms }: { engagementId: string; comms: import('@/types').CommEntry[] }) {
+  const { deleteComm } = useStore()
   const [showLog, setShowLog] = useState(false)
   const sorted = [...comms].sort((a, b) => a.date > b.date ? 1 : -1)
   return (
@@ -306,7 +307,7 @@ function WrapUpTimelinePanel({ engagementId, comms }: { engagementId: string; co
       {showLog && <WrapUpLogCommPanel engagementId={engagementId} onClose={() => setShowLog(false)} />}
       <div className="space-y-4 mt-2">
         {sorted.map(comm => (
-          <div key={comm.id} className={`flex gap-3 ${comm.type === 'email_outbound' ? 'flex-row-reverse' : ''}`}>
+          <div key={comm.id} className={`flex gap-3 group ${comm.type === 'email_outbound' ? 'flex-row-reverse' : ''}`}>
             <div className={`text-xs px-3 py-2 rounded-xl max-w-lg w-full ${
               comm.type === 'email_outbound' ? 'bg-ink text-cream ml-auto'
               : comm.type === 'stage_change' ? 'bg-parchment text-ink-400 italic'
@@ -317,6 +318,11 @@ function WrapUpTimelinePanel({ engagementId, comms }: { engagementId: string; co
               <p className="text-[10px] opacity-60 mt-1">{comm.from_name} · {formatDate(comm.date, 'MMM d, h:mm a')}</p>
               <WrapUpNextStepBadge comm={comm} engagementId={engagementId} />
             </div>
+            {/* This page could log a timeline item but never delete one. */}
+            <button onClick={() => deleteComm(engagementId, comm.id)} title="Delete this timeline item"
+              className={`flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 text-ink-200 hover:text-red-500 transition-all ${comm.type === 'email_outbound' ? 'order-1' : ''}`}>
+              <Trash2 size={12} />
+            </button>
           </div>
         ))}
         {sorted.length === 0 && <p className="text-xs text-ink-300 italic">No activity logged yet.</p>}
