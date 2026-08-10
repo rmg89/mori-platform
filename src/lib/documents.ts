@@ -2,6 +2,7 @@
 // Templates are data-merge only — no AI, deterministic output
 
 import { Engagement, BusinessProfile, ContractTemplateBlock, primaryContact } from '@/types'
+import { captureError } from '@/lib/error-reporting'
 type Client = Engagement
 
 function pc(client: Client) {
@@ -68,9 +69,21 @@ function createDoc() {
 type SignatureImage = { dataUrl: string; width: number; height: number }
 
 async function loadSignatureImage(): Promise<SignatureImage | null> {
+  // Returning null renders the contract without a signature. That is a document
+  // going out the door wrong, not a cosmetic miss, so it gets reported.
   try {
     const res = await fetch('/signature.png')
-    if (!res.ok) return null
+    if (!res.ok) {
+      captureError({
+        kind: 'api',
+        severity: 'warning',
+        message: `Signature image failed to load (${res.status}) — document rendered unsigned`,
+        action: 'GET /signature.png',
+        method: 'GET',
+        httpStatus: res.status,
+      })
+      return null
+    }
     const blob = await res.blob()
     const objectUrl = URL.createObjectURL(blob)
     try {
@@ -90,7 +103,13 @@ async function loadSignatureImage(): Promise<SignatureImage | null> {
     } finally {
       URL.revokeObjectURL(objectUrl)
     }
-  } catch {
+  } catch (err) {
+    captureError({
+      kind: 'api',
+      severity: 'warning',
+      message: `Signature image could not be decoded — document rendered unsigned: ${err instanceof Error ? err.message : String(err)}`,
+      action: 'render signature',
+    })
     return null
   }
 }

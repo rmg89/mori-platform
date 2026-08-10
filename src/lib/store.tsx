@@ -921,8 +921,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const refreshed = await fetchAllEngagements()
         setEngagements(refreshed)
       } else if (resolvedAction === 'add_to_existing' && item.ai_suggested_engagement_id) {
-        // insertContact logs and returns null on failure rather than throwing —
-        // check explicitly so a DB error doesn't get silently marked "confirmed".
+        // insertContact now throws on failure; the null check below stays as a
+        // guard against an unexpected empty id, not as the error path.
         const contactId = await insertContact(item.ai_suggested_engagement_id, {
           first_name: item.from_name,
           last_name: null,

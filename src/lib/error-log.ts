@@ -29,21 +29,35 @@ export interface ServerErrorInput {
   method?: string
   action?: string
   httpStatus?: number
+  severity?: 'error' | 'warning'
   context?: Record<string, unknown>
 }
+
+// A failure on a hot read path (the dashboard refetches on every load) would
+// otherwise write thousands of identical rows. One per fingerprint per minute
+// per instance is enough to see the problem and its recency.
+const THROTTLE_MS = 60_000
+const lastLogged = new Map<string, number>()
 
 /** Write one server-side error row. Never throws — logging can't break a route. */
 export async function logServerError(input: ServerErrorInput): Promise<void> {
   try {
     const route = input.route ?? 'unknown'
+    const fp = fingerprint('server', input.message, route)
+
+    const now = Date.now()
+    const previous = lastLogged.get(fp)
+    if (previous && now - previous < THROTTLE_MS) return
+    lastLogged.set(fp, now)
+
     await supabaseAdmin()
       .from('error_reports')
       .insert({
         kind: 'server',
-        severity: 'error',
+        severity: input.severity ?? 'error',
         message: input.message.slice(0, 2000),
         stack: input.stack?.slice(0, 8000) ?? null,
-        fingerprint: fingerprint('server', input.message, route),
+        fingerprint: fp,
         route,
         method: input.method ?? null,
         action: input.action ?? null,

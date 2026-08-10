@@ -97,6 +97,20 @@ export function getRecentErrors(): RecentError[] {
   return [...recent]
 }
 
+// ── subscribers ──────────────────────────────────────────────────────────────
+
+// Several pages handle a failed load with `.catch(err => console.error(...))`,
+// which leaves the user staring at an empty table with no idea anything broke.
+// Reporting it to the operator is only half the job: the person in front of the
+// screen has to see it too, or they carry on believing the data is real.
+type Listener = (error: RecentError) => void
+const listeners = new Set<Listener>()
+
+export function onErrorCaptured(listener: Listener): () => void {
+  listeners.add(listener)
+  return () => { listeners.delete(listener) }
+}
+
 // ── noise filter ─────────────────────────────────────────────────────────────
 
 // Browser and framework chatter that says nothing about this app. Left
@@ -135,6 +149,14 @@ export function captureError(input: CaptureInput): void {
     const entry: RecentError = { ...input, at: new Date().toISOString(), route }
     recent.unshift(entry)
     if (recent.length > MAX_RECENT) recent.pop()
+
+    // Tell the UI before the dedupe below, but never for the user's own report
+    // (they already know) — they'd get a toast echoing their own words back.
+    if (input.kind !== 'user_report') {
+      listeners.forEach(listener => {
+        try { listener(entry) } catch { /* a bad listener can't break capture */ }
+      })
+    }
 
     const now = Date.now()
     const previous = lastSent.get(fp)

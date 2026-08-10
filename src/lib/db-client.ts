@@ -26,16 +26,13 @@ export async function insertEngagementRow(input: Record<string, unknown>): Promi
 }
 
 export async function insertContact(engagement_id: string | null, contact: Record<string, unknown>): Promise<string | null> {
-  try {
-    const { id } = await req<{ id: string }>('/api/contacts', {
-      method: 'POST',
-      body: JSON.stringify({ engagement_id, ...contact }),
-    })
-    return id
-  } catch (err) {
-    console.error('insertContact:', err)
-    return null
-  }
+  // Throws on failure, like every sibling write here. It used to log and return
+  // null, which left each caller responsible for remembering a null check.
+  const { id } = await req<{ id: string }>('/api/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ engagement_id, ...contact }),
+  })
+  return id
 }
 
 export async function upsertContact(contact: Record<string, unknown> & { id?: string; engagement_id: string | null }): Promise<void> {
@@ -53,12 +50,9 @@ export async function deleteContactRow(id: string): Promise<void> {
 }
 
 export async function fetchCompanies(): Promise<Company[]> {
-  try {
-    return await req('/api/companies')
-  } catch (err) {
-    console.warn('fetchCompanies:', err)
-    return []
-  }
+  // Returning [] on failure rendered a dead backend as "you have no companies",
+  // with a clean console and no way to tell the difference.
+  return req('/api/companies')
 }
 
 export async function updateCompanyRow(id: string, patch: Record<string, unknown>): Promise<void> {
@@ -86,12 +80,7 @@ export async function deleteCommRow(id: string): Promise<void> {
 }
 
 export async function fetchReviewItems(): Promise<ReviewItem[]> {
-  try {
-    return await req('/api/review-items')
-  } catch (err) {
-    console.warn('fetchReviewItems:', err)
-    return []
-  }
+  return req('/api/review-items')
 }
 
 export async function updateReviewItemRow(id: string, patch: Record<string, unknown>): Promise<void> {
@@ -99,12 +88,7 @@ export async function updateReviewItemRow(id: string, patch: Record<string, unkn
 }
 
 export async function fetchReviewItemExtracted(id: string): Promise<Record<string, unknown> | null> {
-  try {
-    return await req(`/api/review-items/${id}/extracted`)
-  } catch (err) {
-    console.warn('fetchReviewItemExtracted:', err)
-    return null
-  }
+  return req(`/api/review-items/${id}/extracted`)
 }
 
 export async function upsertCall(call: Record<string, unknown> & { engagement_id: string }): Promise<void> {

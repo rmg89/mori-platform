@@ -4,6 +4,23 @@ import { timingSafeEqual } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { scanEngagement } from '@/lib/ai-scan'
 import { getBackwardTransition } from '@/lib/pipeline'
+import { logServerError } from '@/lib/error-log'
+
+/**
+ * Returns the same "Error: ..." text these tools have always returned to Claude,
+ * and records it. Previously an MCP write could fail 30 times and leave no trace
+ * anywhere the operator would ever look — Claude saw the error, nobody else did.
+ * The captured stack identifies which tool it came from.
+ */
+async function mcpError(error: { message: string }) {
+  await logServerError({
+    message: `MCP tool failed: ${error.message}`,
+    stack: new Error().stack,
+    route: '/api/mcp',
+    action: 'mcp tool',
+  })
+  return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+}
 
 // Gate every request behind a token. Without this, /api/[transport] lets anyone call
 // any of the tools below — including field edits, contact deletion, and engagement
@@ -121,7 +138,7 @@ const handler = createMcpHandler(
       // Unpaid invoices mode
       if (unpaid_only) {
         const { data, error } = await supabase.from('engagements').select('id,organization,event_name,event_date,fee,invoice_sent_at,deposit_amount,deposit_invoice_sent_at,deposit_received_at').eq('section','wrap-up').not('invoice_sent_at','is',null).is('payment_received_at',null).eq('archived',false)
-        if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+        if (error) return await mcpError(error)
         return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? [], null, 2) }] }
       }
       // Upcoming events mode
@@ -129,14 +146,14 @@ const handler = createMcpHandler(
         const today = new Date().toISOString().split('T')[0]
         const future = new Date(Date.now() + upcoming_days * 86400000).toISOString().split('T')[0]
         const { data, error } = await supabase.from('engagements').select('*').eq('section','engagements').eq('archived',false).gte('event_date',today).lte('event_date',future).order('event_date')
-        if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+        if (error) return await mcpError(error)
         return { content: [{ type: 'text' as const, text: JSON.stringify((data ?? []).map(engSummary), null, 2) }] }
       }
       // Stale prospects mode
       if (stale_days !== undefined) {
         const cutoff = new Date(Date.now() - stale_days * 86400000).toISOString()
         const { data, error } = await supabase.from('engagements').select('*').eq('section','prospects').eq('archived',false).lt('last_activity_at',cutoff).order('last_activity_at')
-        if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+        if (error) return await mcpError(error)
         return { content: [{ type: 'text' as const, text: JSON.stringify((data ?? []).map(engSummary), null, 2) }] }
       }
       // Full-text search mode
@@ -159,7 +176,7 @@ const handler = createMcpHandler(
       if (event_type) q = q.eq('event_type', event_type)
       if (organization) q = q.ilike('organization', `%${organization}%`)
       const { data, error } = await q
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: JSON.stringify((data ?? []).map(engSummary), null, 2) }] }
     })
 
@@ -219,7 +236,7 @@ const handler = createMcpHandler(
       inputSchema: {},
     }, async () => {
       const { data, error } = await supabase.from('communications').select('*, engagements(id,organization,section)').eq('needs_response', true).order('date', { ascending: false })
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? [], null, 2) }] }
     })
 
@@ -257,9 +274,9 @@ const handler = createMcpHandler(
         patch.declined_at = new Date().toISOString()
       }
       const { error } = await supabase.from('engagements').update(patch).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       if (stage === 'declined') {
-        try { await scanEngagement(supabase, engagement_id, 'declined') } catch (err) { console.error('scanEngagement (declined):', err) }
+        try { await scanEngagement(supabase, engagement_id, 'declined') } catch (err) { await mcpError(err instanceof Error ? err : new Error(String(err))) }
         return { content: [{ type: 'text' as const, text: 'Stage updated to "declined". Moved to Wrap-Up for review — an AI scan has flagged which post-event items still apply.' }] }
       }
       return { content: [{ type: 'text' as const, text: `Stage updated to "${stage}".` }] }
@@ -272,8 +289,8 @@ const handler = createMcpHandler(
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
       const { error } = await supabase.from('engagements').update({ section: 'engagements', prospect_step: null, booking_review_needed: true, confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-      try { await scanEngagement(supabase, engagement_id, 'booking') } catch (err) { console.error('scanEngagement (booking):', err) }
+      if (error) return await mcpError(error)
+      try { await scanEngagement(supabase, engagement_id, 'booking') } catch (err) { await mcpError(err instanceof Error ? err : new Error(String(err))) }
       return { content: [{ type: 'text' as const, text: 'Moved to confirmed engagements. An AI scan has flagged whether a contract is required and which prep materials are needed — review in the "Needs Review" section.' }] }
     })
 
@@ -284,8 +301,8 @@ const handler = createMcpHandler(
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
       const { error } = await supabase.from('engagements').update({ section: 'wrap-up', wrap_up_review_needed: true, updated_at: new Date().toISOString() }).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
-      try { await scanEngagement(supabase, engagement_id, 'wrapup') } catch (err) { console.error('scanEngagement (wrapup):', err) }
+      if (error) return await mcpError(error)
+      try { await scanEngagement(supabase, engagement_id, 'wrapup') } catch (err) { await mcpError(err instanceof Error ? err : new Error(String(err))) }
       return { content: [{ type: 'text' as const, text: 'Moved to wrap-up. An AI scan has flagged which post-event items are likely needed — review in the "Needs Review" section.' }] }
     })
 
@@ -322,7 +339,7 @@ const handler = createMcpHandler(
         ? (() => { try { return JSON.parse(value) } catch { return value } })()
         : value
       const { error } = await supabase.from('engagements').update({ [field]: dbValue, updated_at: new Date().toISOString() }).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Updated ${field}.` }] }
     })
 
@@ -348,7 +365,7 @@ const handler = createMcpHandler(
           ? Array.from(new Set([...current, item]))
           : current.filter((x: string) => x !== item)
         const { error } = await supabase.from('engagements').update({ [col]: updated, updated_at: now }).eq('id', engagement_id)
-        if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+        if (error) return await mcpError(error)
         return { content: [{ type: 'text' as const, text: `"${item}" ${value ? `marked ${flag}` : `removed from ${flag}`}.` }] }
       }
       const colMap: Record<string, Record<string, unknown>> = {
@@ -363,7 +380,7 @@ const handler = createMcpHandler(
         booking_reviewed:     { booking_review_needed: false },
       }
       const { error } = await supabase.from('engagements').update({ ...colMap[flag], updated_at: now }).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Flag "${flag}" set to ${value}.` }] }
     })
 
@@ -389,7 +406,7 @@ const handler = createMcpHandler(
         social_media_complete:{ social_media_complete: value },
       }
       const { error } = await supabase.from('engagements').update({ ...colMap[flag], updated_at: now }).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Post-event flag "${flag}" set to ${value}.` }] }
     })
 
@@ -411,7 +428,7 @@ const handler = createMcpHandler(
     }, async ({ engagement_id, type, body, subject, from_name, to_name, staff_name, needs_response, date }) => {
       const now = date ?? new Date().toISOString()
       const { error } = await supabase.from('communications').insert({ engagement_id, type, body, subject, from_name, to_name, staff_name, needs_response: needs_response ?? false, date: now, channel: type === 'call' ? 'phone' : 'email' })
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       await supabase.from('engagements').update({ last_activity_at: now, updated_at: now }).eq('id', engagement_id)
       return { content: [{ type: 'text' as const, text: 'Communication logged.' }] }
     })
@@ -431,12 +448,12 @@ const handler = createMcpHandler(
         const id = note_id
         if (!id) return { content: [{ type: 'text' as const, text: 'note_id required to resolve.' }] }
         const { error } = await supabase.from('briefing_notes').update({ resolved: true }).eq('id', id)
-        if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+        if (error) return await mcpError(error)
         return { content: [{ type: 'text' as const, text: 'Briefing note resolved.' }] }
       }
       if (!body) return { content: [{ type: 'text' as const, text: 'body required to add a note.' }] }
       const { error } = await supabase.from('briefing_notes').insert({ engagement_id, body, resolved: false })
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: 'Briefing note added.' }] }
     })
 
@@ -453,7 +470,7 @@ const handler = createMcpHandler(
       if (status) q = q.eq('status', status)
       if (engagement_id) q = q.eq('engagement_id', engagement_id)
       const { data, error } = await q
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? [], null, 2) }] }
     })
 
@@ -471,7 +488,7 @@ const handler = createMcpHandler(
       },
     }, async ({ engagement_id, type, status, scheduled_at, requested_at, notes }) => {
       const { error } = await supabase.from('calls').insert({ engagement_id, type, status, scheduled_at, notes, added_by: 'ai', requested_at: requested_at ?? new Date().toISOString() })
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: 'Call added.' }] }
     })
 
@@ -493,7 +510,7 @@ const handler = createMcpHandler(
       if (requested_at !== undefined) updates.requested_at = requested_at
       if (notes !== undefined) updates.notes = notes
       const { error } = await supabase.from('calls').update(updates).eq('id', call_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: 'Call updated.' }] }
     })
 
@@ -519,7 +536,7 @@ const handler = createMcpHandler(
         engagement_id, direction, label, url, note: notes,
         done: false, received, received_at: received ? now : null, added_at: now,
       })
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Material "${label}" added.` }] }
     })
 
@@ -550,7 +567,7 @@ const handler = createMcpHandler(
         event_name, event_date, event_city, event_format, fee, source, booker_name, topic, notes,
         archived: false, created_at: now, updated_at: now, last_activity_at: now,
       }).select('id').single()
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Prospect created. id: ${data.id}` }] }
     })
 
@@ -576,7 +593,7 @@ const handler = createMcpHandler(
         is_current_point_of_contact: is_point_of_contact ?? false,
         status: 'prospect_active', watching: false, notes,
       })
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Contact ${first_name} ${last_name ?? ''} added.` }] }
     })
 
@@ -608,7 +625,7 @@ const handler = createMcpHandler(
       if (company_id !== undefined) updates.company_id = company_id
       if (notes !== undefined) updates.notes = notes
       const { error } = await supabase.from('contacts').update(updates).eq('id', contact_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: 'Contact updated.' }] }
     })
 
@@ -619,7 +636,7 @@ const handler = createMcpHandler(
       inputSchema: { contact_id: z.string() },
     }, async ({ contact_id }) => {
       const { error } = await supabase.from('contacts').delete().eq('id', contact_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: 'Contact removed.' }] }
     })
 
@@ -632,7 +649,7 @@ const handler = createMcpHandler(
       const now = new Date().toISOString()
       const patch: Record<string, unknown> = { archived: true, archived_at: now, archived_reason: reason, updated_at: now }
       const { error } = await supabase.from('engagements').update(patch).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Engagement archived. Reason: ${reason}` }] }
     })
 
@@ -646,7 +663,7 @@ const handler = createMcpHandler(
       if (name) q = q.ilike('name', `%${name}%`)
       if (watching_only) q = q.eq('watching', true)
       const { data, error } = await q
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? [], null, 2) }] }
     })
 
@@ -663,7 +680,7 @@ const handler = createMcpHandler(
       },
     }, async ({ name, industry, website, watching, notes }) => {
       const { data, error } = await supabase.from('companies').insert({ name, industry, website, watching: watching ?? false, notes }).select('id').single()
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Company "${name}" created. id: ${data.id}` }] }
     })
 
@@ -687,7 +704,7 @@ const handler = createMcpHandler(
       if (watching !== undefined) updates.watching = watching
       if (notes !== undefined) updates.notes = notes
       const { error } = await supabase.from('companies').update(updates).eq('id', company_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: 'Company updated.' }] }
     })
 
@@ -769,7 +786,7 @@ const handler = createMcpHandler(
       if (row.section === 'wrap-up') patch.wrap_up_review_needed = false
       if (row.section === 'engagements') patch.booking_review_needed = false
       const { error } = await supabase.from('engagements').update(patch).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: `Moved back to ${target.section}${target.prospect_step ? ` (${target.prospect_step})` : ''}.` }] }
     })
 
@@ -780,7 +797,7 @@ const handler = createMcpHandler(
       inputSchema: { engagement_id: z.string() },
     }, async ({ engagement_id }) => {
       const { error } = await supabase.from('engagements').update({ archived: false, archived_at: null, updated_at: new Date().toISOString() }).eq('id', engagement_id)
-      if (error) return { content: [{ type: 'text' as const, text: `Error: ${error.message}` }] }
+      if (error) return await mcpError(error)
       return { content: [{ type: 'text' as const, text: 'Engagement unarchived.' }] }
     })
 

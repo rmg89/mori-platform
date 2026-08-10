@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { supabaseAdmin } from '@/lib/supabase'
+import { logServerError } from '@/lib/error-log'
 import type {
   Engagement, EngagementContact, CommEntry, EngagementCall,
   OutgoingMaterial, IncomingMaterial, BriefingNote,
@@ -423,7 +424,7 @@ function assembleEngagement(
 export async function fetchAllEngagements(origin: string): Promise<Engagement[]> {
   // Auto-transition any confirmed engagement whose event date has passed into wrap-up
   const today = new Date().toISOString().split('T')[0]
-  const { data: transitioned } = await supabase
+  const { data: transitioned, error: transitionError } = await supabase
     .from('engagements')
     .update({ section: 'wrap-up', wrap_up_review_needed: true })
     .eq('section', 'engagements')
@@ -431,21 +432,39 @@ export async function fetchAllEngagements(origin: string): Promise<Engagement[]>
     .lt('event_date', today)
     .select('id')
 
+  if (transitionError) {
+    // A failure here means past events silently stay in Engagements forever.
+    // Nothing else in the app would ever notice.
+    await logServerError({
+      message: `fetchAllEngagements auto-transition failed: ${transitionError.message}`,
+      route: '/api/engagements',
+      action: 'auto-transition to wrap-up',
+    })
+  }
+
   ;(transitioned ?? []).forEach((row: { id: string }) => {
     fetch(`${origin}/api/ai/scan-engagement`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ engagement_id: row.id, scan_type: 'wrapup' }),
-    }).catch(() => {})
+    }).catch(err => {
+      void logServerError({
+        message: `Wrap-up AI scan trigger failed: ${err instanceof Error ? err.message : String(err)}`,
+        route: '/api/engagements',
+        action: 'trigger wrapup scan',
+        severity: 'warning',
+        context: { engagement_id: row.id },
+      })
+    })
   })
 
   const [
     { data: engRows, error: engError },
-    { data: contactRows },
-    { data: commRows },
-    { data: callRows },
-    { data: materialRows },
-    { data: briefingRows },
+    { data: contactRows, error: contactError },
+    { data: commRows, error: commError },
+    { data: callRows, error: callError },
+    { data: materialRows, error: materialError },
+    { data: briefingRows, error: briefingError },
   ] = await Promise.all([
     supabase.from('engagements').select('*').order('created_at', { ascending: false }),
     supabase.from('contacts').select('*'),
@@ -456,6 +475,28 @@ export async function fetchAllEngagements(origin: string): Promise<Engagement[]>
   ])
 
   if (engError) throw new Error(`fetchAllEngagements: ${engError.message}`)
+
+  // The five sub-table reads used to discard their errors entirely. A dead
+  // `contacts` table rendered as every engagement having no contacts, on every
+  // page, with a clean console — the worst kind of failure, because it looks
+  // like data rather than an outage. Report each one; still return what loaded,
+  // so one broken table doesn't take the whole app down.
+  const subTableErrors: [string, { message: string } | null][] = [
+    ['contacts', contactError],
+    ['communications', commError],
+    ['calls', callError],
+    ['materials', materialError],
+    ['briefing_notes', briefingError],
+  ]
+  for (const [table, err] of subTableErrors) {
+    if (!err) continue
+    await logServerError({
+      message: `fetchAllEngagements: ${table} read failed — engagements will render with no ${table}: ${err.message}`,
+      route: '/api/engagements',
+      action: `read ${table}`,
+      context: { table },
+    })
+  }
 
   return (engRows as EngagementRow[]).map(row =>
     assembleEngagement(
@@ -530,8 +571,16 @@ export async function insertEngagementRow(input: {
         watching: false,
       }))
     ).select('*')
-    if (contactError) console.error('insertEngagementRow contacts:', contactError.message)
-    else if (contactRows) contacts = contactRows as ContactRow[]
+    if (contactError) {
+      // The engagement row itself succeeded, so the user sees a created record
+      // with its contacts quietly missing. Report rather than only logging.
+      await logServerError({
+        message: `insertEngagementRow: engagement created but its contacts failed to save: ${contactError.message}`,
+        route: '/api/engagements',
+        action: 'insert engagement contacts',
+        context: { engagement_id: (row as { id?: string }).id },
+      })
+    } else if (contactRows) contacts = contactRows as ContactRow[]
   }
 
   return assembleEngagement(row as EngagementRow, contacts, [], [], [], [])
@@ -539,7 +588,9 @@ export async function insertEngagementRow(input: {
 
 export async function insertContact(engagement_id: string | null, contact: Omit<ContactRow, 'id' | 'engagement_id'>): Promise<string | null> {
   const { data, error } = await supabase.from('contacts').insert({ ...contact, engagement_id }).select('id').single()
-  if (error) { console.error('insertContact:', error.message); return null }
+  // Throws rather than returning null: every sibling write in this file throws,
+  // and a caller that forgot the null check would mark a failed insert as saved.
+  if (error) throw new Error(`insertContact: ${error.message}`)
   return data.id
 }
 
@@ -565,7 +616,7 @@ export async function deleteContactRow(id: string): Promise<void> {
 
 export async function fetchCompanies(): Promise<import('@/types').Company[]> {
   const { data, error } = await supabase.from('companies').select('*').order('name')
-  if (error) { console.warn('fetchCompanies:', error.message); return [] }
+  if (error) throw new Error(`fetchCompanies: ${error.message}`)
   return (data ?? []).map((row: Record<string, unknown>) => ({
     id: row.id as string,
     name: row.name as string,
@@ -687,7 +738,7 @@ export async function fetchReviewItems(): Promise<ReviewItem[]> {
     .from('review_items')
     .select('id,received_at,from_name,from_email,subject,body_preview,account,ai_confidence,state,ai_suggested_action,ai_suggested_engagement_id,ai_reasoning,confirmed_by,confirmed_at')
     .order('received_at', { ascending: false })
-  if (error) { console.warn('fetchReviewItems:', error.message); return [] }
+  if (error) throw new Error(`fetchReviewItems: ${error.message}`)
   return (data as ReviewItemRow[]).map(assembleReviewItem)
 }
 
@@ -698,7 +749,7 @@ export async function updateReviewItemRow(id: string, patch: Record<string, unkn
 
 export async function fetchReviewItemExtracted(id: string): Promise<Record<string, unknown> | null> {
   const { data, error } = await supabase.from('review_items').select('ai_extracted').eq('id', id).single()
-  if (error) { console.warn('fetchReviewItemExtracted:', error.message); return null }
+  if (error) throw new Error(`fetchReviewItemExtracted: ${error.message}`)
   return (data?.ai_extracted as Record<string, unknown>) ?? null
 }
 
