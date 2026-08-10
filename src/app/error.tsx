@@ -1,6 +1,7 @@
 'use client'
 import { useEffect } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { captureError } from '@/lib/error-reporting'
 
 export default function GlobalError({
   error,
@@ -11,6 +12,12 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('[GlobalError]', error)
+    captureError({
+      kind: 'render',
+      message: error.message || 'Unknown render error',
+      stack: error.stack,
+      context: { digest: error.digest },
+    })
   }, [error])
 
   return (

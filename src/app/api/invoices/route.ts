@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchInvoices, createInvoice } from '@/lib/invoices'
 import type { InvoiceKind, InvoiceStatus } from '@/types'
+import { serverError } from '@/lib/error-log'
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,8 +13,8 @@ export async function GET(req: NextRequest) {
       limit: Number(sp.get('limit') ?? 50),
     })
     return NextResponse.json(result)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     const input = await req.json()
     const invoice = await createInvoice(input)
     return NextResponse.json(invoice)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

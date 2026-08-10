@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
+import { serverError } from '@/lib/error-log'
 
 export async function POST(req: NextRequest) {
   const { image_description, topic_prompt, tone } = await req.json()
@@ -46,8 +47,7 @@ Write 3 Instagram caption options for Mori.`
     const raw = text.split(/Option\s+[123][:\.\s]/i).filter(Boolean).map(s => s.trim())
 
     return NextResponse.json({ captions: raw.length >= 3 ? raw.slice(0, 3) : [text] })
-  } catch (err: any) {
-    console.error('Caption generation error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

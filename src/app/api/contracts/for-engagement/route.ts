@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchContractsForEngagement } from '@/lib/contracts'
+import { serverError } from '@/lib/error-log'
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
     }
     const contracts = await fetchContractsForEngagement(engagementId)
     return NextResponse.json(contracts)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

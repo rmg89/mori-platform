@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { parseInboundEmail, InboundEmail } from '@/lib/ai-email-parse'
+import { serverError } from '@/lib/error-log'
 
 // Gate every request behind EMAIL_INGEST_SECRET_TOKEN (sent as "Authorization: Bearer <token>"),
 // same pattern as the MCP endpoint (src/app/api/[transport]/route.ts) — this is the seam a
@@ -43,8 +44,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase.from('review_items').insert(parsed).select('*').single()
     if (error) throw new Error(error.message)
     return NextResponse.json(data)
-  } catch (err: unknown) {
-    console.error('email-sync/ingest error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Ingest failed' }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

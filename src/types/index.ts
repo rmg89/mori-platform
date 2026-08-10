@@ -577,3 +577,29 @@ export interface TeamUser {
   account: string // which M365 account they own
   avatar_initials: string
 }
+// ─── Error reporting ──────────────────────────────────────────────────────────
+
+export type ErrorKind = 'render' | 'promise' | 'window' | 'api' | 'server' | 'user_report'
+
+export interface ErrorReport {
+  id: string
+  created_at: string
+  kind: ErrorKind
+  severity: 'error' | 'warning'
+  message: string
+  stack?: string | null
+  fingerprint: string
+  url?: string | null
+  route?: string | null
+  action?: string | null
+  method?: string | null
+  http_status?: number | null
+  user_label?: string | null
+  session_id?: string | null
+  user_agent?: string | null
+  context?: Record<string, unknown> | null
+  breadcrumbs?: { at: string; label: string }[] | null
+  user_note?: string | null
+  resolved_at?: string | null
+  resolved_note?: string | null
+}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchBusinessProfile, updateBusinessProfile } from '@/lib/business'
+import { serverError } from '@/lib/error-log'
 
 export async function GET() {
   const profile = await fetchBusinessProfile()
@@ -11,7 +12,7 @@ export async function PUT(req: NextRequest) {
     const patch = await req.json()
     await updateBusinessProfile(patch)
     return NextResponse.json({ ok: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
+import { serverError } from '@/lib/error-log'
 
 function parseJson(text: string): Record<string, unknown> | null {
   try {
@@ -48,8 +49,7 @@ Respond with ONLY a JSON object (no markdown fences) in this exact shape:
     return NextResponse.json({
       website: typeof result?.website === 'string' ? result.website : null,
     })
-  } catch (err: any) {
-    console.error('enrich-company error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

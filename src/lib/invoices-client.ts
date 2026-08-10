@@ -10,17 +10,7 @@ import type { Invoice, InvoiceKind, InvoiceSnapshot, InvoiceStatus } from '@/typ
 
 export { buildInvoiceSnapshot, snapshotToClient } from '@/lib/invoice-utils'
 
-async function req<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? `${url}: ${res.status}`)
-  }
-  return res.json()
-}
+import { apiRequest as req } from '@/lib/api-client'
 
 export async function createInvoice(input: {
   engagementId?: string

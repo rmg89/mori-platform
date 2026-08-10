@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { findLatestInvoice } from '@/lib/invoices'
 import type { InvoiceKind } from '@/types'
+import { serverError } from '@/lib/error-log'
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
     }
     const invoice = await findLatestInvoice(engagementId, type)
     return NextResponse.json(invoice)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateReviewItemRow } from '@/lib/db'
+import { serverError } from '@/lib/error-log'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -7,7 +8,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const patch = await req.json()
     await updateReviewItemRow(id, patch)
     return NextResponse.json({ ok: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

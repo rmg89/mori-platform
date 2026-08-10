@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchCompanies, insertCompanyRow } from '@/lib/db'
+import { serverError } from '@/lib/error-log'
 
 export async function GET() {
   const companies = await fetchCompanies()
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
     const input = await req.json()
     const company = await insertCompanyRow(input)
     return NextResponse.json(company)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

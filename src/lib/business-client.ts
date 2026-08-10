@@ -6,6 +6,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { BusinessProfile } from '@/types'
+import { apiRequest } from '@/lib/api-client'
+import { captureError } from '@/lib/error-reporting'
 
 const FALLBACK: BusinessProfile = {
   name: 'MT Global Strategies',
@@ -17,21 +19,33 @@ const FALLBACK: BusinessProfile = {
 export async function fetchBusinessProfile(): Promise<BusinessProfile> {
   try {
     const res = await fetch('/api/business-profile')
-    if (!res.ok) return FALLBACK
+    if (!res.ok) {
+      // Falling back to hardcoded details still renders a working page, which
+      // is precisely why this needs reporting: the user sees stale letterhead
+      // on a contract and has no way to tell the lookup failed.
+      captureError({
+        kind: 'api',
+        severity: 'warning',
+        message: `Business profile lookup failed (${res.status}) — showing hardcoded fallback`,
+        action: 'GET /api/business-profile',
+        method: 'GET',
+        httpStatus: res.status,
+      })
+      return FALLBACK
+    }
     return await res.json()
-  } catch {
+  } catch (err) {
+    captureError({
+      kind: 'api',
+      severity: 'warning',
+      message: `Business profile lookup failed (${err instanceof Error ? err.message : 'network error'}) — showing hardcoded fallback`,
+      action: 'GET /api/business-profile',
+      method: 'GET',
+    })
     return FALLBACK
   }
 }
 
 export async function updateBusinessProfile(patch: Partial<BusinessProfile>): Promise<void> {
-  const res = await fetch('/api/business-profile', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? `updateBusinessProfile: ${res.status}`)
-  }
+  await apiRequest('/api/business-profile', { method: 'PUT', body: JSON.stringify(patch) })
 }

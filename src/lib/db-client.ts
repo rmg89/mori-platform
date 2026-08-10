@@ -7,18 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Engagement, EngagementContact, Company, ReviewItem } from '@/types'
-
-async function req<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? `${url}: ${res.status}`)
-  }
-  return res.json()
-}
+import { apiRequest as req } from '@/lib/api-client'
 
 export async function fetchAllEngagements(): Promise<Engagement[]> {
   return req('/api/engagements')
