@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
+import { serverError } from '@/lib/error-log'
 
 export async function POST(req: NextRequest) {
   const { thread_subject, contact_name, contact_org, last_message } = await req.json()
@@ -33,8 +34,7 @@ Draft a reply.`
 
     const reply = message.content[0].type === 'text' ? message.content[0].text : ''
     return NextResponse.json({ reply })
-  } catch (err: any) {
-    console.error('Email reply error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

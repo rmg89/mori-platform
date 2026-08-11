@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchUnassignedContacts, insertContact } from '@/lib/db'
+import { serverError } from '@/lib/error-log'
 
 export async function GET(req: NextRequest) {
   if (req.nextUrl.searchParams.get('unassigned') !== 'true') {
@@ -8,8 +9,8 @@ export async function GET(req: NextRequest) {
   try {
     const contacts = await fetchUnassignedContacts()
     return NextResponse.json(contacts)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }
 
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     const id = await insertContact(engagement_id ?? null, contact)
     if (!id) return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })
     return NextResponse.json({ id })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }

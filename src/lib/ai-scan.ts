@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DEFAULT_OUTGOING_MATERIALS, DEFAULT_INCOMING_MATERIALS, POST_EVENT_FLAGS, PostEventFlag } from '@/types'
 import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
+import { logServerError } from '@/lib/error-log'
 
 export type ScanType = 'booking' | 'declined' | 'wrapup'
 
@@ -109,7 +110,17 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
       supabase.from('communications').select('date,subject,body').eq('engagement_id', engagementId).order('date', { ascending: false }).limit(10),
     ])
 
-    if (error || !row) return { patch: {} }
+    if (error || !row) {
+      // An empty patch is indistinguishable from "the AI found nothing to
+      // flag", so a failure here quietly produces a wrong checklist.
+      await logServerError({
+        message: `scanEngagement (${scanType}): could not load engagement — scan skipped: ${error?.message ?? 'no row returned'}`,
+        route: '/api/ai/scan-engagement',
+        action: `${scanType} scan`,
+        context: { engagement_id: engagementId },
+      })
+      return { patch: {} }
+    }
 
     const context = buildContext(row, contacts ?? [], comms ?? [])
     const system = systemPromptFor(scanType)
@@ -123,7 +134,16 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
 
     const text = message.content[0].type === 'text' ? message.content[0].text : ''
     const result = parseJson(text)
-    if (!result) return { patch: {} }
+    if (!result) {
+      await logServerError({
+        message: `scanEngagement (${scanType}): AI returned output that could not be parsed as JSON — scan skipped`,
+        route: '/api/ai/scan-engagement',
+        action: `${scanType} scan`,
+        severity: 'warning',
+        context: { engagement_id: engagementId, model: AI_MODEL, response: text.slice(0, 1000) },
+      })
+      return { patch: {} }
+    }
 
     const now = new Date().toISOString()
     let patch: Record<string, unknown> = {}
@@ -154,7 +174,17 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
       }
     }
 
-    await supabase.from('engagements').update(patch).eq('id', engagementId)
+    // Both writes below discarded their errors: the scan would report success
+    // while none of its conclusions reached the database.
+    const { error: updateError } = await supabase.from('engagements').update(patch).eq('id', engagementId)
+    if (updateError) {
+      await logServerError({
+        message: `scanEngagement (${scanType}): scan ran but its flags failed to save: ${updateError.message}`,
+        route: '/api/ai/scan-engagement',
+        action: `${scanType} scan write`,
+        context: { engagement_id: engagementId, patch },
+      })
+    }
 
     const summary = typeof result.summary === 'string' ? result.summary : undefined
     let note: { id: string; created_at: string } | undefined
@@ -162,18 +192,32 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
       // Hand the real row back to the caller. The client used to invent a `tmp_` id
       // for its optimistic copy, so resolving or deleting the note before the next
       // full refetch sent that placeholder to a uuid column and failed.
-      const { data, error } = await supabase
+      const { data, error: noteError } = await supabase
         .from('briefing_notes')
         .insert({ engagement_id: engagementId, body: summary, resolved: false })
         .select('id,created_at')
         .single()
-      if (error) console.error('scanEngagement briefing note insert:', error.message)
-      else if (data) note = { id: data.id as string, created_at: data.created_at as string }
+      if (noteError) {
+        await logServerError({
+          message: `scanEngagement (${scanType}): briefing note failed to save: ${noteError.message}`,
+          route: '/api/ai/scan-engagement',
+          action: `${scanType} scan note`,
+          context: { engagement_id: engagementId },
+        })
+      } else if (data) {
+        note = { id: data.id as string, created_at: data.created_at as string }
+      }
     }
 
     return { patch, summary, note }
   } catch (err) {
-    console.error('scanEngagement error:', err)
+    await logServerError({
+      message: `scanEngagement (${scanType}) failed: ${err instanceof Error ? err.message : String(err)}`,
+      stack: err instanceof Error ? err.stack : undefined,
+      route: '/api/ai/scan-engagement',
+      action: `${scanType} scan`,
+      context: { engagement_id: engagementId },
+    })
     return { patch: {} }
   }
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
+import { logServerError } from '@/lib/error-log'
 
 // Confidence at/above this, for a clear-cut action, lets the review page
 // auto-bucket the item (New Prospects / Ignore) instead of surfacing it
@@ -156,7 +157,16 @@ export async function parseInboundEmail(supabase: SupabaseClient, email: Inbound
 
     const text = message.content[0].type === 'text' ? message.content[0].text : ''
     const result = parseJson(text)
-    if (!result) return base
+    if (!result) {
+      await logServerError({
+        message: 'parseInboundEmail: AI returned output that could not be parsed as JSON — item filed with no AI suggestion',
+        route: '/api/email-sync/ingest',
+        action: 'parse inbound email',
+        severity: 'warning',
+        context: { model: AI_MODEL, from_email: email.from_email, response: text.slice(0, 1000) },
+      })
+      return base
+    }
 
     const action = result.suggested_action as ParsedReviewItem['ai_suggested_action']
     const confidence = typeof result.confidence === 'number' ? result.confidence : null
@@ -174,7 +184,15 @@ export async function parseInboundEmail(supabase: SupabaseClient, email: Inbound
         : 'needs_review',
     }
   } catch (err) {
-    console.error('parseInboundEmail error:', err)
+    // Returning `base` means the item lands in Review with no AI suggestion at
+    // all, which reads as "the AI wasn't confident" rather than "the AI failed".
+    await logServerError({
+      message: `parseInboundEmail failed — item filed with no AI suggestion: ${err instanceof Error ? err.message : String(err)}`,
+      stack: err instanceof Error ? err.stack : undefined,
+      route: '/api/email-sync/ingest',
+      action: 'parse inbound email',
+      context: { from_email: email.from_email, subject: email.subject },
+    })
     return base
   }
 }

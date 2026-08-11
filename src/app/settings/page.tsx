@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
 import AppShell from '@/components/layout/AppShell'
-import { BookUser, Shield, Plug, Users, Receipt, Check } from 'lucide-react'
+import { BookUser, Shield, Plug, Users, Receipt, Check, AlertTriangle } from 'lucide-react'
+import ErrorsTab from '@/components/settings/ErrorsTab'
 import Link from 'next/link'
 import { fetchBusinessProfile, updateBusinessProfile } from '@/lib/business-client'
 import type { BusinessProfile } from '@/types'
 
-type Tab = 'users' | 'billing' | 'integrations'
+type Tab = 'users' | 'billing' | 'integrations' | 'errors'
 
 function BillingField({
   label, value, onChange, placeholder,
@@ -113,6 +114,7 @@ export default function SettingsPage() {
             { id: 'users', label: 'Users & Permissions', icon: Users },
             { id: 'billing', label: 'Billing', icon: Receipt },
             { id: 'integrations', label: 'Integrations', icon: Plug },
+            { id: 'errors', label: 'Errors', icon: AlertTriangle },
           ] as { id: Tab; label: string; icon: React.ElementType }[]).map(t => (
             <button
               key={t.id}
@@ -205,6 +207,9 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
+
+        {/* Errors tab */}
+        {tab === 'errors' && <ErrorsTab />}
       </div>
     </AppShell>
   )

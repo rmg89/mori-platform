@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, AI_MODEL, callAI } from '@/lib/ai-client'
+import { serverError, logServerError } from '@/lib/error-log'
 
 function parseJson(text: string): Record<string, unknown> | null {
   try {
@@ -44,12 +45,22 @@ Respond with ONLY a JSON object (no markdown fences) in this exact shape:
     const textBlock = message.content.find(b => b.type === 'text')
     const text = textBlock && textBlock.type === 'text' ? textBlock.text : ''
     const result = parseJson(text)
+    if (!result) {
+      // A null website reads to the user as "no website found" rather than
+      // "the lookup broke", so the failure has to be recorded here.
+      await logServerError({
+        message: 'enrich-company: AI returned output that could not be parsed as JSON — reported as no website found',
+        route: '/api/ai/enrich-company',
+        action: 'enrich company',
+        severity: 'warning',
+        context: { model: AI_MODEL, response: text.slice(0, 1000) },
+      })
+    }
 
     return NextResponse.json({
       website: typeof result?.website === 'string' ? result.website : null,
     })
-  } catch (err: any) {
-    console.error('enrich-company error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    return serverError(err, req)
   }
 }
