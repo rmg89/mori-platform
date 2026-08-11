@@ -136,9 +136,15 @@ function buildAlerts(prospects: Engagement[], active: Engagement[], postEvent: E
 
 // ─── Field readiness ─────────────────────────────────────────────────────────
 
+// field_statuses also holds UI pseudo-keys that aren't briefing fields — the
+// underscore-prefixed ones (_deposit_section, _section_venue, …) record which
+// sections are shown. Counting them here would add a "needed" field that has no
+// value to fill, so readiness could never reach 100%.
+const isRealField = (key: string) => !key.startsWith('_')
+
 function fieldReadiness(e: Engagement): { filled: number; total: number } {
   if (!e.field_statuses) return { filled: 0, total: 0 }
-  const entries = Object.entries(e.field_statuses).filter(([, s]) => s === 'needed')
+  const entries = Object.entries(e.field_statuses).filter(([f, s]) => s === 'needed' && isRealField(f))
   const filled = entries.filter(([f]) => {
     const val = (e as unknown as Record<string, unknown>)[f]
     return val !== undefined && val !== null && val !== ''
@@ -351,7 +357,7 @@ function buildOutstandingData(allEngagements: Engagement[]): OutstandingDataItem
   for (const e of allEngagements) {
     if (!e.field_statuses) continue
     const needed = Object.entries(e.field_statuses)
-      .filter(([, status]) => status === 'needed')
+      .filter(([field, status]) => status === 'needed' && isRealField(field))
       .filter(([field]) => {
         const val = (e as unknown as Record<string, unknown>)[field]
         return val === undefined || val === null || val === ''

@@ -637,10 +637,18 @@ function buildBriefingDoc(client: Client) {
     y += 16
   }
 
+  // Honour what was dismissed on the briefing document on screen. Two levels, both
+  // stored in engagements.field_statuses: an individual field keyed by its own name,
+  // and a whole section keyed `_section_<name>`. Without this the PDF printed
+  // everything, so the document sent to a client didn't match what the team saw.
+  const statuses = ((client as any).field_statuses ?? {}) as Record<string, string>
+  const fieldDropped = (key?: string) => !!key && statuses[key] === 'not_needed'
+  const sectionDropped = (key: string) => statuses[`_section_${key}`] === 'not_needed'
+
   // Bold label at fixed column, normal value wrapping beside it
   const LABEL_W = 88
-  const field = (label: string, value: string | undefined | null) => {
-    if (!value) return
+  const field = (label: string, value: string | undefined | null, key?: string) => {
+    if (!value || fieldDropped(key)) return
     const lines = doc.splitTextToSize(s(value), W - LABEL_W)
     checkPage(lines.length * 14 + 4)
     doc.setFontSize(10.5)
@@ -671,9 +679,9 @@ function buildBriefingDoc(client: Client) {
   }
   const typeLabel = typeLabels[eventType] || ''
   const eventName = client.event_name || client.organization
-  field('What:', typeLabel ? `${eventName} — ${typeLabel}` : eventName)
-  if (client.topic) field('Topic:', client.topic)
-  if ((client as any).purpose) {
+  field('What:', typeLabel ? `${eventName} — ${typeLabel}` : eventName, 'event_name')
+  if (client.topic) field('Topic:', client.topic, 'topic')
+  if ((client as any).purpose && !fieldDropped('purpose')) {
     const purposeLines = doc.splitTextToSize(s((client as any).purpose), W)
     checkPage(purposeLines.length * 13 + 4)
     doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 58, 54)
@@ -682,24 +690,44 @@ function buildBriefingDoc(client: Client) {
   }
 
   // ── WHEN ────────────────────────────────────────────────────────────────────
-  const dateTime = [formatDate(client.event_date), client.event_time].filter(Boolean).join(' | ')
-  field('When:', dateTime)
-  if (client.session_length) field('Duration:', `${client.session_length} minutes`)
+  // The screen renders date and time as one "Date / Time" row keyed `event_date`, so
+  // dismissing that hides both — printing a bare time here would disagree with it.
+  // `event_time` has its own key in Event Details and drops only the time.
+  if (!fieldDropped('event_date')) {
+    const dateParts = [
+      formatDate(client.event_date),
+      fieldDropped('event_time') ? null : client.event_time,
+    ].filter(Boolean)
+    field('When:', dateParts.join(' | '))
+  }
+  if (client.session_length) field('Duration:', `${client.session_length} minutes`, 'session_length')
 
   // ── WHERE ───────────────────────────────────────────────────────────────────
-  const whereStr = hasPhysical
-    ? [client.event_location, client.event_city].filter(Boolean).join(', ')
-    : 'Virtual'
-  field('Where:', whereStr || '—')
-  if (isVirtual && (client as any).join_link) field('Join Link:', s((client as any).join_link))
-  if (isVirtual && (client as any).dial_in_backup) field('Dial-in:', s((client as any).dial_in_backup))
-  if ((client as any).arrival_time) field('Arrival:', s((client as any).arrival_time))
-  if ((client as any).venue_special_instructions) field('Note:', s((client as any).venue_special_instructions))
+  // The venue *section* covers the physical location only. Join link and dial-in are
+  // how a virtual event is attended, not venue detail, so removing the venue section
+  // must not strip them — they have their own field-level dismissals.
+  const venueGone = sectionDropped('venue')
+  const locationDismissed = hasPhysical && fieldDropped('event_location') && fieldDropped('event_city')
+  const whereParts = hasPhysical
+    ? [
+        fieldDropped('event_location') ? null : client.event_location,
+        fieldDropped('event_city') ? null : client.event_city,
+      ].filter(Boolean)
+    : ['Virtual']
+  // The '—' placeholder means "not filled in yet". Dismissing both location fields
+  // means "don't show this", so print nothing rather than a placeholder.
+  if (!venueGone && !locationDismissed) field('Where:', whereParts.join(', ') || '—')
+  if (isVirtual && (client as any).join_link) field('Join Link:', s((client as any).join_link), 'join_link')
+  if (isVirtual && (client as any).dial_in_backup) field('Dial-in:', s((client as any).dial_in_backup), 'dial_in_backup')
+  if (!venueGone) {
+    if ((client as any).arrival_time) field('Arrival:', s((client as any).arrival_time), 'arrival_time')
+    if ((client as any).venue_special_instructions) field('Note:', s((client as any).venue_special_instructions), 'venue_special_instructions')
+  }
 
   // ── OTHER DETAILS ──────────────────────────────────────────────────────────
   const audienceParts = [
-    (client as any).audience_description,
-    client.audience_size ? `~${client.audience_size.toLocaleString()} attendees` : null,
+    fieldDropped('audience_description') ? null : (client as any).audience_description,
+    fieldDropped('audience_size') || !client.audience_size ? null : `~${client.audience_size.toLocaleString()} attendees`,
   ].filter(Boolean)
   if (audienceParts.length) field('Audience:', audienceParts.join(' · '))
 
@@ -711,14 +739,14 @@ function buildBriefingDoc(client: Client) {
     field('Contact:', contactStr)
   }
 
-  if ((client as any).moderator_info) field('Moderator:', s((client as any).moderator_info))
-  if ((client as any).panelist_info) field('Co-Panelists:', s((client as any).panelist_info))
-  if ((client as any).vip_info) field('VIPs:', s((client as any).vip_info))
-  if ((client as any).dress_code) field('Dress Code:', s((client as any).dress_code))
+  if ((client as any).moderator_info) field('Moderator:', s((client as any).moderator_info), 'moderator_info')
+  if ((client as any).panelist_info) field('Co-Panelists:', s((client as any).panelist_info), 'panelist_info')
+  if ((client as any).vip_info) field('VIPs:', s((client as any).vip_info), 'vip_info')
+  if ((client as any).dress_code) field('Dress Code:', s((client as any).dress_code), 'dress_code')
 
   // ── TRAVEL ──────────────────────────────────────────────────────────────────
   const hasTravel = (client as any).flight_details || (client as any).hotel_name || (client as any).drive_time
-  if (hasTravel) {
+  if (hasTravel && !sectionDropped('travel')) {
     y += 4; rule()
     doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 14, 12)
     doc.text('Travel', L, y); y += 14
@@ -728,22 +756,22 @@ function buildBriefingDoc(client: Client) {
         ((client as any).flight_confirmation ? ` — Conf: ${s((client as any).flight_confirmation)}` : '')
       field('Flight:', flightStr)
     }
-    if ((client as any).hotel_name) {
+    if ((client as any).hotel_name && !fieldDropped('hotel_name')) {
       const hotelStr = [
         s((client as any).hotel_name),
-        (client as any).hotel_checkin ? `Check-in: ${s((client as any).hotel_checkin)}` : null,
-        (client as any).hotel_confirmation ? `Conf: ${s((client as any).hotel_confirmation)}` : null,
+        (client as any).hotel_checkin && !fieldDropped('hotel_checkin') ? `Check-in: ${s((client as any).hotel_checkin)}` : null,
+        (client as any).hotel_confirmation && !fieldDropped('hotel_confirmation') ? `Conf: ${s((client as any).hotel_confirmation)}` : null,
       ].filter(Boolean).join(' | ')
       field('Hotel:', hotelStr)
     }
-    if ((client as any).ground_transport) field('Transport:', s((client as any).ground_transport))
-    if ((client as any).drive_time) field('Drive Time:', s((client as any).drive_time))
+    if ((client as any).ground_transport) field('Transport:', s((client as any).ground_transport), 'ground_transport')
+    if ((client as any).drive_time) field('Drive Time:', s((client as any).drive_time), 'drive_time')
     if ((client as any).parking_details) field('Parking:', s((client as any).parking_details))
   }
 
   // ── RUN OF SHOW ──────────────────────────────────────────────────────────────
   const rosRaw = (client as any).run_of_show as Record<string, unknown>[] | undefined
-  if (rosRaw && rosRaw.length > 0) {
+  if (rosRaw && rosRaw.length > 0 && !sectionDropped('runofshow')) {
     const ros = rosRaw.map(normalizeRosForPdf)
     y += 4; rule()
     checkPage(60)

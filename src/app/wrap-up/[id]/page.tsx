@@ -339,6 +339,7 @@ export default function WrapUpDetailPage() {
     updatePostEventTestimonialLink,
     updatePostEventTestimonialText,
     updatePostEventNotes,
+    flushPostEventNotes,
     updatePostEventItemNote,
     addPostEventMedia,
     removePostEventMedia,
@@ -854,6 +855,7 @@ export default function WrapUpDetailPage() {
           <textarea
             value={e.post_event_notes ?? ''}
             onChange={ev => updatePostEventNotes(engagementId, ev.target.value)}
+            onBlur={ev => flushPostEventNotes(engagementId, ev.target.value)}
             placeholder="Any context, outstanding items, or details about this engagement's wrap-up..."
             rows={3}
             className="w-full text-sm bg-parchment/40 border border-ink-100 rounded-xl px-4 py-3 text-ink placeholder:text-ink-300 focus:outline-none focus:border-ink-200 resize-none"

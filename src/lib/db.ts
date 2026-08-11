@@ -90,6 +90,7 @@ interface EngagementRow {
   post_event_testimonial_link: string | null
   post_event_testimonial_text: string | null
   post_event_follow_up_date: string | null
+  post_event_stages: Record<string, string> | null
 }
 
 interface ContactRow {
@@ -122,7 +123,6 @@ interface CommRow {
   to_name: string | null
   staff_name: string | null
   needs_response: boolean
-  response_due_by: string | null
   next_step: string | null
   next_step_due_at: string | null
   next_step_snoozed_until: string | null
@@ -141,6 +141,8 @@ interface CallRow {
   completed_at: string | null
   notes: string | null
   added_by: string | null
+  format: string | null
+  details: string | null
 }
 
 interface MaterialRow {
@@ -198,7 +200,6 @@ function mapComm(row: CommRow): CommEntry {
     staff_name: row.staff_name ?? undefined,
     channel: row.channel ?? undefined,
     needs_response: row.needs_response,
-    response_due_by: row.response_due_by ?? undefined,
     next_step: row.next_step ?? undefined,
     next_step_due_at: row.next_step_due_at ?? undefined,
     next_step_snoozed_until: row.next_step_snoozed_until ?? undefined,
@@ -216,6 +217,10 @@ function mapCall(row: CallRow): EngagementCall {
     scheduled_at: row.scheduled_at ?? undefined,
     scheduled_tz: row.scheduled_tz ?? undefined,
     completed_at: row.completed_at ?? undefined,
+    // The UI has always read these two; the columns only existed as of 2026-08-10,
+    // so without mapping them here they'd stay undefined on every reload.
+    format: (row.format as EngagementCall['format']) ?? undefined,
+    details: row.details ?? undefined,
     notes: row.notes ?? undefined,
     added_by: (row.added_by as 'ai' | 'manual') ?? 'manual',
   }
@@ -362,7 +367,11 @@ function assembleEngagement(
     engagement_flags: deriveEngagementFlags(row),
     media_flags: deriveMediaFlags(row),
     post_event_flags: postEvent.done,
-    post_event_stages: postEvent.stages,
+    // Start from the stored column, then let the derived stages win for the two
+    // they own (invoice/media come from authoritative timestamp columns). Reading
+    // only the derived value discarded every stage the user set by hand for
+    // thank_you / testimonial / social_media / follow_up.
+    post_event_stages: { ...(row.post_event_stages ?? {}), ...postEvent.stages } as WrapUpFlagStages,
     post_event_needed: postEvent.needed,
     post_event_not_needed: postEvent.not_needed,
     post_event_follow_up_details: row.follow_up_details ?? undefined,
@@ -595,10 +604,17 @@ export async function insertContact(engagement_id: string | null, contact: Omit<
 }
 
 export async function upsertContact(contact: Partial<ContactRow> & { engagement_id: string | null }): Promise<void> {
-  // Only upsert if the id looks like a real UUID (not a temp id from the UI)
+  // Only write if the id looks like a real UUID (not a temp id from the UI)
   if (!contact.id || /^(new_|lnk_)/.test(contact.id)) return
-  const { error } = await supabase.from('contacts').upsert(contact)
+  // A real UPDATE, not an upsert. Postgres builds the insert branch of an upsert
+  // before resolving the conflict, so any partial patch (anything without
+  // first_name) died on the NOT NULL constraint instead of updating the row.
+  const { id, ...patch } = contact
+  // Ask for the affected row back: an UPDATE that matches nothing succeeds with no
+  // error, which is the same silent-write failure this file is meant to stop.
+  const { data, error } = await supabase.from('contacts').update(patch).eq('id', id).select('id')
   if (error) throw new Error(`upsertContact: ${error.message}`)
+  if (!data?.length) throw new Error(`upsertContact: no contact matched id ${id}`)
 }
 
 // Contacts with no engagement_id — created directly from the Contacts directory,

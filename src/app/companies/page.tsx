@@ -235,9 +235,6 @@ function CompanyRow({ company, engagements }: { company: Company; engagements: a
               </span>
             )}
           </p>
-          {company.teams.length > 0 && (
-            <p className="text-xs text-ink-400 truncate">{company.teams.map(t => t.name).join(', ')}</p>
-          )}
         </div>
       </div>
       <div>

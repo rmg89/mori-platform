@@ -102,7 +102,7 @@ function parseJson(text: string): Record<string, unknown> | null {
   }
 }
 
-export async function scanEngagement(supabase: SupabaseClient, engagementId: string, scanType: ScanType): Promise<{ patch: Record<string, unknown>; summary?: string }> {
+export async function scanEngagement(supabase: SupabaseClient, engagementId: string, scanType: ScanType): Promise<{ patch: Record<string, unknown>; summary?: string; note?: { id: string; created_at: string } }> {
   try {
     const [{ data: row, error }, { data: contacts }, { data: comms }] = await Promise.all([
       supabase.from('engagements').select('*').eq('id', engagementId).single(),
@@ -187,10 +187,16 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
     }
 
     const summary = typeof result.summary === 'string' ? result.summary : undefined
+    let note: { id: string; created_at: string } | undefined
     if (summary) {
-      const { error: noteError } = await supabase
+      // Hand the real row back to the caller. The client used to invent a `tmp_` id
+      // for its optimistic copy, so resolving or deleting the note before the next
+      // full refetch sent that placeholder to a uuid column and failed.
+      const { data, error: noteError } = await supabase
         .from('briefing_notes')
         .insert({ engagement_id: engagementId, body: summary, resolved: false })
+        .select('id,created_at')
+        .single()
       if (noteError) {
         await logServerError({
           message: `scanEngagement (${scanType}): briefing note failed to save: ${noteError.message}`,
@@ -198,10 +204,12 @@ export async function scanEngagement(supabase: SupabaseClient, engagementId: str
           action: `${scanType} scan note`,
           context: { engagement_id: engagementId },
         })
+      } else if (data) {
+        note = { id: data.id as string, created_at: data.created_at as string }
       }
     }
 
-    return { patch, summary }
+    return { patch, summary, note }
   } catch (err) {
     await logServerError({
       message: `scanEngagement (${scanType}) failed: ${err instanceof Error ? err.message : String(err)}`,

@@ -72,6 +72,7 @@ interface StoreActions {
   updatePostEventTestimonialLink: (id: string, link: string) => void
   updatePostEventTestimonialText: (id: string, text: string) => void
   updatePostEventNotes: (id: string, notes: string) => void
+  flushPostEventNotes: (id: string, notes: string) => void
   updatePostEventItemNote: (id: string, flag: PostEventFlag, note: string) => void
   addPostEventMedia: (id: string, item: { type: PostEventMediaType; name: string; url: string; description?: string }) => void
   removePostEventMedia: (id: string, mediaId: string) => void
@@ -114,6 +115,7 @@ interface StoreActions {
 
   // Contacts (global — updates all engagements sharing the same email)
   updateContact: (email: string, patch: Partial<EngagementContact>) => void
+  setPointOfContact: (engagementId: string, contactId: string) => void
   deleteContact: (id: string) => void
   createContact: (input: {
     first_name: string; last_name?: string; email?: string; phone?: string; title?: string
@@ -138,6 +140,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Pending debounced post-event-note writes, keyed by engagement id.
+  const notesTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  // Temp ids of contacts removed while their INSERT was still in flight, so the row
+  // the insert creates can be deleted once we learn its real id.
+  const abandonedContactsRef = useRef<Set<string>>(new Set())
+  // Point-of-contact flags set on a contact whose INSERT hadn't returned yet, keyed
+  // by temp id and applied once the real id is known.
+  const pendingPocRef = useRef<Map<string, boolean>>(new Map())
 
   const trackSave = useCallback((promise: Promise<unknown>) => {
     setSaveStatus('saving')
@@ -300,9 +310,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Point of contact is a column on each contact row, so it needs a real write per
+  // affected contact. It used to go through updateEngagement({ contacts }), which
+  // strips the contacts array before writing — the UI moved the marker and nothing
+  // reached the database.
+  const setPointOfContact = useCallback((engagementId: string, contactId: string) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== engagementId) return e
+      e.contacts.forEach(c => {
+        const next = c.id === contactId
+        if (c.is_current_point_of_contact === next) return
+        // Still waiting on this contact's INSERT — there is no row to update yet, so
+        // hand the flag to the insert's callback instead of dropping the write.
+        if (/^(new_|lnk_)/.test(c.id)) { pendingPocRef.current.set(c.id, next); return }
+        upsertContact({ id: c.id, engagement_id: e.id, is_current_point_of_contact: next } as never).catch(onWriteError)
+      })
+      return {
+        ...e,
+        contacts: e.contacts.map(c => ({ ...c, is_current_point_of_contact: c.id === contactId })),
+        updated_at: new Date().toISOString(),
+      }
+    }))
+  }, [onWriteError])
+
   const deleteContact = useCallback((id: string) => {
     setEngagements(prev => prev.map(e => ({ ...e, contacts: e.contacts.filter(c => c.id !== id) })))
     setUnassignedContacts(prev => prev.filter(c => c.id !== id))
+    // A contact added or linked earlier in this session still carries a new_/lnk_
+    // placeholder until its INSERT resolves. Sending that to a uuid column errors,
+    // and simply skipping the delete leaves the row the insert is about to create —
+    // either way the contact comes back on refresh. Mark it so the insert's callback
+    // deletes the real row once it knows the id.
+    if (/^(new_|lnk_)/.test(id)) { abandonedContactsRef.current.add(id); return }
     deleteContactRow(id).catch(onWriteError)
   }, [])
 
@@ -352,6 +391,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (contacts) {
       contacts.forEach(c => {
         if (/^(new_|lnk_)/.test(c.id)) {
+          const tempId = c.id
           insertContact(id, {
             first_name: c.first_name,
             last_name: c.last_name ?? '',
@@ -365,6 +405,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             notes: c.notes ?? null,
             company_id: c.company_id ?? null,
             team_id: c.team_id ?? null,
+          }).then(realId => {
+            // Swap the placeholder for the id the database actually assigned.
+            // Left in place, every later action on this contact (remove, set point
+            // of contact, edit) targeted an id no row has.
+            if (!realId) { onWriteError(new Error(`Failed to save contact ${c.first_name}`)); return }
+            if (abandonedContactsRef.current.delete(tempId)) {
+              // Removed from the UI while this insert was still in flight.
+              deleteContactRow(realId).catch(onWriteError)
+              return
+            }
+            // Apply any point-of-contact change made while this insert was in flight.
+            const pendingPoc = pendingPocRef.current.get(tempId)
+            if (pendingPoc !== undefined) {
+              pendingPocRef.current.delete(tempId)
+              upsertContact({ id: realId, engagement_id: id, is_current_point_of_contact: pendingPoc } as never).catch(onWriteError)
+            }
+            setEngagements(prev => prev.map(en => en.id !== id ? en : {
+              ...en,
+              contacts: en.contacts.map(x => x.id === tempId ? { ...x, id: realId } : x),
+            }))
           }).catch(onWriteError)
         }
       })
@@ -385,17 +445,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ engagement_id: id, scan_type: scanType }),
     })
       .then(res => res.json())
-      .then((result: { patch?: Record<string, unknown>; summary?: string }) => {
-        const { patch, summary } = result
+      .then((result: { patch?: Record<string, unknown>; summary?: string; note?: { id: string; created_at: string } }) => {
+        const { patch, summary, note } = result
+        // A summary with no note means the server's insert failed. Say so rather
+        // than dropping the scan's output with no signal at all.
+        if (summary && !note) onWriteError(new Error('AI scan ran but its note could not be saved'))
         setEngagements(prev => prev.map(e => {
           if (e.id !== id) return e
           const next: Engagement = { ...e, ...(patch ?? {}), updated_at: new Date().toISOString() }
-          if (summary) {
+          // Only show the note when the server actually stored one and told us its
+          // id. Inventing an id for a note that may not exist just moves the failure
+          // to the next resolve/delete, which would update 0 rows and report success.
+          if (summary && note) {
             next.briefing_notes = [...(e.briefing_notes ?? []), {
-              id: `tmp_${Date.now()}`,
+              id: note.id,
               body: summary,
               resolved: false,
-              created_at: new Date().toISOString(),
+              created_at: note.created_at,
             }]
           }
           return next
@@ -720,60 +786,71 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngagements(prev => prev.map(e =>
       e.id === id ? { ...e, post_event_notes: notes, updated_at: new Date().toISOString() } : e
     ))
-    updateEngagementRow(id, { notes }).catch(onWriteError)
-  }, [])
+    // Was writing to `notes` — the engagement's general notes field — which both
+    // lost the post-event note and clobbered the general one on every keystroke.
+    // Debounced because this fires per keystroke: overlapping PATCHes can land out
+    // of order and leave an earlier draft as the stored value.
+    const timers = notesTimersRef.current
+    if (timers[id]) clearTimeout(timers[id])
+    timers[id] = setTimeout(() => {
+      delete timers[id]
+      updateEngagementRow(id, { post_event_notes: notes }).catch(onWriteError)
+    }, 600)
+  }, [onWriteError])
+
+  // Write immediately, cancelling any debounced write still pending. Called on blur
+  // so leaving the field can't lose the last keystrokes to the debounce window.
+  const flushPostEventNotes = useCallback((id: string, notes: string) => {
+    const timers = notesTimersRef.current
+    if (!timers[id]) return
+    clearTimeout(timers[id])
+    delete timers[id]
+    updateEngagementRow(id, { post_event_notes: notes }).catch(onWriteError)
+  }, [onWriteError])
 
   const updatePostEventStage = useCallback((id: string, stages: Partial<WrapUpFlagStages>) => {
-    setEngagements(prev => prev.map(e =>
-      e.id === id ? { ...e, post_event_stages: { ...e.post_event_stages, ...stages }, updated_at: new Date().toISOString() } : e
-    ))
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const post_event_stages = { ...e.post_event_stages, ...stages }
+      updateEngagementRow(id, { post_event_stages }).catch(onWriteError)
+      return { ...e, post_event_stages, updated_at: new Date().toISOString() }
+    }))
   }, [])
+
+  // Proposed dates live in the engagements.proposed_dates jsonb column. Every one of
+  // these used to be local-state-only, so a prospect's whole set of date/time options
+  // looked saved and was gone on the next refresh.
+  const setProposedDates = useCallback((id: string, next: (current: { date: string; times?: string[] }[]) => { date: string; times?: string[] }[] | null) => {
+    setEngagements(prev => prev.map(e => {
+      if (e.id !== id) return e
+      const proposed_dates = next(e.proposed_dates ?? [])
+      if (proposed_dates === null) return e
+      updateEngagementRow(id, { proposed_dates }).catch(onWriteError)
+      return { ...e, proposed_dates, updated_at: new Date().toISOString() }
+    }))
+  }, [onWriteError])
 
   const addProposedDate = useCallback((id: string, date: string) => {
-    setEngagements(prev => prev.map(e => {
-      if (e.id !== id) return e
-      const existing = e.proposed_dates ?? []
-      if (existing.some(d => d.date === date)) return e
-      const newDates = [...existing, { date }].sort((a, b) => a.date > b.date ? 1 : -1)
-      return { ...e, proposed_dates: newDates, updated_at: new Date().toISOString() }
-    }))
-  }, [])
+    setProposedDates(id, current => current.some(d => d.date === date)
+      ? null
+      : [...current, { date }].sort((a, b) => a.date > b.date ? 1 : -1))
+  }, [setProposedDates])
 
   const removeProposedDate = useCallback((id: string, date: string) => {
-    setEngagements(prev => prev.map(e =>
-      e.id !== id ? e : {
-        ...e,
-        proposed_dates: (e.proposed_dates ?? []).filter(d => d.date !== date),
-        updated_at: new Date().toISOString(),
-      }
-    ))
-  }, [])
+    setProposedDates(id, current => current.filter(d => d.date !== date))
+  }, [setProposedDates])
 
   const addProposedTime = useCallback((id: string, date: string, time: string) => {
-    setEngagements(prev => prev.map(e => {
-      if (e.id !== id) return e
-      return {
-        ...e,
-        proposed_dates: (e.proposed_dates ?? []).map(d =>
-          d.date === date ? { ...d, times: [...(d.times ?? []), time] } : d
-        ),
-        updated_at: new Date().toISOString(),
-      }
-    }))
-  }, [])
+    setProposedDates(id, current => current.map(d =>
+      d.date === date ? { ...d, times: [...(d.times ?? []), time] } : d
+    ))
+  }, [setProposedDates])
 
   const removeProposedTime = useCallback((id: string, date: string, time: string) => {
-    setEngagements(prev => prev.map(e => {
-      if (e.id !== id) return e
-      return {
-        ...e,
-        proposed_dates: (e.proposed_dates ?? []).map(d =>
-          d.date === date ? { ...d, times: (d.times ?? []).filter(t => t !== time) } : d
-        ),
-        updated_at: new Date().toISOString(),
-      }
-    }))
-  }, [])
+    setProposedDates(id, current => current.map(d =>
+      d.date === date ? { ...d, times: (d.times ?? []).filter(t => t !== time) } : d
+    ))
+  }, [setProposedDates])
 
   const confirmProposedDate = useCallback((id: string, date: string, time?: string) => {
     setEngagements(prev => prev.map(e =>
@@ -785,7 +862,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     ))
-    updateEngagementRow(id, { event_date: date, event_time: time ?? null }).catch(onWriteError)
+    // Clear proposed_dates in the DB too — local state emptied it either way, so
+    // without this the options came back on the next load.
+    updateEngagementRow(id, { event_date: date, event_time: time ?? null, proposed_dates: [] }).catch(onWriteError)
   }, [])
 
   const addCall = useCallback((engagementId: string, call: EngagementCall) => {
@@ -833,7 +912,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       contact_id: comm.contact_id ?? null,
       staff_name: comm.staff_name ?? null,
       needs_response: comm.needs_response ?? false,
-      response_due_by: comm.response_due_by ?? null,
       next_step: comm.next_step ?? null,
       next_step_due_at: comm.next_step_due_at ?? null,
       next_step_snoozed_until: comm.next_step_snoozed_until ?? null,
@@ -850,12 +928,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updated_at: new Date().toISOString(),
       }
     }))
-    updateCommRow(commId, {
-      next_step: patch.next_step ?? undefined,
-      next_step_due_at: patch.next_step_due_at ?? undefined,
-      next_step_snoozed_until: patch.next_step_snoozed_until ?? undefined,
-      next_step_cleared: patch.next_step_cleared ?? undefined,
-    } as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
+    // Send only the keys the caller actually supplied, and map an explicit
+    // `undefined` to null so a field can be cleared. The old shape spread all four
+    // keys through `?? undefined`, so "wake" (which passes next_step_snoozed_until:
+    // undefined to un-snooze) serialised to `{}` — a 204 that changed nothing, and
+    // the snooze came back on the next refresh.
+    const FIELDS = ['next_step', 'next_step_due_at', 'next_step_snoozed_until', 'next_step_cleared'] as const
+    const dbPatch: Record<string, unknown> = {}
+    for (const k of FIELDS) if (k in patch) dbPatch[k] = patch[k] ?? null
+    if (Object.keys(dbPatch).length === 0) return
+    updateCommRow(commId, dbPatch as Parameters<typeof updateCommRow>[1]).catch(onWriteError)
   }, [])
 
   const deleteComm = useCallback((engagementId: string, commId: string) => {
@@ -1043,14 +1125,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       archiveEngagement, unarchiveEngagement, deleteEngagement,
       toggleEngagementFlag, toggleMediaFlag,
       setPostEventFlagNeeded, setPostEventFlagDone, setPostEventFlagNotNeeded, resetPostEventFlag,
-      updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, updatePostEventStage,
+      updatePostEventFollowUpDetails, updatePostEventFollowUpDate, updatePostEventTestimonialLink, updatePostEventTestimonialText, updatePostEventNotes, flushPostEventNotes, updatePostEventStage,
       updatePostEventItemNote, addPostEventMedia, removePostEventMedia, updatePostEventMediaDescription,
       addProposedDate, removeProposedDate, confirmProposedDate, addProposedTime, removeProposedTime,
       addCall, updateCall, addComm, updateComm, deleteComm,
       addBriefingNote, resolveBriefingNote, unresolveBriefingNote, deleteBriefingNote,
       setFieldStatus,
       confirmReviewItem, dismissReviewItem,
-      updateCompany, createCompany, deleteCompany, updateContact, deleteContact, createContact,
+      updateCompany, createCompany, deleteCompany, updateContact, setPointOfContact, deleteContact, createContact,
     }}>
       {children}
     </StoreContext.Provider>

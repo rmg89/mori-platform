@@ -4,11 +4,11 @@ import { useState, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PROSPECT_STEPS, ENGAGEMENT_FLAGS, primaryContact } from '@/types'
 import { formatDate, getInitials, isEngagementCurrent } from '@/lib/utils'
-import { ArrowLeft, Eye, EyeOff, Building2, Mail, Calendar, CheckCircle2, Circle, ArrowRight, AlertTriangle, Users, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Building2, Mail, Calendar, CheckCircle2, Circle, ArrowRight, AlertTriangle, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ConfirmModal'
 
-type Tab = 'engagements' | 'contacts' | 'teams'
+type Tab = 'engagements' | 'contacts'
 
 export default function CompanyProfilePage() {
   const { id } = useParams()
@@ -39,7 +39,6 @@ export default function CompanyProfilePage() {
   const TABS: { id: Tab; label: string; count?: number }[] = [
     { id: 'engagements', label: 'Engagements', count: engagements.length },
     { id: 'contacts', label: 'Contacts', count: allContacts.length },
-    { id: 'teams', label: 'Teams', count: company.teams.length },
   ]
 
   return (
@@ -212,24 +211,8 @@ export default function CompanyProfilePage() {
         </div>
       )}
 
-      {/* Teams tab */}
-      {tab === 'teams' && (
-        <div className="space-y-3">
-          {company.teams.length === 0 ? (
-            <div className="bg-white border border-dashed border-ink-200 rounded-xl px-6 py-8 text-center text-ink-300 text-sm">
-              No teams yet — add sub-groups within this company
-            </div>
-          ) : company.teams.map(team => (
-            <div key={team.id} className="flex items-center gap-3 bg-white border border-ink-100 rounded-xl px-5 py-4">
-              <Users size={14} className="text-ink-300" />
-              <p className="text-sm font-medium text-ink">{team.name}</p>
-            </div>
-          ))}
-          <button className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink px-2 py-1 transition-all">
-            <Plus size={14} />Add team
-          </button>
-        </div>
-      )}
+      {/* Teams tab removed 2026-08-10 — no teams table exists, so the list was always
+          empty and its "Add team" button had no handler at all. */}
 
       {/* Delete */}
       <div className="mt-6 flex items-center justify-between gap-3 px-5 py-4 bg-red-50/40 border border-red-100 rounded-xl">

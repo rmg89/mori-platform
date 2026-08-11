@@ -146,7 +146,6 @@ export interface CommEntry {
   staff_name?: string
   channel?: string
   needs_response?: boolean
-  response_due_by?: string
   tagged_manually?: boolean
   // Next step tracking
   next_step?: string                  // what needs to happen next
